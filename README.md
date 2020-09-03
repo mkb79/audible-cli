@@ -40,11 +40,11 @@ If the ``AUDIBLE_CONFIG_DIR`` environment variable is set, it uses the value as 
 
 Otherwise it will use a folder depending on the operating system.
 
-| OS | Path |
-| --— | --- |
-| Windows | ``C:\Users\<user>\AppData\Local\audible`` |
-| Unix | ``~/.audible`` |
-| Mac OS X | ``~/.audible`` |
+| OS       | Path                                      |
+| - --      | ---                                       |
+| Windows  | ``C:\Users\<user>\AppData\Local\audible`` |
+| Unix     | ``~/.audible``                            |
+| Mac OS X | ``~/.audible``                            |
 
 To override this behavior, you can call `audible` or `audible-quickstart` with the `-c PATH_TO_CONF_DIR` option. You have to do this on each call. So if you want to make use of a custom folder best practice is to use the environment variable method.
 
