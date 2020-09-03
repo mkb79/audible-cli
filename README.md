@@ -41,7 +41,7 @@ If the ``AUDIBLE_CONFIG_DIR`` environment variable is set, it uses the value as 
 Otherwise it will use a folder depending on the operating system.
 
 | OS       | Path                                      |
-| - --      | ---                                       |
+| ---      | ---                                       |
 | Windows  | ``C:\Users\<user>\AppData\Local\audible`` |
 | Unix     | ``~/.audible``                            |
 | Mac OS X | ``~/.audible``                            |
