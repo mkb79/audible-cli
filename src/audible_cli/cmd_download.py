@@ -217,6 +217,7 @@ class LibraryItem:
         for codec in self.available_codecs:
             if verify is not None and verify == codec["enhanced_codec"]:
                 return verify
+
             if codec["name"].startswith("aax_"):
                 name = codec["name"]
                 try:
@@ -229,15 +230,29 @@ class LibraryItem:
                             sample_rate,
                             bitrate
                         )
+
                 except ValueError:
                     secho("Unexpected codec name: {name}")
                     continue
+
         if verify is not None:
             secho(f"{verify} codec was not found, using {best[0]} instead")
+
         return best[0]
+
+    @property
+    def is_downloadable(self):
+        if self.content_delivery_type in ("Periodical",):
+            return False
+
+        return True        
 
     async def get_audiobook(self, output_dir, quality="high",
                             overwrite_existing=False):
+        if not self.is_downloadable:
+            secho(f"{self.full_title} is not downloadable. Skip item.", fg="red")
+            return
+
         assert quality in ("best", "high", "normal",)
         if quality == "best":
             codec = self.get_quality()
