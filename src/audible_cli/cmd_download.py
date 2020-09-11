@@ -100,7 +100,12 @@ async def download_content(client, url, output_dir, filename,
                             await f.write(chunk)
                             progressbar.update(len(chunk))
 
-                tmp_file.rename(file)    
+                if file.exists() and overwrite_existing:
+                    i = 0
+                    while file.with_suffix(f"{file.suffix}.old.{i}").exists():
+                        i += 1
+                    file.rename(file.with_suffix(f"{file.suffix}.old.{i}"))
+                tmp_file.rename(file)
                 tqdm.tqdm.write(f"File {file} downloaded to {output_dir} in {r.elapsed}")
                 return True
             finally:
@@ -204,10 +209,43 @@ class LibraryItem:
             secho(f"Error: {e} occured. Can't get download link. Skip asin {self.asin}")
             return None
 
+    def get_quality(self, verify=None):
+        """If verify is set, ensures the given quality is present in the
+        codecs list. Otherwise, will find the best aax quality available
+        """
+        best = (None, 0, 0)
+        for codec in self.available_codecs:
+            if verify is not None and verify == codec["enhanced_codec"]:
+                return verify
+            if codec["name"].startswith("aax_"):
+                name = codec["name"]
+                try:
+                    sample_rate, bitrate = name[4:].split("_")
+                    sample_rate = int(sample_rate)
+                    bitrate = int(bitrate)
+                    if sample_rate > best[1] or bitrate > best[2]:
+                        best = (
+                            codec["enhanced_codec"],
+                            sample_rate,
+                            bitrate
+                        )
+                except ValueError:
+                    secho("Unexpected codec name: {name}")
+                    continue
+        if verify is not None:
+            secho(f"{verify} codec was not found, using {best[0]} instead")
+        return best[0]
+
     async def get_audiobook(self, output_dir, quality="high",
                             overwrite_existing=False):
-        assert quality in ("high", "normal",)
-        codec = CODEC_HIGH_QUALITY if quality == "high" else CODEC_NORMAL_QUALITY
+        assert quality in ("best", "high", "normal",)
+        if quality == "best":
+            codec = self.get_quality()
+        else:
+            codec = self.get_quality(
+                CODEC_HIGH_QUALITY if quality == "high" else CODEC_NORMAL_QUALITY
+            )
+
         url = await self.get_download_link(codec)
         if not url:
         # TODO: no link
@@ -261,7 +299,10 @@ class Library:
 async def consume(queue):
     while True:
         item = await queue.get()
-        await item
+        try:
+            await item
+        except Exception as e:
+            secho(f"Error in job: {e}")
         queue.task_done()
 
 
@@ -269,11 +310,19 @@ async def main(loop, auth, **params):
     ignore_errors = params.get("ignore_errors")
 
     library = await Library.get_from_api(
-        auth, response_groups="product_desc, pdf_url, media")
+        auth, response_groups="product_desc,pdf_url,media,product_attrs,relationships")
 
     jobs = []
 
-    for asin in params.get("asin"):
+    asin_list = params.get("asin")
+    title_list = params.get("title")
+    if params.get("all") is True:
+        asin_list = []
+        title_list = []
+        for i in library:
+            jobs.append(i.asin)
+
+    for asin in asin_list:
         if library.asin_in_library(asin):
             jobs.append(asin)
         else:
@@ -282,7 +331,7 @@ async def main(loop, auth, **params):
                 ctx.fail(f"Asin {asin} not found in library.")
             secho(f"Skip asin {asin}: Not found in library", fg="red")
 
-    for title in params.get("title"): 
+    for title in title_list:
         match = library.search_item_by_title(title)
         full_match = [i for i in match if i[1] == 100]
 
@@ -353,10 +402,15 @@ async def main(loop, auth, **params):
 )
 @click.option(
     "--quality", "-q",
-    default="high",
+    default="best",
     show_default=True,
-    type=click.Choice(["high", "normal"]),
+    type=click.Choice(["best", "high", "normal"]),
     help="download quality"
+)
+@click.option(
+    "--all",
+    is_flag=True,
+    help="download all library items, overrides --asin and --title options"
 )
 @click.option(
     "--pdf",
