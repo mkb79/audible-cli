@@ -435,7 +435,7 @@ async def main(loop, auth, **params):
 @click.option(
     "--overwrite",
     is_flag=True,
-    help="overwrite existing files"
+    help="rename existing files"
 )
 @click.option(
     "--ignore-errors",
