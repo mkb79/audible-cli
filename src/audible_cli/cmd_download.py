@@ -168,12 +168,22 @@ class LibraryItem:
     def has_pdf(self):
         return self.pdf_url is not None
 
+    async def get_pdf_url(self):
+        # something is broken getting with pdf url getting from api response
+        # missing credentials in pdf url link
+        # this working for me
+        tld = self._client.auth.locale.domain
+        r = await self._client.head(
+            f"https://www.audible.{tld}/companion-file/{self.asin}")
+        return r.url
+
     async def get_pdf(self, output_dir, overwrite_existing=False):
         if not self.has_pdf:
         # TODO: no pdf
             return
 
-        url = self.pdf_url
+        #url = self.pdf_url
+        url = await self.get_pdf_url()
 
         filename = self.full_title_slugify + ".pdf"
         await download_content(client=self._client, url=url,
@@ -232,7 +242,7 @@ class LibraryItem:
                         )
 
                 except ValueError:
-                    secho("Unexpected codec name: {name}")
+                    secho(f"Unexpected codec name: {name}")
                     continue
 
         if verify is not None:
