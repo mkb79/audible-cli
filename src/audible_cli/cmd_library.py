@@ -27,28 +27,43 @@ async def _export_library(auth, **params):
         num_results=1000
     )
 
-    infos = ("asin", "title", "subtitle", "authors", "narrators", "series", "runtime_length_min", "is_finished", "percent_complete", "rating")
-
     f = pathlib.Path(params.get("output"))
-    fnames = ["asin", "title", "subtitle", "authors", "narrators", "series_title", "series_sequence", "runtime_length_min", "is_finished", "percent_complete", "rating", "num_ratings"]
-    writer = csv.DictWriter(f.open("w"), fieldnames=fnames, dialect="excel-tab")
+
+    headers = ["asin", "title", "subtitle", "authors", "narrators", "series_title", "series_sequence", "genres", "runtime_length_min", "is_finished", "percent_complete", "rating", "num_ratings", "date_added", "release_date", "cover_url"]
+
+    writer = csv.DictWriter(f.open("w"), fieldnames=headers, dialect="excel-tab")
     writer.writeheader()
 
-    for i in library:
-        item_data = {}
-        for x in infos:
-            v = getattr(i, x)
-            if x in ("authors", "narrators"):
-                item_data[x] = ", ".join([y["name"] for y in v])
-            elif x == "series":
-                item_data["series_title"] = v[0]["title"] if v else ""
-                item_data["series_sequence"] = v[0]["sequence"] if v else ""
-            elif x == "rating":
-                item_data["rating"] = v["overall_distribution"]["display_average_rating"]
-                item_data["num_ratings"] = v["overall_distribution"]["num_ratings"]
-            else:
-                item_data[x] = v if v is not None else ""
-        writer.writerow(item_data)
+    keys_to_extract = ("asin", "title", "subtitle", "runtime_length_min", "is_finished", "percent_complete", "release_date") 
+
+    for item in library:
+        data_row = {}
+        for key in item:
+            v = getattr(item, key)
+            if v is None:
+                pass
+            elif key in keys_to_extract:
+                data_row[key] = v
+            elif key in ("authors", "narrators"):
+                data_row[key] = ", ".join([i["name"] for i in v])
+            elif key == "series":
+                data_row["series_title"] = v[0]["title"]
+                data_row["series_sequence"] = v[0]["sequence"]
+            elif key == "rating":
+                data_row["rating"] = v["overall_distribution"]["display_average_rating"]
+                data_row["num_ratings"] = v["overall_distribution"]["num_ratings"]
+            elif key == "library_status":
+                data_row["date_added"] = v["date_added"]
+            elif key == "product_images":
+                data_row["cover_url"] = v["500"]
+            elif key == "category_ladders":
+                genres = []
+                for genre in v:
+                    for ladder in genre["ladder"]:
+                        genres.append(ladder["name"])
+                data_row["genres"] = ", ".join(genres)
+
+        writer.writerow(data_row)
 
 
 @cli.command("export")
