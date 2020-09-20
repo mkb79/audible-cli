@@ -23,7 +23,8 @@ async def _export_library(auth, **params):
                          "review_attrs, categories, badge_types, "
                          "category_ladders, claim_code_url, is_downloaded, "
                          "is_finished, is_returnable, origin_asin, pdf_url, "
-                         "percent_complete, provided_review")
+                         "percent_complete, provided_review"),
+        num_results=1000
     )
 
     infos = ("asin", "title", "subtitle", "authors", "narrators", "series", "runtime_length_min", "is_finished", "percent_complete", "rating")
