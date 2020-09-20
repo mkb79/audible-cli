@@ -335,7 +335,9 @@ async def main(loop, auth, **params):
     ignore_errors = params.get("ignore_errors")
 
     library = await Library.get_from_api(
-        auth, response_groups="product_desc,pdf_url,media,product_attrs,relationships")
+        auth,
+        response_groups="product_desc,pdf_url,media,product_attrs,relationships",
+        num_results=1000)
 
     jobs = []
 
