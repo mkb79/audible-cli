@@ -72,6 +72,6 @@ Use the `audible-quickstart` command in your shell to create your first config, 
 
 ## Commands
 
-Call `audible -h` to let you show all main subcommands. At this time, there are the `manage` and `download` subcommand. The `manage` command has multiple subcommands. So take a look with the `audible manage -h` and `audible manage <subcommand> -h`. 
+Call `audible -h` to let you show all main subcommands. At this time, there are the `manage`, `download` and `library` subcommand. The `manage` command has multiple subcommands. So take a look with the `audible manage -h` and `audible manage <subcommand> -h`. 
 
 **More informations will be coming soon.** 
