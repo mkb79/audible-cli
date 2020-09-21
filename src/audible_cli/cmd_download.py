@@ -382,7 +382,7 @@ async def main(loop, auth, **params):
     overwrite_existing = params.get("overwrite")
     quality = params.get("quality")
     get_pdf = params.get("pdf")
-    get_cover = params.get("pdf")
+    get_cover = params.get("cover")
 
     queue = asyncio.Queue()
     for job in jobs:
