@@ -58,11 +58,11 @@ It has a main section named ``APP`` and sections for each profile you created na
 
 audible-cli make use of profiles. Each profile contains the name of the corresponding auth file and the country code for the audible marketplace. If you have audiobooks on multiple marketplaces, you have to create a profile for each one with the same auth file.
 
-In the main section of the config file, a primary profile is defined. This profile is used, if no other is specified. You can call `audible` or `audible-quickstart` with the `-P PROFILE_NAME` option, to select another profile.
+In the main section of the config file, a primary profile is defined. This profile is used, if no other is specified. You can call `audible -P PROFILE_NAME`, to select another profile.
 
 ### auth files
 
-Like the config file, auth files are stored in the config dir too. If you protected your auth file with a password call `audible` or `audible-quickstart` with the `-p PASSWORD` option, to provide the password.
+Like the config file, auth files are stored in the config dir too. If you protected your auth file with a password call `audible -p PASSWORD`, to provide the password.
 
 If the auth file is encrypted and you don’t provide the password, you will be asked for it with a „hidden“ input field. 
 
