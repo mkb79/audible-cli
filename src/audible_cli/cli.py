@@ -58,17 +58,18 @@ def add_option_to_config(ctx, param, value):
 
 class CliCommands(click.Group):
     def list_commands(self, ctx):
-        return sorted(["manage", "download"])
+        return sorted(["manage", "download", "library"])
 
     def get_command(self, ctx, name):
         try:
             mod = importlib.import_module(f"audible_cli.cmd_{name}")
-        except ImportError:
+        except ImportError as exc:
             click.secho(
                 f"Something went wrong during setup command: {name}\n",
                 fg="red",
                 bold=True
             )
+            click.echo(exc)
             return
         return mod.cli
 
