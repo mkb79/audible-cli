@@ -16,25 +16,36 @@ def cli():
 async def _export_library(auth, **params):
     library = await Library.get_from_api(
         auth,
-        response_groups=("contributors, media, price, product_attrs, "
-                         "product_desc, product_extended_attrs, "
-                         "product_plan_details, product_plans, rating, sample, "
-                         "sku, series, reviews, ws4v, origin, relationships, "
-                         "review_attrs, categories, badge_types, "
-                         "category_ladders, claim_code_url, is_downloaded, "
-                         "is_finished, is_returnable, origin_asin, pdf_url, "
-                         "percent_complete, provided_review"),
+        response_groups=(
+            "contributors, media, price, product_attrs, product_desc, "
+            "product_extended_attrs, product_plan_details, product_plans, "
+            "rating, sample, sku, series, reviews, ws4v, origin, "
+            "relationships, review_attrs, categories, badge_types, "
+            "category_ladders, claim_code_url, is_downloaded, is_finished, "
+            "is_returnable, origin_asin, pdf_url, percent_complete, "
+            "provided_review"
+        ),
         num_results=1000
     )
 
     f = pathlib.Path(params.get("output"))
 
-    headers = ["asin", "title", "subtitle", "authors", "narrators", "series_title", "series_sequence", "genres", "runtime_length_min", "is_finished", "percent_complete", "rating", "num_ratings", "date_added", "release_date", "cover_url"]
+    headers = [
+        "asin", "title", "subtitle", "authors", "narrators", "series_title",
+        "series_sequence", "genres", "runtime_length_min", "is_finished",
+        "percent_complete", "rating", "num_ratings", "date_added",
+        "release_date", "cover_url"
+    ]
 
-    writer = csv.DictWriter(f.open("w"), fieldnames=headers, dialect="excel-tab")
+    writer = csv.DictWriter(
+        f.open("w"), fieldnames=headers, dialect="excel-tab"
+    )
     writer.writeheader()
 
-    keys_to_extract = ("asin", "title", "subtitle", "runtime_length_min", "is_finished", "percent_complete", "release_date") 
+    keys_with_raw_values = (
+        "asin", "title", "subtitle", "runtime_length_min", "is_finished",
+        "percent_complete", "release_date"
+    )
 
     for item in library:
         data_row = {}
@@ -42,7 +53,7 @@ async def _export_library(auth, **params):
             v = getattr(item, key)
             if v is None:
                 pass
-            elif key in keys_to_extract:
+            elif key in keys_with_raw_values:
                 data_row[key] = v
             elif key in ("authors", "narrators"):
                 data_row[key] = ", ".join([i["name"] for i in v])
@@ -83,3 +94,4 @@ def export_library(config, **params):
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
+
