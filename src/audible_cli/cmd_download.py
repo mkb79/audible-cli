@@ -8,7 +8,7 @@ from click import echo, secho
 from tabulate import tabulate
 
 from .models import Library
-from .utils import pass_config
+from .config import pass_config
 
 
 SSL_PROTOCOLS = (asyncio.sslproto.SSLProtocol,)
@@ -121,6 +121,8 @@ async def main(auth, **params):
     quality = params.get("quality")
     get_pdf = params.get("pdf")
     get_cover = params.get("cover")
+    get_audio = params.get("no_audio") is not True
+    get_aaxc = params.get("aaxc")
 
     queue = asyncio.Queue()
     for job in jobs:
@@ -129,7 +131,11 @@ async def main(auth, **params):
             queue.put_nowait(item.get_cover(output_dir, overwrite_existing))
         if get_pdf:
             queue.put_nowait(item.get_pdf(output_dir, overwrite_existing))
-        queue.put_nowait(item.get_audiobook(output_dir, quality, overwrite_existing))
+        if get_audio:
+            if get_aaxc:
+                queue.put_nowait(item.get_audiobook_aaxc(output_dir, quality, overwrite_existing))
+            else:
+                queue.put_nowait(item.get_audiobook(output_dir, quality, overwrite_existing))
 
     # schedule the consumer
     sim_jobs = params.get("jobs")
@@ -213,6 +219,11 @@ async def main(auth, **params):
     default=3,
     show_default=True,
     help="number of simultaneous downloads"
+)
+@click.option(
+    "--aaxc",
+    is_flag=True,
+    help="Experimental: Downloading aaxc files and voucher instead of aax"
 )
 @pass_config
 def cli(config, **params):

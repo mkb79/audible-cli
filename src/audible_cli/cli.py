@@ -1,59 +1,15 @@
 import importlib
-import os
-import pathlib
 import sys
 
 import click
 
 from . import cmd_quickstart
-from .utils import Config
-
-APP_NAME: str = "Audible"
-CONFIG_FILE: str = "config.toml"
-CONFIG_ENV_DIR: str = "AUDIBLE_CONFIG_DIR"
-CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
-
-
-def get_config_dir_path(ignore_env: bool = False) -> pathlib.Path:
-    env_dir = os.getenv(CONFIG_ENV_DIR)
-    if env_dir and not ignore_env:
-        return pathlib.Path(env_dir).resolve()
-
-    return pathlib.Path(
-        click.get_app_dir(APP_NAME, roaming=False, force_posix=True)
-    )
-
-
-def get_config_file_path(ignore_env: bool = False) -> pathlib.Path:
-    return (get_config_dir_path(ignore_env) / CONFIG_FILE).absolute()
-
-
-def read_config(ctx, param, value):
-    """Callback that is used whenever --config is passed.  We use this to
-    always load the correct config.  This means that the config is loaded
-    even if the group itself never executes so our config stay always
-    available.
-    """
-    config = ctx.ensure_object(Config)
-    config.read_config(value)
-    return value
-
-
-def set_config(ctx, param, value):
-    """
-    Callback like `read_config` but without reading the config file. The use 
-    case is when config file doesn't exists but a `Config` object is needed.
-    """
-    config = ctx.ensure_object(Config)
-    config.filename = pathlib.Path(value)
-    return value
-
-
-def add_option_to_config(ctx, param, value):
-    """Add a provided option to :attr:`Config._params`"""
-    config = ctx.ensure_object(Config)
-    config.params[param.name] = value
-    return value
+from .options import (
+    auth_file_password_option,
+    cli_config_option,
+    profile_option,
+    quickstart_config_option
+)
 
 
 class CliCommands(click.Group):
@@ -74,33 +30,22 @@ class CliCommands(click.Group):
         return mod.cli
 
 
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+
+
 @click.group(cls=CliCommands, context_settings=CONTEXT_SETTINGS)
-@click.option(
-    "--config",
-    "-c",
-    type=click.Path(exists=True, file_okay=True),
-    default=get_config_file_path(),
-    show_default=True,
-    callback=read_config,
-    expose_value=False,
-    help="The config file to be used."
-)
-@click.option(
-    "--profile",
-    "-P",
-    callback=add_option_to_config,
-    expose_value=False,
-    help="The profile to use instead primary profile (case sensitive!)."
-)
-@click.option(
-    "--password",
-    "-p",
-    callback=add_option_to_config,
-    expose_value=False,
-    help="The password for the profile auth file."
-)
+@cli_config_option
+@profile_option
+@auth_file_password_option
 def cli():
     pass
+
+
+@click.command(context_settings=CONTEXT_SETTINGS)
+@quickstart_config_option
+@click.pass_context
+def quickstart(ctx):
+    ctx.forward(cmd_quickstart.cli)
 
 
 def main(*args, **kwargs):
@@ -108,19 +53,3 @@ def main(*args, **kwargs):
         cli(*args, **kwargs)
     except KeyboardInterrupt:
         sys.exit('\nERROR: Interrupted by user')
-
-
-@click.command(context_settings=CONTEXT_SETTINGS)
-@click.option(
-    "--config",
-    "-c",
-    type=click.Path(exists=False, file_okay=True),
-    default=get_config_file_path(),
-    show_default=True,
-    callback=set_config,
-    expose_value=False,
-    help="The config file to be used."
-)
-@click.pass_context
-def quickstart(ctx):
-    ctx.forward(cmd_quickstart.cli)

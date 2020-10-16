@@ -1,3 +1,4 @@
+import json
 import pathlib
 import string
 import unicodedata
@@ -6,6 +7,7 @@ import aiofiles
 import click
 import httpx
 import tqdm
+from audible.aescipher import decrypt_voucher_from_licenserequest
 from audible.client import AsyncClient
 from click import secho
 
@@ -229,10 +231,40 @@ class LibraryItem:
                                output_dir=output_dir, filename=filename,
                                overwrite_existing=overwrite_existing)
 
+    async def get_audiobook_aaxc(self, output_dir, quality="high",
+                                 overwrite_existing=False):
+
+        assert quality in ("best", "high", "normal",)
+        if quality in ("best", "high"):
+            codec = "Extreme"
+        else:
+            codec = "Normal"
+
+        try:
+            license_response = await self._api_client.post(
+                f"content/{self.asin}/licenserequest",
+                body={
+                    "drm_type": "Adrm",
+                    "consumption_type": "Download",
+                    "quality": codec
+                }
+            )
+        except Exception as e:
+            print(f"Error: {e}")
+            return
+
+        url = license_response["content_license"]["content_metadata"]["content_url"]["offline_url"]
+        voucher = decrypt_voucher_from_licenserequest(self._api_client.auth, license_response)
+
+        filename = self.full_title_slugify + f"-{codec}.aaxc"
+        voucher_file = (pathlib.Path(output_dir) / filename).with_suffix(".voucher")
+        voucher_file.write_text(json.dumps(voucher, indent=4))
+        await download_content(client=self._client, url=url,
+                               output_dir=output_dir, filename=filename,
+                               overwrite_existing=overwrite_existing)
 
 class Library:
     def __init__(self, library, api_client):
-        self._data = library.get("items") or library
         self._api_client = api_client
         self._client = httpx.AsyncClient(timeout=CLIENT_TIMEOUT,
                                          auth=api_client.auth)

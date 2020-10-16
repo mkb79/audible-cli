@@ -5,8 +5,9 @@ import click
 from click import echo, secho, prompt
 from tabulate import tabulate
 
+from .config import Config, pass_config
 from .utils import (
-    build_auth_file, pass_config, Config, DEFAULT_AUTH_FILE_EXTENSION
+    build_auth_file, DEFAULT_AUTH_FILE_EXTENSION
 )
 
 

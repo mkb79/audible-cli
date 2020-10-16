@@ -5,7 +5,8 @@ from tabulate import tabulate
 
 from audible.auth import FileAuthenticator
 
-from .utils import build_auth_file, pass_config
+from .config import pass_config
+from .utils import build_auth_file
 
 
 @click.group()

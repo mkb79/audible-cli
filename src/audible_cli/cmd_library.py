@@ -5,7 +5,7 @@ import pathlib
 import click
 
 from .models import Library
-from .utils import pass_config
+from .config import pass_config
 
 
 @click.group()
