@@ -9,7 +9,7 @@ import httpx
 import tqdm
 from audible.aescipher import decrypt_voucher_from_licenserequest
 from audible.client import AsyncClient
-from click import echo, secho
+from click import secho
 
 from .utils import LongestSubString
 
@@ -242,20 +242,10 @@ class LibraryItem:
             "response_groups" : "last_position_heard, pdf_url, content_reference, chapter_info"
         }
         try:
-            # shows the rights on the book
-            resp = await self._api_client.get(
-                f"library/{self.asin}",
-                response_groups="customer_rights"
-            )
-            echo(resp)
-
             license_response = await self._api_client.post(
                 f"content/{self.asin}/licenserequest",
                 body=body
             )
-
-            # for testing
-            secho("license_response:", fg="red")
         except Exception as e:
             raise e
 
@@ -265,17 +255,7 @@ class LibraryItem:
 
         filename = self.full_title_slugify + f"-{codec}.aaxc"
         voucher_file = (pathlib.Path(output_dir) / filename).with_suffix(".voucher")
-        try:
-            voucher_file.write_text(json.dumps(voucher, indent=4))
-        except Exception as e:
-            # for testing will be removed later
-            echo("Error during convert voucher to json")
-            echo(f"Error: {e}")
-            echo()
-            echo(license_response)
-            echo()
-            secho("decrypted voucher:", fg="red")
-            echo(voucher)
+        voucher_file.write_text(json.dumps(voucher, indent=4))
         await download_content(client=self._client, url=url,
                                output_dir=output_dir, filename=filename,
                                overwrite_existing=overwrite_existing)
