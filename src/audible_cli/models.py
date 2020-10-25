@@ -9,7 +9,7 @@ import httpx
 import tqdm
 from audible.aescipher import decrypt_voucher_from_licenserequest
 from audible.client import AsyncClient
-from click import secho
+from click import echo, secho
 
 from .utils import LongestSubString
 
@@ -235,30 +235,39 @@ class LibraryItem:
                                  overwrite_existing=False):
 
         assert quality in ("best", "high", "normal",)
-        if quality in ("best", "high"):
-            codec = "Extreme"
-        else:
-            codec = "Normal"
-
+        body = {
+            "supported_drm_types" : ["Mpeg", "Adrm"],
+            "quality" : "Extreme" if quality in ("best", "high") else "Normal",
+            "consumption_type" : "Download",
+            "response_groups" : "last_position_heard, pdf_url, content_reference, chapter_info"
+        }
         try:
             license_response = await self._api_client.post(
                 f"content/{self.asin}/licenserequest",
-                body={
-                    "drm_type": "Adrm",
-                    "consumption_type": "Download",
-                    "quality": codec
-                }
+                body=body
             )
         except Exception as e:
-            print(f"Error: {e}")
+            secho(f"Error: {e}", fg="red")
             return
 
         url = license_response["content_license"]["content_metadata"]["content_url"]["offline_url"]
+        codec = license_response["content_license"]["content_metadata"]["content_reference"]["content_format"]
         voucher = decrypt_voucher_from_licenserequest(self._api_client.auth, license_response)
 
         filename = self.full_title_slugify + f"-{codec}.aaxc"
         voucher_file = (pathlib.Path(output_dir) / filename).with_suffix(".voucher")
-        voucher_file.write_text(json.dumps(voucher, indent=4))
+        try:
+            voucher_file.write_text(json.dumps(voucher, indent=4))
+        except Exception as e:
+            # for testing will be removed later
+            echo("Error during convert voucher to json")
+            echo(f"Error: {e}")
+            echo()
+            secho("license_response:", fg="red")
+            echo(license_response)
+            echo()
+            secho("decrypted voucher:", fg="red")
+            echo(voucher)
         await download_content(client=self._client, url=url,
                                output_dir=output_dir, filename=filename,
                                overwrite_existing=overwrite_existing)
