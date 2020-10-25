@@ -235,25 +235,22 @@ class LibraryItem:
                                  overwrite_existing=False):
 
         assert quality in ("best", "high", "normal",)
-        if quality in ("best", "high"):
-            codec = "Extreme"
-        else:
-            codec = "Normal"
-
+        body = {
+            "supported_drm_types" : ["Mpeg", "Adrm"],
+            "quality" : "Extreme" if quality in ("best", "high") else "Normal",
+            "consumption_type" : "Download",
+            "response_groups" : "last_position_heard, pdf_url, content_reference, chapter_info"
+        }
         try:
             license_response = await self._api_client.post(
                 f"content/{self.asin}/licenserequest",
-                body={
-                    "drm_type": "Adrm",
-                    "consumption_type": "Download",
-                    "quality": codec
-                }
+                body=body
             )
         except Exception as e:
-            print(f"Error: {e}")
-            return
+            raise e
 
         url = license_response["content_license"]["content_metadata"]["content_url"]["offline_url"]
+        codec = license_response["content_license"]["content_metadata"]["content_reference"]["content_format"]
         voucher = decrypt_voucher_from_licenserequest(self._api_client.auth, license_response)
 
         filename = self.full_title_slugify + f"-{codec}.aaxc"
