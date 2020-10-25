@@ -242,13 +242,22 @@ class LibraryItem:
             "response_groups" : "last_position_heard, pdf_url, content_reference, chapter_info"
         }
         try:
+            # shows the rights on the book
+            resp = await self._api_client.get(
+                f"library/{self.asin}",
+                response_groups="customer_rights"
+            )
+            echo(resp)
+
             license_response = await self._api_client.post(
                 f"content/{self.asin}/licenserequest",
                 body=body
             )
+
+            # for testing
+            secho("license_response:", fg="red")
         except Exception as e:
-            secho(f"Error: {e}", fg="red")
-            return
+            raise e
 
         url = license_response["content_license"]["content_metadata"]["content_url"]["offline_url"]
         codec = license_response["content_license"]["content_metadata"]["content_reference"]["content_format"]
@@ -263,7 +272,6 @@ class LibraryItem:
             echo("Error during convert voucher to json")
             echo(f"Error: {e}")
             echo()
-            secho("license_response:", fg="red")
             echo(license_response)
             echo()
             secho("decrypted voucher:", fg="red")
