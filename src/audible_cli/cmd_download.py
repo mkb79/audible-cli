@@ -121,6 +121,7 @@ async def main(auth, **params):
     quality = params.get("quality")
     get_pdf = params.get("pdf")
     get_cover = params.get("cover")
+    get_chapters = params.get("chapter")
     get_audio = params.get("no_audio") is not True
     get_aaxc = params.get("aaxc")
 
@@ -131,6 +132,8 @@ async def main(auth, **params):
             queue.put_nowait(item.get_cover(output_dir, overwrite_existing))
         if get_pdf:
             queue.put_nowait(item.get_pdf(output_dir, overwrite_existing))
+        if get_chapters:
+            queue.put_nowait(item.get_chapter_informations(output_dir, quality, overwrite_existing))
         if get_audio:
             if get_aaxc:
                 queue.put_nowait(item.get_audiobook_aaxc(output_dir, quality, overwrite_existing))
@@ -192,6 +195,11 @@ async def main(auth, **params):
     "--cover",
     is_flag=True,
     help="downloads the cover in addition to the audiobook"
+)
+@click.option(
+    "--chapter",
+    is_flag=True,
+    help="saves chapter metadata as JSON file"
 )
 @click.option(
     "--no-audio",

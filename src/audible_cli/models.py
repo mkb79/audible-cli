@@ -256,9 +256,39 @@ class LibraryItem:
         filename = self.full_title_slugify + f"-{codec}.aaxc"
         voucher_file = (pathlib.Path(output_dir) / filename).with_suffix(".voucher")
         voucher_file.write_text(json.dumps(voucher, indent=4))
+        tqdm.tqdm.write(f"Voucher file saved to {voucher_file}.")
+
         await download_content(client=self._client, url=url,
                                output_dir=output_dir, filename=filename,
                                overwrite_existing=overwrite_existing)
+
+    async def get_chapter_informations(self, output_dir, quality="high",
+                                       overwrite_existing=False):
+        assert quality in ("best", "high", "normal",)
+
+        try:
+            chapter_informations = await self._api_client.get(
+                f"content/{self.asin}/metadata",
+                response_groups="chapter_info",
+                quality="Extreme" if quality in ("best", "high") else "Normal",
+                drm_type="Adrm"
+            )
+        except Exception as e:
+            raise e
+
+        filename = self.full_title_slugify + "-chapters.json"
+        output_dir = pathlib.Path(output_dir)
+
+        if not output_dir.is_dir():
+            raise Exception("Output dir doesn't exists")
+
+        file = output_dir / filename
+        if file.exists() and not overwrite_existing:
+            secho(f"File {file} already exists. Skip saving chapters.", fg="red")
+            return True
+        file.write_text(json.dumps(chapter_informations, indent=4))
+        tqdm.tqdm.write(f"Chapter file saved to {file}.")
+
 
 class Library:
     def __init__(self, library, api_client):
