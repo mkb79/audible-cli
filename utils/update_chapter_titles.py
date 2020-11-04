@@ -22,9 +22,10 @@ Example:
    ffmpeg -activation_bytes {ACTIVATION_BYTES} \
           -i {NAME_OF_DOWNLOADED_AAX_FILE} \
           -i {NEW_FFMETADATAFILE} \
-          -map_metadata 1 \
+          -map_metadata 0 \
+          -map_chapters 1 \
           -c copy \
-          NAME_OF_TARGET_M4B_FILE.m4b
+          {NAME_OF_TARGET_M4B_FILE.m4b}
 
 """
 
