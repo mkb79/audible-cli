@@ -1,18 +1,15 @@
 import io
 import pathlib
 from difflib import SequenceMatcher
-from typing import Optional
+from typing import Optional, Union
 
 import click
 import httpx
+from audible import Authenticator
 from click import echo, secho, prompt
 from PIL import Image
 
-from audible.auth import LoginAuthenticator
-
-
-DEFAULT_AUTH_FILE_EXTENSION: str = "json"
-DEFAULT_AUTH_FILE_ENCRYPTION: str = "json"
+from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
 
 
 def prompt_captcha_callback(captcha_url: str) -> str:
@@ -43,29 +40,25 @@ def prompt_otp_callback() -> str:
     return str(guess).strip().lower()
 
 
-def build_auth_file(
-    filename: pathlib.Path,
-    username: str,
-    password: str,
-    country_code: str,
-    file_password: Optional[str]=None
-):
+def build_auth_file(filename: Union[str, pathlib.Path],
+                    username: str,
+                    password: str,
+                    country_code: str,
+                    file_password: Optional[str] = None) -> None:
     echo()
-    secho("Now login with amazon to your audible account.", bold=True)
+    secho("Login with amazon to your audible account now.", bold=True)
 
-    file_options = {"filename": filename}
+    file_options = {"filename": pathlib.Path(filename)}
     if file_password:
         file_options.update(
-            password=file_password, encryption=DEFAULT_AUTH_FILE_ENCRYPTION
-        )
+            password=file_password, encryption=DEFAULT_AUTH_FILE_ENCRYPTION)
 
-    auth = LoginAuthenticator(
+    auth = Authenticator.from_login(
         username=username,
         password=password,
         locale=country_code,
         captcha_callback=prompt_captcha_callback,
-        otp_callback=prompt_otp_callback
-    )
+        otp_callback=prompt_otp_callback)
 
     echo()
     secho("Login was successful. Now registering a new device.", bold=True)
@@ -106,7 +99,7 @@ class LongestSubString:
 
 
 def asin_in_library(asin, library):
-    items = library.get("items", None) or library
+    items = library.get("items") or library
 
     try:
         return next(i for i in items if asin in i["asin"])

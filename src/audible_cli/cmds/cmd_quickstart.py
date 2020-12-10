@@ -5,10 +5,9 @@ import click
 from click import echo, secho, prompt
 from tabulate import tabulate
 
-from .config import Config, pass_config
-from .utils import (
-    build_auth_file, DEFAULT_AUTH_FILE_EXTENSION
-)
+from ..config import Config, pass_session
+from ..constants import DEFAULT_AUTH_FILE_EXTENSION
+from ..utils import build_auth_file
 
 
 def tabulate_summary(d: dict) -> None:
@@ -48,7 +47,7 @@ an authentication to the audible server is necessary to register a new device.
     echo()
     secho(intro, bold=True)
    
-    path = config.dir_path.absolute()
+    path = config.dirname.absolute()
     secho("Selected dir to proceed with:", bold=True)
     echo(path.absolute())
 
@@ -118,9 +117,10 @@ an authentication to the audible server is necessary to register a new device.
 
 @click.command("quickstart")
 @click.pass_context
-@pass_config
-def cli(config, ctx):
+@pass_session
+def cli(session, ctx):
     """Quicksetup audible"""
+    config = session.config
     if config.file_exists():
         m = f"Config file {config.filename} already exists. Quickstart will " \
             f"not overwrite existing files."
@@ -143,7 +143,7 @@ def cli(config, ctx):
 
     if "use_existing_auth_file" not in d:
         build_auth_file(
-            filename=config.dir_path / d.get("auth_file"),
+            filename=config.dirname / d.get("auth_file"),
             username=d.get("audible_username"),
             password=d.get("audible_password"),
             country_code=d.get("country_code"),

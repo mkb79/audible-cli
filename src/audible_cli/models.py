@@ -7,8 +7,8 @@ import aiofiles
 import click
 import httpx
 import tqdm
+from audible import AsyncClient
 from audible.aescipher import decrypt_voucher_from_licenserequest
-from audible.client import AsyncClient
 from click import secho
 
 from .utils import LongestSubString
@@ -27,10 +27,10 @@ async def download_content(client, url, output_dir, filename,
         raise Exception("Output dir doesn't exists")
 
     file = output_dir / filename
-    tmp_file = file.with_suffix(".tmp")        
+    tmp_file = file.with_suffix(".tmp")
 
     if file.exists() and not overwrite_existing:
-        secho(f"File {file} already exists. Skip download.", fg="red")
+        secho(f"File {file} already exists. Skip download.", fg="blue")
         return True
 
     try:
@@ -266,6 +266,17 @@ class LibraryItem:
                                        overwrite_existing=False):
         assert quality in ("best", "high", "normal",)
 
+        filename = self.full_title_slugify + "-chapters.json"
+        output_dir = pathlib.Path(output_dir)
+
+        if not output_dir.is_dir():
+            raise Exception("Output dir doesn't exists")
+
+        file = output_dir / filename
+        if file.exists() and not overwrite_existing:
+            secho(f"File {file} already exists. Skip saving chapters.", fg="blue")
+            return True
+
         try:
             chapter_informations = await self._api_client.get(
                 f"content/{self.asin}/metadata",
@@ -276,16 +287,6 @@ class LibraryItem:
         except Exception as e:
             raise e
 
-        filename = self.full_title_slugify + "-chapters.json"
-        output_dir = pathlib.Path(output_dir)
-
-        if not output_dir.is_dir():
-            raise Exception("Output dir doesn't exists")
-
-        file = output_dir / filename
-        if file.exists() and not overwrite_existing:
-            secho(f"File {file} already exists. Skip saving chapters.", fg="red")
-            return True
         file.write_text(json.dumps(chapter_informations, indent=4))
         tqdm.tqdm.write(f"Chapter file saved to {file}.")
 

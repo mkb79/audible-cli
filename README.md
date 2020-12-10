@@ -4,7 +4,7 @@
 
 ## Requirements
 
-audible-cli needs at least *Python 3.6* and *Audible v0.4.1*.
+audible-cli needs at least *Python 3.6* and *Audible v0.5.0*.
 
 It depends on the following packages:
 
@@ -41,7 +41,7 @@ If the ``AUDIBLE_CONFIG_DIR`` environment variable is set, it uses the value as 
 Otherwise it will use a folder depending on the operating system.
 
 | OS       | Path                                      |
-| ---      | ---                                       |
+| —      | —                                       |
 | Windows  | ``C:\Users\<user>\AppData\Local\audible`` |
 | Unix     | ``~/.audible``                            |
 | Mac OS X | ``~/.audible``                            |
@@ -73,5 +73,23 @@ Use the `audible-quickstart` command in your shell to create your first config, 
 ## Commands
 
 Call `audible -h` to let you show all main subcommands. At this time, there are the `manage`, `download` and `library` subcommand. The `manage` command has multiple subcommands. So take a look with the `audible manage -h` and `audible manage <subcommand> -h`. 
+
+## Plugins
+
+### Location
+
+Audible-cli expected plugins in the `plugins` subdir of the config dir. Read above how Audible-cli
+searches the config dir. You can provide a custom dir with the `audible —plugins PATH_TO_PLUGIN_DIR`.
+
+### Custom Commands
+
+You can provide own subcommands and execute them with `audible plugin-cmds SUBCOMMAND`.
+All plugin commands must be placed in the plugin folder. Every subcommand must have his own file.
+Every file have to be named ``cmd_{SUBCOMMAND}.py``. Each subcommand file must have a function
+called `cli` as entrypoint. This function have to be decorated with ``@click.group()`` or 
+``@click.command()``.
+
+Relative imports in the command files doesn’t work. So you have to work with absolute imports.
+Please take care about this.
 
 **More informations will be coming soon.** 

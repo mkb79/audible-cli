@@ -7,8 +7,8 @@ import click
 from click import echo, secho
 from tabulate import tabulate
 
-from .models import Library
-from .config import pass_config
+from ..models import Library
+from ..config import pass_session
 
 
 SSL_PROTOCOLS = (asyncio.sslproto.SSLProtocol,)
@@ -71,6 +71,18 @@ async def consume(queue):
 
 async def main(auth, **params):
     ignore_errors = params.get("ignore_errors")
+    get_all = params.get("all") is True
+    asins = params.get("asin")
+    titles = params.get("title")
+    output_dir = pathlib.Path(params.get("output_dir")).resolve()
+    overwrite_existing = params.get("overwrite")
+    quality = params.get("quality")
+    get_pdf = params.get("pdf")
+    get_cover = params.get("cover")
+    get_chapters = params.get("chapter")
+    get_audio = params.get("no_audio") is not True
+    get_aaxc = params.get("aaxc")
+    sim_jobs = params.get("jobs")
 
     library = await Library.get_from_api(
         auth,
@@ -79,15 +91,13 @@ async def main(auth, **params):
 
     jobs = []
 
-    asin_list = params.get("asin")
-    title_list = params.get("title")
-    if params.get("all") is True:
-        asin_list = []
-        title_list = []
+    if get_all:
+        asins = []
+        titles = []
         for i in library:
             jobs.append(i.asin)
 
-    for asin in asin_list:
+    for asin in asins:
         if library.asin_in_library(asin):
             jobs.append(asin)
         else:
@@ -96,7 +106,7 @@ async def main(auth, **params):
                 ctx.fail(f"Asin {asin} not found in library.")
             secho(f"Skip asin {asin}: Not found in library", fg="red")
 
-    for title in title_list:
+    for title in titles:
         match = library.search_item_by_title(title)
         full_match = [i for i in match if i[1] == 100]
 
@@ -116,15 +126,6 @@ async def main(auth, **params):
         else:
             secho(f"Skip title {title}: Not found in library", fg="red")
 
-    output_dir = pathlib.Path(params.get("output_dir")).resolve()
-    overwrite_existing = params.get("overwrite")
-    quality = params.get("quality")
-    get_pdf = params.get("pdf")
-    get_cover = params.get("cover")
-    get_chapters = params.get("chapter")
-    get_audio = params.get("no_audio") is not True
-    get_aaxc = params.get("aaxc")
-
     queue = asyncio.Queue()
     for job in jobs:
         item = library.get_item_by_asin(job)
@@ -141,7 +142,6 @@ async def main(auth, **params):
                 queue.put_nowait(item.get_audiobook(output_dir, quality, overwrite_existing))
 
     # schedule the consumer
-    sim_jobs = params.get("jobs")
     consumers = [asyncio.ensure_future(consume(queue)) for _ in range(sim_jobs)]
     
     # wait until the consumer has processed all items
@@ -151,8 +151,11 @@ async def main(auth, **params):
     for consumer in consumers:
         consumer.cancel()
 
+    await library._api_client.close()
+    await library._client.aclose()
 
-@click.command()
+
+@click.command("download")
 @click.option(
     "--output-dir", "-o",
     type=click.Path(exists=True, dir_okay=True),
@@ -233,13 +236,14 @@ async def main(auth, **params):
     is_flag=True,
     help="Experimental: Downloading aaxc files and voucher instead of aax"
 )
-@pass_config
-def cli(config, **params):
+@pass_session
+def cli(session, **params):
     """download audiobook(s) from library"""
     loop = asyncio.get_event_loop()
     ignore_httpx_ssl_eror(loop)
+    auth = session.auth
     try:
-        loop.run_until_complete(main(config.auth, **params))
+        loop.run_until_complete(main(auth, **params))
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()

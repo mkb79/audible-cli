@@ -3,15 +3,14 @@ import pathlib
 from click import echo, secho
 from tabulate import tabulate
 
-from audible.auth import FileAuthenticator
+from audible import Authenticator
+from ..config import pass_session
+from ..utils import build_auth_file
 
-from .config import pass_config
-from .utils import build_auth_file
 
-
-@click.group()
+@click.group("manage")
 def cli():
-    """manage audible"""
+    """manage audible-cli"""
 
 
 @cli.group("config")
@@ -30,25 +29,25 @@ def manage_auth_files():
 
 
 @manage_config.command("edit")
-@pass_config
-def config_editor(config):
+@pass_session
+def config_editor(session):
     """Open the config file with default editor"""
-    click.edit(filename=config.filename)
+    click.edit(filename=session.config.filename)
 
 
 @manage_profiles.command("list")
-@pass_config
-def list_profiles(config):
+@pass_session
+def list_profiles(session):
     """List all profiles in the config file"""
     head = ["P", "Profile", "auth file", "cc"]
-    data = []
-    profiles = config.data.get("profile")
+    profiles = session.config.data.get("profile")
 
+    data = []
     for profile in profiles:
         p = profiles.get(profile)
         auth_file = p.get("auth_file")
         country_code = p.get("country_code")
-        is_primary = profile == config.primary_profile
+        is_primary = profile == session.config.primary_profile
         data.append(
             ["*" if is_primary else "", profile, auth_file, country_code])
 
@@ -83,14 +82,14 @@ def list_profiles(config):
     "--is-primary",
     is_flag=True,
 )
-@pass_config
+@pass_session
 @click.pass_context
-def add_profile(ctx, config, profile, country_code, auth_file, is_primary):
+def add_profile(ctx, session, profile, country_code, auth_file, is_primary):
     """Adds a profile to config file"""
-    if not (config.dir_path / auth_file).exists():
+    if not (session.config.dirname / auth_file).exists():
         ctx.fail("Auth file doesn't exists.")
 
-    config.add_profile(
+    session.config.add_profile(
         name=profile,
         auth_file=auth_file,
         country_code=country_code,
@@ -104,11 +103,10 @@ def add_profile(ctx, config, profile, country_code, auth_file, is_primary):
     multiple=True,
     help="The profile name to remove from config."
 )
-@pass_config
-@click.pass_context
-def remove_profile(ctx, config, profile):
+@pass_session
+def remove_profile(session, profile):
     """Remove one or multiple profile(s) from config file"""
-    profiles = config.data.get("profile")
+    profiles = session.config.data.get("profile")
     for p in profile:
         if p not in profiles:
             secho(
@@ -117,13 +115,13 @@ def remove_profile(ctx, config, profile):
             del profiles[p]
             echo(f"Profile '{p}' removed from config")
 
-    config.write_config()
+    session.config.write_config()
     echo("Changes successful saved to config file.")
 
 
-@pass_config
-def check_if_auth_file_not_exists(config, ctx, value):
-    value = config.dir_path / value
+@pass_session
+def check_if_auth_file_not_exists(session, ctx, value):
+    value = session.config.dirname / value
     if pathlib.Path(value).exists():
         ctx.fail("The file already exists.")
     return value
@@ -159,11 +157,11 @@ def check_if_auth_file_not_exists(config, ctx, value):
     prompt="Please enter the country code",
     help="The country code for the marketplace you want to authenticate."
 )
-@pass_config
-def add_auth_file(config, auth_file, password, audible_username, audible_password, country_code):
+@pass_session
+def add_auth_file(session, auth_file, password, audible_username, audible_password, country_code):
     "Register a new device and add an auth file to config dir"
     build_auth_file(
-        filename=auth_file,
+        filename=session.config.dirname / auth_file,
         username=audible_username,
         password=audible_password,
         country_code=country_code,
@@ -171,9 +169,9 @@ def add_auth_file(config, auth_file, password, audible_username, audible_passwor
     )
 
 
-@pass_config
-def check_if_auth_file_exists(config, ctx, value):
-    value = config.dir_path / value
+@pass_session
+def check_if_auth_file_exists(session, ctx, value):
+    value = session.config.dirname / value
     if not pathlib.Path(value).exists():
         ctx.fail("The file doesn't exists.")
     return value
@@ -193,13 +191,11 @@ def check_if_auth_file_exists(config, ctx, value):
 )
 def remove_auth_file(auth_file, password):
     "Deregister a device and remove auth file from config dir"
-    auth = FileAuthenticator(auth_file, password)
+    auth = Authenticator.from_file(auth_file, password)
     device_name = auth.device_info["device_name"]
     auth.refresh_access_token()
-
     auth.deregister_device()
-    echo(f"{device_name} deregistered")
-    
+    echo(f"{device_name} deregistered")    
     auth_file.unlink()
     echo(f"{auth_file} removed from config dir")
     

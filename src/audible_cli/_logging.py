@@ -3,74 +3,60 @@ import pathlib
 from typing import Optional, Union
 from warnings import warn
 
-LEVELS = {
-    "debug": logging.DEBUG,
-    "info": logging.INFO,
-    "warn": logging.WARNING,
-    "warning": logging.WARNING,
-    "error": logging.ERROR,
-    "critical": logging.CRITICAL,
-    "not-set": logging.NOTSET
-}
+logger = logging.getLogger("audible-cli")
+logger.addHandler(logging.NullHandler())
+
+log_formatter = logging.Formatter(
+    "%(asctime)s %(levelname)s [%(name)s] %(filename)s:%(lineno)d: %(message)s"
+)
 
 
-class AudibleLogHelper:
-    def __init__(self) -> None:
-        self._formatter = logging.Formatter(
-            "%(asctime)s %(levelname)s [%(name)s] "
-            "%(filename)s:%(lineno)d: %(message)s"
-        )
-        self._logger = logging.getLogger("audible-cli")
-
+class AudibleCliLogHelper:
     def set_level(self, level: Union[str, int]) -> None:
-        """Set logging level for the main logger."""
-        if isinstance(level, str):
-            level = LEVELS.get(level.lower().strip())
+        """Set logging level for the audible-cli package."""
+        self._set_level(logger, level)
 
-        self._logger.setLevel(level)
-        self._logger.info(
-            "set logging threshold to \"%s\"",
-            logging.getLevelName(self._logger.level)
-        )
-
-    def _set_handler_level(self, handler,
-                           level: Optional[Union[str, int]]) -> None:
-        if isinstance(level, str):
-            level = LEVELS.get(level.lower().strip())
-
+    @staticmethod
+    def _set_level(obj, level: Optional[Union[str, int]]) -> None:
         if level:
-            handler.setLevel(level)
+            level = level.upper() if isinstance(level, str) else level
+            obj.setLevel(level)
 
-        self._logger.info(
-            f"set logging threshold for \"{handler.name}\" "
-            f"to \"{logging.getLevelName(handler.level)}\""
-        )
+        level_name = logging.getLevelName(obj.level)
+        logger.info(f"set log level for {obj.name} to: {level_name}")
 
-        if handler.level < self._logger.level:
-            warn("Handler level must be equal or greater than logger level")
+        if 0 < obj.level < logger.level:
+            warn(f"{obj.name} level is lower than {logger.name} logger level")
+
+    def _set_handler(self, handler, name, level):
+        handler.setFormatter(log_formatter)
+        handler.set_name(name)
+        logger.addHandler(handler)
+        self._set_level(handler, level)
 
     def set_console_logger(self,
                            level: Optional[Union[str, int]] = None) -> None:
-        """Set logging level for the stream handler."""
-        stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(self._formatter)
-        stream_handler.set_name("ConsoleLogger")
-        self._logger.addHandler(stream_handler)
-        self._set_handler_level(stream_handler, level)
+        """Set up a console logger to the audible-cli package."""
+        handler = logging.StreamHandler()
+        # noinspection PyTypeChecker
+        self._set_handler(handler, "ConsoleLogger", level)
 
     def set_file_logger(
             self, filename: str, level: Optional[Union[str, int]] = None
     ) -> None:
-        """Set logging level and filename for the file handler."""
+        """Set up a file logger to the audible-cli package."""
         filename = pathlib.Path(filename)
-        file_handler = logging.FileHandler(filename)
-        file_handler.setFormatter(self._formatter)
-        file_handler.set_name("FileLogger")
-        self._logger.addHandler(file_handler)
-        self._set_handler_level(file_handler, level)
+        handler = logging.FileHandler(filename)
+        # noinspection PyTypeChecker
+        self._set_handler(handler, "FileLogger", level)
 
-    def capture_warnings(self, status: bool = True) -> None:
+    @staticmethod
+    def capture_warnings(status: bool = True) -> None:
+        """Lets the logger capture warnings."""
         logging.captureWarnings(status)
-        self._logger.info(
+        logger.info(
             f"Capture warnings {'activated' if status else 'deactivated'}"
         )
+
+
+log_helper = AudibleCliLogHelper()

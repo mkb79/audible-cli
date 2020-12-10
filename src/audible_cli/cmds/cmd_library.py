@@ -4,11 +4,11 @@ import pathlib
 
 import click
 
-from .models import Library
-from .config import pass_config
+from ..models import Library
+from ..config import pass_session
 
 
-@click.group()
+@click.group("library")
 def cli():
     """interact with library"""
 
@@ -85,13 +85,12 @@ async def _export_library(auth, **params):
     show_default=True,
     help="output file"
 )
-@pass_config
-def export_library(config, **params):
+@pass_session
+def export_library(session, **params):
     """export library"""
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(_export_library(config.auth, **params))
+        loop.run_until_complete(_export_library(session.config.auth, **params))
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
-
