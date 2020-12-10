@@ -78,18 +78,40 @@ Call `audible -h` to let you show all main subcommands. At this time, there are 
 
 ### Location
 
-Audible-cli expected plugins in the `plugins` subdir of the config dir. Read above how Audible-cli
-searches the config dir. You can provide a custom dir with the `audible --plugins PATH_TO_PLUGIN_DIR`.
+Audible-cli expected plugins in the `plugins` subdir of the config dir. Read above how Audible-cli searches the config dir. You can provide a custom dir with the `audible --plugins PATH_TO_PLUGIN_DIR`.
 
 ### Custom Commands
 
 You can provide own subcommands and execute them with `audible plugin-cmds SUBCOMMAND`.
 All plugin commands must be placed in the plugin folder. Every subcommand must have his own file.
-Every file have to be named ``cmd_{SUBCOMMAND}.py``. Each subcommand file must have a function
-called `cli` as entrypoint. This function have to be decorated with ``@click.group()`` or 
-``@click.command()``.
+Every file have to be named ``cmd_{SUBCOMMAND}.py``. Each subcommand file must have a function called `cli` as entrypoint. This function have to be decorated with ``@click.group()`` or  ``@click.command()``.
 
-Relative imports in the command files doesn't work. So you have to work with absolute imports.
-Please take care about this.
+Relative imports in the command files doesn't work. So you have to work with absolute imports. Please take care about this.
+
+Example:
+
+```python
+import audible
+import click
+from audible_cli.config import pass_session
+
+
+@click.command()
+@click.option(
+    "--asin", "-a",
+    multiple=False,
+    help="asin of the audiobook"
+)
+@pass_session
+def cli(session, asin):
+    "Print out the image urls for different resolutions for a book"
+    with audible.Client(auth=session.auth) as client:
+        r = client.get(f"library/{asin}",
+                       response_groups="media",
+                       image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500")
+    images = r["item"]["product_images"]
+    for res, url in images.items():
+        click.echo(f"Resolution {res}: {url}")
+```
 
 **More informations will be coming soon.** 
