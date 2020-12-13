@@ -1,9 +1,10 @@
-import click
 import pathlib
+
+import click
+from audible import Authenticator
 from click import echo, secho
 from tabulate import tabulate
 
-from audible import Authenticator
 from ..config import pass_session
 from ..utils import build_auth_file
 
@@ -75,7 +76,7 @@ def list_profiles(session):
     "--auth-file", "-f",
     type=click.Path(exists=False, file_okay=True),
     prompt="Please enter name for the auth file",
-    help="The auth file name (without dir) to be added. " \
+    help="The auth file name (without dir) to be added. "
          "The auth file must exist."
 )
 @click.option(
@@ -158,8 +159,9 @@ def check_if_auth_file_not_exists(session, ctx, value):
     help="The country code for the marketplace you want to authenticate."
 )
 @pass_session
-def add_auth_file(session, auth_file, password, audible_username, audible_password, country_code):
-    "Register a new device and add an auth file to config dir"
+def add_auth_file(session, auth_file, password, audible_username,
+                  audible_password, country_code):
+    """Register a new device and add an auth file to config dir"""
     build_auth_file(
         filename=session.config.dirname / auth_file,
         username=audible_username,
@@ -190,12 +192,11 @@ def check_if_auth_file_exists(session, ctx, value):
     help="The optional password for the auth file."
 )
 def remove_auth_file(auth_file, password):
-    "Deregister a device and remove auth file from config dir"
+    """Deregister a device and remove auth file from config dir"""
     auth = Authenticator.from_file(auth_file, password)
     device_name = auth.device_info["device_name"]
     auth.refresh_access_token()
     auth.deregister_device()
-    echo(f"{device_name} deregistered")    
+    echo(f"{device_name} deregistered")
     auth_file.unlink()
     echo(f"{auth_file} removed from config dir")
-    

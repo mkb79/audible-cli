@@ -1,9 +1,9 @@
 import os
 import pathlib
-import toml
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import click
+import toml
 from audible import Authenticator
 from audible.exceptions import FileEncryptionError
 from click import echo, prompt
@@ -83,8 +83,9 @@ class Config:
 
     def delete_profile(self, name: str) -> None:
         del self.data["profile"][name]
-    
-    def read_config(self, filename: Optional[Union[str, pathlib.Path]] = None) -> None:
+
+    def read_config(self, filename: Optional[
+            Union[str, pathlib.Path]] = None) -> None:
         f = pathlib.Path(filename or self.filename).resolve()
 
         try:
@@ -100,7 +101,8 @@ class Config:
         self._config_file = f
         self._is_read = True
 
-    def write_config(self, filename: Optional[Union[str, pathlib.Path]] = None) -> None:
+    def write_config(self, filename: Optional[
+            Union[str, pathlib.Path]] = None) -> None:
         f = pathlib.Path(filename or self.filename).resolve()
 
         if not f.parent.is_dir():
@@ -154,9 +156,11 @@ class Session:
                     locale=country_code)
                 return self._auth
             except (FileEncryptionError, ValueError):
-                echo("Auth file is encrypted but no/wrong password is provided")
-                password = prompt("Please enter the password (or enter to exit)",
-                                  hide_input=True, default="")
+                echo(
+                    "Auth file is encrypted but no/wrong password is provided")
+                password = prompt(
+                    "Please enter the password (or enter to exit)",
+                    hide_input=True, default="")
                 if password == "":
                     ctx = click.get_current_context()
                     ctx.abort()
@@ -178,14 +182,14 @@ pass_session = click.make_pass_decorator(Session, ensure=True)
 
 
 def add_param_to_session(ctx: click.Context, param, value):
-    """Add a parameter to :class:`Session` `param` attribute""" 
+    """Add a parameter to :class:`Session` `param` attribute"""
     session = ctx.ensure_object(Session)
     session.params[param.name] = value
     return value
 
 
 def add_plugin_path_to_session(ctx: click.Context, param, value):
-    """Add a plugin cmds path to :class:`Session` `param` attribute""" 
+    """Add a plugin cmds path to :class:`Session` `param` attribute"""
     session = ctx.ensure_object(Session)
     session._plugin_path = pathlib.Path(value).resolve()
     return value

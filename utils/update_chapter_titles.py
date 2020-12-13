@@ -50,11 +50,11 @@ class ApiMeta:
         return len(self.get_chapters())
 
     def get_chapters(self):
-        return self._meta_parsed["content_metadata"]["chapter_info"]["chapters"]
+        return self._meta_parsed["content_metadata"]["chapter_info"][
+            "chapters"]
 
 
 class FFMeta:
-
     SECTION = re.compile(r"\[(?P<header>[^]]+)\]")
     OPTION = re.compile(r"(?P<option>.*?)\s*(?:(?P<vi>=)\s*(?P<value>.*))?$")
 
@@ -71,7 +71,7 @@ class FFMeta:
         for line in iter(self._ffmeta_raw.splitlines()):
             mo = self.SECTION.match(line)
             if mo:
-                sec_name = mo.group('header')
+                sec_name = mo.group("header")
                 if sec_name == "CHAPTER":
                     num_chap += 1
                     if sec_name not in parsed_dict:
@@ -104,12 +104,15 @@ class FFMeta:
             elif section == "CHAPTER":
                 # TODO: Tue etwas
                 for chapter in self._ffmeta_parsed[section]:
-                    self._write_section(fp, section, self._ffmeta_parsed[section][chapter], d)
+                    self._write_section(fp, section,
+                                        self._ffmeta_parsed[section][chapter],
+                                        d)
             else:
-                self._write_section(fp, section, self._ffmeta_parsed[section], d)
+                self._write_section(fp, section, self._ffmeta_parsed[section],
+                                    d)
 
     def _write_section(self, fp, section_name, section_items, delimiter):
-        """Write a single section to the specified `fp'."""
+        """Write a single section to the specified `fp`."""
         if section_name is not None:
             fp.write(f"[{section_name}]\n")
 
@@ -135,30 +138,31 @@ class FFMeta:
                     self.set_chapter_option(num_chap, "title", value)
 
 
-CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
-        
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+
+
 @click.command(context_settings=CONTEXT_SETTINGS)
 @click.option(
-   "--ffmeta", "-f",
-   type=click.Path(
-       exists=True, file_okay=True, readable=True
-   ),
-   required=True,
-   help="ffmetadata file extracted from file with ffmpeg"
+    "--ffmeta", "-f",
+    type=click.Path(
+        exists=True, file_okay=True, readable=True
+    ),
+    required=True,
+    help="ffmetadata file extracted from file with ffmpeg"
 )
 @click.option(
-   "--apimeta", "-a",
-   type=click.Path(
-       exists=True, file_okay=True, readable=True
-   ),
-   required=True,
-   help="metadata from api"
+    "--apimeta", "-a",
+    type=click.Path(
+        exists=True, file_okay=True, readable=True
+    ),
+    required=True,
+    help="metadata from api"
 )
 @click.option(
-   "--outfile", "-o",
-   type=click.Path(exists=False, file_okay=True),
-   required=True,
-   help="filename to store prepared ffmeta"
+    "--outfile", "-o",
+    type=click.Path(exists=False, file_okay=True),
+    required=True,
+    help="filename to store prepared ffmeta"
 )
 def cli(ffmeta, apimeta, outfile):
     ffmeta_class = FFMeta(ffmeta)
@@ -171,7 +175,8 @@ def main(*args, **kwargs):
     try:
         cli(*args, **kwargs)
     except KeyboardInterrupt:
-        sys.exit('\nERROR: Interrupted by user')
+        sys.exit("\nERROR: Interrupted by user")
+
 
 if __name__ == "__main__":
     sys.exit(main())

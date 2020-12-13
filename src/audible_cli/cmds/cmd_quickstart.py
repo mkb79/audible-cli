@@ -19,7 +19,8 @@ def tabulate_summary(d: dict) -> None:
     ]
     if "use_existing_auth_file" not in d:
         data.append(
-            ["auth_file_password", "***" if "auth_file_password" in d else "-"])
+            ["auth_file_password",
+             "***" if "auth_file_password" in d else "-"])
         data.append(["audible_username", d.get("audible_username")])
         data.append(["audible_password", "***"])
 
@@ -46,7 +47,7 @@ an authentication to the audible server is necessary to register a new device.
 """
     echo()
     secho(intro, bold=True)
-   
+
     path = config.dirname.absolute()
     secho("Selected dir to proceed with:", bold=True)
     echo(path.absolute())
@@ -111,7 +112,7 @@ an authentication to the audible server is necessary to register a new device.
     d["audible_username"] = prompt("Please enter your amazon username")
     d["audible_password"] = prompt("Please enter your amazon password",
                                    hide_input=True, confirmation_prompt=True)
-    
+
     return d
 
 
@@ -124,7 +125,7 @@ def cli(session, ctx):
     if config.file_exists():
         m = f"Config file {config.filename} already exists. Quickstart will " \
             f"not overwrite existing files."
- 
+
         ctx.fail(m) if ctx else echo(m)
         sys.exit()
 

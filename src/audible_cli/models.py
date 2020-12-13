@@ -1,76 +1,37 @@
-import json
-import pathlib
 import string
 import unicodedata
+from typing import Dict, Optional, Union
 
-import aiofiles
-import click
+import audible
 import httpx
-import tqdm
-from audible import AsyncClient
+from audible import Authenticator
 from audible.aescipher import decrypt_voucher_from_licenserequest
+from audible.localization import Locale
 from click import secho
 
+from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
 from .utils import LongestSubString
 
 
-CLIENT_TIMEOUT = 15
-CODEC_HIGH_QUALITY = "LC_128_44100_stereo"
-CODEC_NORMAL_QUALITY = "LC_64_44100_stereo"
-
-
-async def download_content(client, url, output_dir, filename,
-                           overwrite_existing=False):
-    output_dir = pathlib.Path(output_dir)
-
-    if not output_dir.is_dir():
-        raise Exception("Output dir doesn't exists")
-
-    file = output_dir / filename
-    tmp_file = file.with_suffix(".tmp")
-
-    if file.exists() and not overwrite_existing:
-        secho(f"File {file} already exists. Skip download.", fg="blue")
-        return True
-
-    try:
-        async with client.stream("GET", url) as r:
-            length = int(r.headers["Content-Length"])
-
-            progressbar = tqdm.tqdm(
-                desc=filename, total=length, unit='B', unit_scale=True,
-                unit_divisor=1024
-            )
-
-            try:
-                with progressbar:
-                    async with aiofiles.open(tmp_file, mode="wb") as f:
-                    #with progressbar, tmp_file.open("wb") as f:
-                        async for chunk in r.aiter_bytes():
-                            await f.write(chunk)
-                            progressbar.update(len(chunk))
-
-                if file.exists() and overwrite_existing:
-                    i = 0
-                    while file.with_suffix(f"{file.suffix}.old.{i}").exists():
-                        i += 1
-                    file.rename(file.with_suffix(f"{file.suffix}.old.{i}"))
-                tmp_file.rename(file)
-                tqdm.tqdm.write(f"File {file} downloaded to {output_dir} in {r.elapsed}")
-                return True
-            finally:
-                # remove tmp_file if download breaks
-                tmp_file.unlink() if tmp_file.exists() else ""
-    except KeyError as e:
-        secho(f"An error occured during downloading {file}", fg="red")
-        return False
-
-
 class LibraryItem:
-    def __init__(self, item, api_client, client):
-        self._data = item
-        self._api_client = api_client
-        self._client = client
+    def __init__(self,
+                 data: dict,
+                 locale: Optional[Locale] = None,
+                 country_code: Optional[str] = None,
+                 auth: Optional[Authenticator] = None):
+
+        if locale is None and country_code is None and auth is None:
+            raise ValueError("No locale, country_code or auth provided.")
+        if locale is not None and country_code is not None:
+            raise ValueError("Locale and country_code provided. Expected only "
+                             "one of them.")
+
+        if country_code is not None:
+            locale = Locale(country_code)
+
+        self._data = data.get("item", data)
+        self._locale = locale or auth.locale
+        self._auth = auth
 
     def __getitem__(self, key):
         return self._data[key]
@@ -81,18 +42,19 @@ class LibraryItem:
         except KeyError:
             return None
 
-    def __iter__(self):
-        return iter(self._data)
-
     @property
     def full_title(self):
-        return self.title + (f": {self.subtitle}" if self.subtitle else "")
+        title: str = self.title
+        if self.subtitle is not None:
+            title = f"{title}: {self.subtitle}"
+        return title
 
     @property
     def full_title_slugify(self):
-        valid_chars = f"-_.() " + string.ascii_letters + string.digits
-        cleaned_title = unicodedata.normalize('NFKD', self.full_title)\
-                        .encode('ASCII', 'ignore').replace(b" ", b"_")
+        valid_chars = "-_.() " + string.ascii_letters + string.digits
+        cleaned_title = unicodedata.normalize("NFKD", self.full_title)
+        cleaned_title = cleaned_title.encode("ASCII", "ignore")
+        cleaned_title = cleaned_title.replace(b" ", b"_")
         return "".join(chr(c) for c in cleaned_title if chr(c) in valid_chars)
 
     def substring_in_title_accuracy(self, substring):
@@ -103,76 +65,51 @@ class LibraryItem:
         accuracy = self.substring_in_title_accuracy(substring)
         return accuracy >= p
 
-    async def get_cover(self, output_dir, overwrite_existing=False):
-        url = self.product_images.get("500")
-        if url is None:
-            # TODO: no cover
+    def get_cover_url(self, res: Union[str, int] = 500):
+        images = self.product_images
+        res = str(res)
+        if images is None or res not in images:
             return
+        return images[res]
 
-        filename = self.full_title_slugify + ".jpg"
-        await download_content(client=self._client, url=url,
-                               output_dir=output_dir, filename=filename,
-                               overwrite_existing=overwrite_existing)
+    def get_pdf_url(self):
+        if self.pdf_url is not None:
+            domain = self._locale.domain
+            return f"https://www.audible.{domain}/companion-file/{self.asin}"
 
-    @property
-    def has_pdf(self):
-        return self.pdf_url is not None
+    def _build_aax_request_url(self, codec: str):
+        url = ("https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
+               "FSDownloadContent")
+        params = {
+            "type": "AUDI",
+            "currentTransportMethod": "WIFI",
+            "key": self.asin,
+            "codec": codec
+        }
+        return httpx.URL(url, params=params)
 
-    async def get_pdf_url(self):
-        # something is broken getting with pdf url getting from api response
-        # missing credentials in pdf url link
-        # this working for me
-        tld = self._client.auth.locale.domain
-        r = await self._client.head(
-            f"https://www.audible.{tld}/companion-file/{self.asin}")
-        return r.url
-
-    async def get_pdf(self, output_dir, overwrite_existing=False):
-        if not self.has_pdf:
-        # TODO: no pdf
-            return
-
-        #url = self.pdf_url
-        url = await self.get_pdf_url()
-
-        filename = self.full_title_slugify + ".pdf"
-        await download_content(client=self._client, url=url,
-                               output_dir=output_dir, filename=filename,
-                               overwrite_existing=overwrite_existing)
-
-    async def get_download_link(self, codec):
-        if self._client.auth.adp_token is None:
-            ctx = click.get_current_context()
-            ctx.fail("No adp token present. Can't get download link.")
-    
+    def _extract_link_from_response(self, r: httpx.Response):
+        # prepare link
+        # see https://github.com/mkb79/Audible/issues/3#issuecomment-518099852
         try:
-            content_url = ("https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
-                           "FSDownloadContent")
-            params = {
-                'type': 'AUDI',
-                'currentTransportMethod': 'WIFI',
-                'key': self.asin,
-                'codec': codec
-            }
-            r = await self._client.head(
-                url=content_url,
-                params=params,
-                allow_redirects=False)
-    
-            # prepare link
-            # see https://github.com/mkb79/Audible/issues/3#issuecomment-518099852
-            link = r.headers['Location']
-            tld = self._client.auth.locale.domain
-            new_link = link.replace("cds.audible.com", f"cds.audible.{tld}")
-            return new_link
+            link = r.headers["Location"]
+            domain = self._locale.domain
+            return link.replace("cds.audible.com", f"cds.audible.{domain}")
         except Exception as e:
-            secho(f"Error: {e} occured. Can't get download link. Skip asin {self.asin}")
-            return None
+            secho(f"Error: {e} occured. Can't get download link. "
+                  f"Skip asin {self.asin}.")
 
-    def get_quality(self, verify=None):
-        """If verify is set, ensures the given quality is present in the
-        codecs list. Otherwise, will find the best aax quality available
+    def _get_codec(self, quality: str):
+        """If quality is not ``best``, ensures the given quality is present in 
+        them codecs list. Otherwise, will find the best aax quality available
         """
+        assert quality in ("best", "high", "normal",)
+
+        verify = None
+        if quality != "best":
+            verify = CODEC_HIGH_QUALITY if quality == "high" else \
+                CODEC_NORMAL_QUALITY
+
         best = (None, 0, 0)
         for codec in self.available_codecs:
             if verify is not None and verify == codec["enhanced_codec"]:
@@ -201,115 +138,237 @@ class LibraryItem:
         return best[0]
 
     @property
-    def is_downloadable(self):
+    def _is_downloadable(self):
         if self.content_delivery_type in ("Periodical",):
             return False
 
-        return True        
+        return True
 
-    async def get_audiobook(self, output_dir, quality="high",
-                            overwrite_existing=False):
-        if not self.is_downloadable:
-            secho(f"{self.full_title} is not downloadable. Skip item.", fg="red")
+    def get_aax_url(self,
+                    quality: str = "high",
+                    client: Optional[httpx.Client] = None):
+
+        if not self._is_downloadable:
+            secho(f"{self.full_title} is not downloadable. Skip item.",
+                  fg="red")
             return
 
-        assert quality in ("best", "high", "normal",)
-        if quality == "best":
-            codec = self.get_quality()
+        codec = self._get_codec(quality)
+        url = self._build_aax_request_url(codec)
+        if client is None:
+            assert self._auth is not None
+            with httpx.Client(auth=self._auth) as client:
+                resp = client.head(url=url, allow_redirects=False)
         else:
-            codec = self.get_quality(
-                CODEC_HIGH_QUALITY if quality == "high" else CODEC_NORMAL_QUALITY
-            )
+            resp = client.head(url=url, allow_redirects=False)
 
-        url = await self.get_download_link(codec)
-        if not url:
-        # TODO: no link
+        return self._extract_link_from_response(resp), codec
+
+    async def aget_aax_url(self,
+                           quality: str = "high",
+                           client: Optional[httpx.AsyncClient] = None):
+
+        if not self._is_downloadable:
+            secho(f"{self.full_title} is not downloadable. Skip item.",
+                  fg="red")
             return
 
-        filename = self.full_title_slugify + f"-{codec}.aax"
-        await download_content(client=self._client, url=url,
-                               output_dir=output_dir, filename=filename,
-                               overwrite_existing=overwrite_existing)
+        codec = self._get_codec(quality)
+        url = self._build_aax_request_url(codec)
+        if client is None:
+            assert self._auth is not None
+            async with httpx.AsyncClient(auth=self._auth) as client:
+                resp = await client.head(url=url, allow_redirects=False)
+        else:
+            resp = await client.head(url=url, allow_redirects=False)
 
-    async def get_audiobook_aaxc(self, output_dir, quality="high",
-                                 overwrite_existing=False):
+        return self._extract_link_from_response(resp), codec
 
+    @staticmethod
+    def _build_aaxc_request_body(quality: str):
         assert quality in ("best", "high", "normal",)
-        body = {
-            "supported_drm_types" : ["Mpeg", "Adrm"],
-            "quality" : "Extreme" if quality in ("best", "high") else "Normal",
-            "consumption_type" : "Download",
-            "response_groups" : "last_position_heard, pdf_url, content_reference, chapter_info"
+        return {
+            "supported_drm_types": ["Mpeg", "Adrm"],
+            "quality": "Extreme" if quality in ("best", "high") else "Normal",
+            "consumption_type": "Download",
+            "response_groups": ("last_position_heard, pdf_url, "
+                                "content_reference, chapter_info")
         }
-        try:
-            license_response = await self._api_client.post(
-                f"content/{self.asin}/licenserequest",
-                body=body
-            )
-        except Exception as e:
-            raise e
 
-        url = license_response["content_license"]["content_metadata"]["content_url"]["offline_url"]
-        codec = license_response["content_license"]["content_metadata"]["content_reference"]["content_format"]
-        voucher = decrypt_voucher_from_licenserequest(self._api_client.auth, license_response)
+    @staticmethod
+    def _extract_url_from_aaxc_response(r: Dict):
+        return r["content_license"]["content_metadata"]["content_url"][
+            "offline_url"]
 
-        filename = self.full_title_slugify + f"-{codec}.aaxc"
-        voucher_file = (pathlib.Path(output_dir) / filename).with_suffix(".voucher")
-        voucher_file.write_text(json.dumps(voucher, indent=4))
-        tqdm.tqdm.write(f"Voucher file saved to {voucher_file}.")
+    @staticmethod
+    def _extract_codec_from_aaxc_response(r: Dict):
+        return r["content_license"]["content_metadata"]["content_reference"][
+            "content_format"]
 
-        await download_content(client=self._client, url=url,
-                               output_dir=output_dir, filename=filename,
-                               overwrite_existing=overwrite_existing)
+    @staticmethod
+    def _decrypt_voucher_from_aaxc_response(r: Dict, auth: Authenticator):
+        voucher = decrypt_voucher_from_licenserequest(auth, r)
+        r["content_license"]["license_response"] = voucher
+        return r
 
-    async def get_chapter_informations(self, output_dir, quality="high",
-                                       overwrite_existing=False):
+    def get_aaxc_url(self,
+                     quality: str = "high",
+                     api_client: Optional[audible.Client] = None):
+
+        body = self._build_aaxc_request_body(quality)
+        if api_client is None:
+            assert self._auth is not None
+            cc = self._locale.country_code
+            with audible.Client(auth=self._auth,
+                                country_code=cc) as api_client:
+                lr = api_client.post(
+                    f"content/{self.asin}/licenserequest", body=body)
+        else:
+            lr = api_client.post(f"content/{self.asin}/licenserequest",
+                                 body=body)
+
+        url = self._extract_url_from_aaxc_response(lr)
+        codec = self._extract_codec_from_aaxc_response(lr)
+        dlr = self._decrypt_voucher_from_aaxc_response(lr, api_client.auth)
+
+        return url, codec, dlr
+
+    async def aget_aaxc_url(self,
+                            quality: str = "high",
+                            api_client: Optional[audible.AsyncClient] = None):
+
+        body = self._build_aaxc_request_body(quality)
+        if api_client is None:
+            assert self._auth is not None
+            cc = self._locale.country_code
+            async with audible.AsyncClient(auth=self._auth,
+                                           country_code=cc) as api_client:
+                lr = await api_client.post(
+                    f"content/{self.asin}/licenserequest", body=body)
+        else:
+            lr = await api_client.post(f"content/{self.asin}/licenserequest",
+                                       body=body)
+
+        url = self._extract_url_from_aaxc_response(lr)
+        codec = self._extract_codec_from_aaxc_response(lr)
+        dlr = self._decrypt_voucher_from_aaxc_response(lr, api_client.auth)
+
+        return url, codec, dlr
+
+    def _build_metadata_request_url(self, quality: str):
         assert quality in ("best", "high", "normal",)
+        url = f"content/{self.asin}/metadata"
+        params = {
+            "response_groups": "last_position_heard, content_reference, "
+                               "chapter_info",
+            "quality": "Extreme" if quality in ("best", "high") else "Normal",
+            "drm_type": "Adrm"
+        }
+        return str(httpx.URL(url, params=params))
 
-        filename = self.full_title_slugify + "-chapters.json"
-        output_dir = pathlib.Path(output_dir)
+    def get_content_metadata(self,
+                             quality: str = "high",
+                             api_client: Optional[audible.Client] = None):
 
-        if not output_dir.is_dir():
-            raise Exception("Output dir doesn't exists")
+        url = self._build_metadata_request_url(quality)
+        if api_client is None:
+            assert self._auth is not None
+            cc = self._locale.country_code
+            with audible.Client(auth=self._auth,
+                                country_code=cc) as api_client:
+                metadata = api_client.get(url)
+        else:
+            metadata = api_client.get(url)
 
-        file = output_dir / filename
-        if file.exists() and not overwrite_existing:
-            secho(f"File {file} already exists. Skip saving chapters.", fg="blue")
-            return True
+        return metadata
 
-        try:
-            chapter_informations = await self._api_client.get(
-                f"content/{self.asin}/metadata",
-                response_groups="chapter_info",
-                quality="Extreme" if quality in ("best", "high") else "Normal",
-                drm_type="Adrm"
-            )
-        except Exception as e:
-            raise e
+    async def aget_content_metadata(self,
+                                    quality: str = "high",
+                                    api_client: Optional[
+                                        audible.AsyncClient] = None):
 
-        file.write_text(json.dumps(chapter_informations, indent=4))
-        tqdm.tqdm.write(f"Chapter file saved to {file}.")
+        url = self._build_metadata_request_url(quality)
+        if api_client is None:
+            assert self._auth is not None
+            cc = self._locale.country_code
+            async with audible.AsyncClient(auth=self._auth,
+                                           country_code=cc) as api_client:
+                metadata = await api_client.get(url)
+        else:
+            metadata = await api_client.get(url)
+
+        return metadata
 
 
 class Library:
-    def __init__(self, library, api_client):
-        self._api_client = api_client
-        self._client = httpx.AsyncClient(timeout=CLIENT_TIMEOUT,
-                                         auth=api_client.auth)
+    def __init__(self,
+                 data: dict,
+                 locale: Optional[Locale] = None,
+                 country_code: Optional[str] = None,
+                 auth: Optional[Authenticator] = None):
 
-        self._data = [LibraryItem(i, self._api_client, self._client) \
-                      for i in library.get("items") or library]
+        if locale is None and country_code is None and auth is None:
+            raise ValueError("No locale, country_code or auth provided.")
+        if locale is not None and country_code is not None:
+            raise ValueError("Locale and country_code provided. Expected only "
+                             "one of them.")
+
+        locale = Locale(country_code) if country_code else locale
+        self._locale = locale or auth.locale
+        self._auth = auth
+        self._data = [LibraryItem(i, locale=self._locale, auth=self._auth)
+                      for i in data.get("items", data)]
 
     def __iter__(self):
         return iter(self._data)
 
     @classmethod
-    async def get_from_api(cls, auth, **params):
-        api_client = AsyncClient(auth, timeout=CLIENT_TIMEOUT)
-        async with api_client as client:
-            library = await client.get("library", params=params)
+    def get_from_api(cls,
+                     api_client: audible.Client,
+                     locale: Optional[Locale] = None,
+                     country_code: Optional[str] = None,
+                     close_session: bool = False,
+                     **request_params):
 
-        return cls(library, api_client)
+        if locale is not None and country_code is not None:
+            raise ValueError("Locale and country_code provided. Expected only "
+                             "one of them.")
+
+        locale = Locale(country_code) if country_code else locale
+        if locale:
+            api_client.locale = locale
+
+        if close_session:
+            with api_client:
+                resp = api_client.get("library", params=request_params)
+        else:
+            resp = api_client.get("library", params=request_params)
+
+        return cls(resp, auth=api_client.auth)
+
+    @classmethod
+    async def aget_from_api(cls,
+                            api_client: audible.AsyncClient,
+                            locale: Optional[Locale] = None,
+                            country_code: Optional[str] = None,
+                            close_session: bool = False,
+                            **request_params):
+
+        if locale is not None and country_code is not None:
+            raise ValueError("Locale and country_code provided. Expected only "
+                             "one of them.")
+
+        locale = Locale(country_code) if country_code else locale
+        if locale:
+            api_client.locale = locale
+
+        if close_session:
+            async with api_client:
+                resp = await api_client.get("library", params=request_params)
+        else:
+            resp = await api_client.get("library", params=request_params)
+
+        return cls(resp, auth=api_client.auth)
 
     def get_item_by_asin(self, asin):
         try:

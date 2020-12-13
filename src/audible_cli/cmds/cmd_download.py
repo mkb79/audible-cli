@@ -1,17 +1,26 @@
 import asyncio
+import asyncio.log
+import asyncio.sslproto
+import json
 import pathlib
 import ssl
 import sys
 
+import aiofiles
+import audible
 import click
+import httpx
+import tqdm
+from audible.exceptions import NotFoundError
 from click import echo, secho
 from tabulate import tabulate
 
-from ..models import Library
 from ..config import pass_session
-
+from ..models import Library
+from ..utils import Downloader
 
 SSL_PROTOCOLS = (asyncio.sslproto.SSLProtocol,)
+
 
 def ignore_httpx_ssl_eror(loop):
     """Ignore aiohttp #3535 / cpython #13548 issue with SSL data after close
@@ -35,7 +44,7 @@ def ignore_httpx_ssl_eror(loop):
 
     orig_handler = loop.get_exception_handler()
 
-    def ignore_ssl_error(loop, context):
+    def ignore_ssl_error(context):
         if context.get("message") in {
             "SSL error in data received",
             "Fatal error on transport",
@@ -44,12 +53,13 @@ def ignore_httpx_ssl_eror(loop):
             exception = context.get("exception")
             protocol = context.get("protocol")
             if (
-                isinstance(exception, ssl.SSLError)
-                and exception.reason == "KRB5_S_INIT"
-                and isinstance(protocol, SSL_PROTOCOLS)
+                    isinstance(exception, ssl.SSLError)
+                    and exception.reason == "KRB5_S_INIT"
+                    and isinstance(protocol, SSL_PROTOCOLS)
             ):
                 if loop.get_debug():
-                    asyncio.log.logger.debug("Ignoring httpx SSL KRB5_S_INIT error")
+                    asyncio.log.logger.debug(
+                        "Ignoring httpx SSL KRB5_S_INIT error")
                 return
         if orig_handler is not None:
             orig_handler(loop, context)
@@ -59,13 +69,90 @@ def ignore_httpx_ssl_eror(loop):
     loop.set_exception_handler(ignore_ssl_error)
 
 
+async def download_cover(client, output_dir, item, res,
+                         overwrite_existing):
+    filename = f"{item.full_title_slugify}_({str(res)}).jpg"
+    filepath = output_dir / filename
+
+    url = item.get_cover_url(res)
+    if url is None:
+        secho(
+            f"No COVER found for {item.full_title} with given resolution.",
+            fg="yellow")
+        return
+
+    dl = Downloader(url, filepath, client, overwrite_existing)
+    await dl.arun(stream=False, pb=False)
+
+
+async def download_pdf(client, output_dir, item, overwrite_existing):
+    url = item.get_pdf_url()
+    if url is None:
+        secho(f"No PDF found for {item.full_title}.", fg="yellow")
+        return
+
+    filename = item.full_title_slugify + ".pdf"
+    filepath = output_dir / filename
+    dl = Downloader(url, filepath, client, overwrite_existing)
+    await dl.arun(stream=False, pb=False)
+
+
+async def download_chapters(api_client, output_dir, item, quality,
+                            overwrite_existing):
+    if not output_dir.is_dir():
+        raise Exception("Output dir doesn't exists")
+
+    filename = item.full_title_slugify + "-chapters.json"
+    file = output_dir / filename
+    if file.exists() and not overwrite_existing:
+        secho(f"File {file} already exists. Skip saving chapters.", fg="blue")
+        return True
+
+    try:
+        metadata = await item.aget_content_metadata(quality, api_client)
+    except NotFoundError:
+        secho(f"Can't get chapters for {item.full_title}. Skip item.",
+              fg="red")
+        return
+    metadata = json.dumps(metadata, indent=4)
+    async with aiofiles.open(file, "w") as f:
+        await f.write(metadata)
+    tqdm.tqdm.write(f"Chapter file saved to {file}.")
+
+
+async def download_aax(client, output_dir, item, quality,
+                       overwrite_existing):
+    url, codec = await item.aget_aax_url(quality, client)
+    filename = item.full_title_slugify + f"-{codec}.aax"
+    filepath = output_dir / filename
+    dl = Downloader(url, filepath, client, overwrite_existing)
+    await dl.arun(pb=True)
+
+
+async def download_aaxc(api_client, client, output_dir, item, quality,
+                        overwrite_existing):
+    url, codec, dlr = await item.aget_aaxc_url(quality, api_client)
+
+    filepath = pathlib.Path(
+        output_dir) / f"{item.full_title_slugify}-{codec}.aaxc"
+    dlr_file = filepath.with_suffix(".voucher")
+
+    dlr = json.dumps(dlr, indent=4)
+    async with aiofiles.open(dlr_file, "w") as f:
+        await f.write(dlr)
+    secho(f"Voucher file saved to {dlr_file}.")
+
+    dl = Downloader(url, filepath, client, overwrite_existing)
+    await dl.arun(pb=True)
+
+
 async def consume(queue):
     while True:
         item = await queue.get()
         try:
             await item
         except Exception as e:
-            secho(f"Error in job: {e}")
+            secho(f"Error in job: {e}", fg="red")
         queue.task_done()
 
 
@@ -79,15 +166,19 @@ async def main(auth, **params):
     quality = params.get("quality")
     get_pdf = params.get("pdf")
     get_cover = params.get("cover")
+    cover_size = params.get("cover_size")
     get_chapters = params.get("chapter")
     get_audio = params.get("no_audio") is not True
     get_aaxc = params.get("aaxc")
     sim_jobs = params.get("jobs")
 
-    library = await Library.get_from_api(
-        auth,
-        response_groups="product_desc,pdf_url,media,product_attrs,relationships",
-        num_results=1000)
+    async with audible.AsyncClient(auth) as client:
+        library = await Library.aget_from_api(
+            client,
+            response_groups=("product_desc, pdf_url, media, product_attrs, "
+                             "relationships"),
+            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500",
+            num_results=1000)
 
     jobs = []
 
@@ -112,12 +203,12 @@ async def main(auth, **params):
 
         if full_match or match:
             echo(f"\nFound the following matches for '{title}'")
-            table_data = [[i[1], i[0].full_title, i[0].asin] \
+            table_data = [[i[1], i[0].full_title, i[0].asin]
                           for i in full_match or match]
             head = ["% match", "title", "asin"]
             table = tabulate(
                 table_data, head, tablefmt="pretty",
-                colalign=("center", "left", "center"))        
+                colalign=("center", "left", "center"))
             echo(table)
 
             if click.confirm("Proceed with this audiobook(s)"):
@@ -127,32 +218,62 @@ async def main(auth, **params):
             secho(f"Skip title {title}: Not found in library", fg="red")
 
     queue = asyncio.Queue()
-    for job in jobs:
-        item = library.get_item_by_asin(job)
-        if get_cover:
-            queue.put_nowait(item.get_cover(output_dir, overwrite_existing))
-        if get_pdf:
-            queue.put_nowait(item.get_pdf(output_dir, overwrite_existing))
-        if get_chapters:
-            queue.put_nowait(item.get_chapter_informations(output_dir, quality, overwrite_existing))
-        if get_audio:
-            if get_aaxc:
-                queue.put_nowait(item.get_audiobook_aaxc(output_dir, quality, overwrite_existing))
-            else:
-                queue.put_nowait(item.get_audiobook(output_dir, quality, overwrite_existing))
 
-    # schedule the consumer
-    consumers = [asyncio.ensure_future(consume(queue)) for _ in range(sim_jobs)]
-    
-    # wait until the consumer has processed all items
-    await queue.join()
+    client = httpx.AsyncClient(auth=auth, timeout=15)
+    api_client = audible.AsyncClient(auth, timeout=15)
+    async with client, api_client:
+        for job in jobs:
+            item = library.get_item_by_asin(job)
+            if get_cover:
+                queue.put_nowait(
+                    download_cover(client=client,
+                                   output_dir=output_dir,
+                                   item=item,
+                                   res=cover_size,
+                                   overwrite_existing=overwrite_existing))
 
-    # the consumer is still awaiting for an item, cancel it
-    for consumer in consumers:
-        consumer.cancel()
+            if get_pdf:
+                queue.put_nowait(
+                    download_pdf(client=client,
+                                 output_dir=output_dir,
+                                 item=item,
+                                 overwrite_existing=overwrite_existing))
 
-    await library._api_client.close()
-    await library._client.aclose()
+            if get_chapters:
+                queue.put_nowait(
+                    download_chapters(api_client=api_client,
+                                      output_dir=output_dir,
+                                      item=item,
+                                      quality=quality,
+                                      overwrite_existing=overwrite_existing))
+
+            if get_audio:
+                if get_aaxc:
+                    queue.put_nowait(
+                        download_aaxc(api_client=api_client,
+                                      client=client,
+                                      output_dir=output_dir,
+                                      item=item,
+                                      quality=quality,
+                                      overwrite_existing=overwrite_existing))
+                else:
+                    queue.put_nowait(
+                        download_aax(client=client,
+                                     output_dir=output_dir,
+                                     item=item,
+                                     quality=quality,
+                                     overwrite_existing=overwrite_existing))
+
+        # schedule the consumer
+        consumers = [asyncio.ensure_future(consume(queue)) for _ in
+                     range(sim_jobs)]
+
+        # wait until the consumer has processed all items
+        await queue.join()
+
+        # the consumer is still awaiting for an item, cancel it
+        for consumer in consumers:
+            consumer.cancel()
 
 
 @click.command("download")
@@ -198,6 +319,13 @@ async def main(auth, **params):
     "--cover",
     is_flag=True,
     help="downloads the cover in addition to the audiobook"
+)
+@click.option(
+    "--cover-size",
+    type=click.Choice(["252", "315", "360", "408", "500", "558", "570", "882",
+                       "900", "1215"]),
+    default="500",
+    help="the cover pixel size"
 )
 @click.option(
     "--chapter",

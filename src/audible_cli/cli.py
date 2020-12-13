@@ -17,8 +17,7 @@ from .options import (
     quickstart_config_option
 )
 
-
-CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
@@ -48,11 +47,11 @@ def quickstart(ctx):
     try:
         sys.exit(ctx.forward(cmd_quickstart.cli))
     except KeyboardInterrupt:
-        sys.exit('\nERROR: Interrupted by user')
+        sys.exit("\nERROR: Interrupted by user")
 
 
 def main(*args, **kwargs):
     try:
         sys.exit(cli(*args, **kwargs))
     except KeyboardInterrupt:
-        sys.exit('\nERROR: Interrupted by user')
+        sys.exit("\nERROR: Interrupted by user")

@@ -4,8 +4,8 @@ import pathlib
 
 import click
 
-from ..models import Library
 from ..config import pass_session
+from ..models import Library
 
 
 @click.group("library")
@@ -61,8 +61,10 @@ async def _export_library(auth, **params):
                 data_row["series_title"] = v[0]["title"]
                 data_row["series_sequence"] = v[0]["sequence"]
             elif key == "rating":
-                data_row["rating"] = v["overall_distribution"]["display_average_rating"]
-                data_row["num_ratings"] = v["overall_distribution"]["num_ratings"]
+                data_row["rating"] = v["overall_distribution"][
+                    "display_average_rating"]
+                data_row["num_ratings"] = v["overall_distribution"][
+                    "num_ratings"]
             elif key == "library_status":
                 data_row["date_added"] = v["date_added"]
             elif key == "product_images":

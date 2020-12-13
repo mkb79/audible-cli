@@ -9,7 +9,6 @@ from .config import (
     set_config
 )
 
-
 cli_config_option = click.option(
     "--config",
     "-c",

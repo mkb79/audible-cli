@@ -1,13 +1,17 @@
+import asyncio
 import io
 import pathlib
 from difflib import SequenceMatcher
+from functools import partial, wraps
 from typing import Optional, Union
 
+import aiofiles
 import click
 import httpx
+import tqdm
+from PIL import Image
 from audible import Authenticator
 from click import echo, secho, prompt
-from PIL import Image
 
 from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
 
@@ -95,7 +99,7 @@ class LongestSubString:
 
     @property
     def percentage(self):
-        return (self._match.size / len(self._search_for) * 100)
+        return self._match.size / len(self._search_for) * 100
 
 
 def asin_in_library(asin, library):
@@ -105,3 +109,133 @@ def asin_in_library(asin, library):
         return next(i for i in items if asin in i["asin"])
     except StopIteration:
         return False
+
+
+def wrap_async(func):
+    @wraps(func)
+    async def run(*args, loop=None, executor=None, **kwargs):
+        if loop is None:
+            loop = asyncio.get_event_loop()
+        pfunc = partial(func, *args, **kwargs)
+        return await loop.run_in_executor(executor, pfunc)
+
+    return run
+
+
+class DummyProgressBar:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
+
+    def update(self, *args, **kwargs):
+        pass
+
+
+class Downloader:
+    def __init__(self, url, file, client, overwrite_existing):
+        self._url = url
+        self._file = pathlib.Path(file).resolve()
+        self._tmp_file = self._file.with_suffix(".tmp")
+        self._client = client
+        self._overwrite_existing = overwrite_existing
+
+    def _progressbar(self, total: int):
+        return tqdm.tqdm(desc=str(self._file), total=total, unit="B",
+                         unit_scale=True, unit_divisor=1024)
+
+    def _file_okay(self):
+        if not self._file.parent.is_dir():
+            secho(f"Folder {self._file.parent} doesn't exists! Skip download.",
+                  fg="red")
+            return False
+
+        if self._file.exists() and not self._file.is_file():
+            secho(f"Object {self._file} exists but is no file. Skip download.",
+                  fg="red")
+            return False
+
+        if self._file.is_file() and not self._overwrite_existing:
+            secho(f"File {self._file} already exists. Skip download.",
+                  fg="blue")
+            return False
+
+        return True
+
+    def _postpare(self, elapsed):
+        file = self._file
+        tmp_file = self._tmp_file
+        if file.exists() and self._overwrite_existing:
+            i = 0
+            while file.with_suffix(f"{file.suffix}.old.{i}").exists():
+                i += 1
+            file.rename(file.with_suffix(f"{file.suffix}.old.{i}"))
+        tmp_file.rename(file)
+        tqdm.tqdm.write(f"File {self._file} downloaded to {self._file.parent} "
+                        f"in {elapsed}.")
+
+    def _remove_tmp_file(self):
+        self._tmp_file.unlink() if self._tmp_file.exists() else None
+
+    def _stream_load(self, pb: bool = True):
+        with self._client.stream("GET", self._url) as r:
+            length = r.headers.get("Content-Length")
+            progressbar = self._progressbar(int(length)) if length and pb \
+                else DummyProgressBar()
+
+            with progressbar, open(self._tmp_file, mode="wb") as f:
+                for chunk in r.iter_bytes():
+                    f.write(chunk)
+                    progressbar.update(len(chunk))
+
+            self._postpare(r.elapsed)
+            return True
+
+    def _load(self):
+        r = self._client.get(self._url)
+        with open(self._tmp_file, mode="wb") as f:
+            f.write(r.content)
+        self._postpare(r.elapsed)
+        return True
+
+    async def _astream_load(self, pb: bool = True):
+        async with self._client.stream("GET", self._url) as r:
+            length = r.headers.get("Content-Length")
+            progressbar = self._progressbar(int(length)) if length and pb \
+                else DummyProgressBar()
+
+            with progressbar:
+                async with aiofiles.open(self._tmp_file, mode="wb") as f:
+                    async for chunk in r.aiter_bytes():
+                        await f.write(chunk)
+                        progressbar.update(len(chunk))
+
+            self._postpare(r.elapsed)
+            return True
+
+    async def _aload(self):
+        r = await self._client.get(self._url)
+        async with aiofiles.open(self._tmp_file, mode="wb") as f:
+            await f.write(r.content)
+        self._postpare(r.elapsed)
+        return True
+
+    def run(self, stream: bool = True, pb: bool = True):
+        if not self._file_okay():
+            return
+
+        try:
+            return self._stream_load(pb) if stream else self._load()
+        finally:
+            self._remove_tmp_file()
+
+    async def arun(self, stream: bool = True, pb: bool = True):
+        if not self._file_okay():
+            return
+
+        try:
+            return await self._astream_load(pb) if stream else \
+                await self._aload()
+        finally:
+            self._remove_tmp_file()
