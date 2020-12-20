@@ -1,6 +1,7 @@
 /src/*
 !/src/audible_cli
 /src/audible_cli/*.bak
+library.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

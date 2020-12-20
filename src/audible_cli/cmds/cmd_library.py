@@ -2,6 +2,7 @@ import asyncio
 import csv
 import pathlib
 
+import audible
 import click
 
 from ..config import pass_session
@@ -14,19 +15,20 @@ def cli():
 
 
 async def _export_library(auth, **params):
-    library = await Library.get_from_api(
-        auth,
-        response_groups=(
-            "contributors, media, price, product_attrs, product_desc, "
-            "product_extended_attrs, product_plan_details, product_plans, "
-            "rating, sample, sku, series, reviews, ws4v, origin, "
-            "relationships, review_attrs, categories, badge_types, "
-            "category_ladders, claim_code_url, is_downloaded, is_finished, "
-            "is_returnable, origin_asin, pdf_url, percent_complete, "
-            "provided_review"
-        ),
-        num_results=1000
-    )
+    async with audible.AsyncClient(auth) as client:
+        library = await Library.aget_from_api(
+            client,
+            response_groups=(
+                "contributors, media, price, product_attrs, product_desc, "
+                "product_extended_attrs, product_plan_details, product_plans, "
+                "rating, sample, sku, series, reviews, ws4v, origin, "
+                "relationships, review_attrs, categories, badge_types, "
+                "category_ladders, claim_code_url, is_downloaded, is_finished, "
+                "is_returnable, origin_asin, pdf_url, percent_complete, "
+                "provided_review"
+            ),
+            num_results=1000
+        )
 
     f = pathlib.Path(params.get("output"))
 
@@ -38,7 +40,7 @@ async def _export_library(auth, **params):
     ]
 
     writer = csv.DictWriter(
-        f.open("w"), fieldnames=headers, dialect="excel-tab"
+        f.open("w", encoding="utf-8"), fieldnames=headers, dialect="excel-tab"
     )
     writer.writeheader()
 
@@ -92,7 +94,7 @@ def export_library(session, **params):
     """export library"""
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(_export_library(session.config.auth, **params))
+        loop.run_until_complete(_export_library(session.auth, **params))
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
