@@ -33,6 +33,9 @@ class LibraryItem:
         self._locale = locale or auth.locale
         self._auth = auth
 
+    def __iter__(self):
+        return iter(self._data)
+
     def __getitem__(self, key):
         return self._data[key]
 
@@ -100,7 +103,7 @@ class LibraryItem:
                   f"Skip asin {self.asin}.")
 
     def _get_codec(self, quality: str):
-        """If quality is not ``best``, ensures the given quality is present in 
+        """If quality is not ``best``, ensures the given quality is present in
         them codecs list. Otherwise, will find the best aax quality available
         """
         assert quality in ("best", "high", "normal",)
