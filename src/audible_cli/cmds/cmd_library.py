@@ -15,8 +15,8 @@ def cli():
 
 
 async def _export_library(auth, **params):
-    with audible.Client(auth) as client:
-        library = Library.get_from_api(
+    async with audible.AsyncClient(auth) as client:
+        library = await Library.aget_from_api(
             client,
             response_groups=(
                 "contributors, media, price, product_attrs, product_desc, "
@@ -40,7 +40,7 @@ async def _export_library(auth, **params):
     ]
 
     writer = csv.DictWriter(
-        f.open("w"), fieldnames=headers, dialect="excel-tab"
+        f.open("w", encoding="utf-8"), fieldnames=headers, dialect="excel-tab"
     )
     writer.writeheader()
 
