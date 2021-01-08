@@ -267,21 +267,21 @@ class LibraryItem:
             "quality": "Extreme" if quality in ("best", "high") else "Normal",
             "drm_type": "Adrm"
         }
-        return str(httpx.URL(url, params=params))
+        return url, params
 
     def get_content_metadata(self,
                              quality: str = "high",
                              api_client: Optional[audible.Client] = None):
 
-        url = self._build_metadata_request_url(quality)
+        url, params = self._build_metadata_request_url(quality)
         if api_client is None:
             assert self._auth is not None
             cc = self._locale.country_code
             with audible.Client(auth=self._auth,
                                 country_code=cc) as api_client:
-                metadata = api_client.get(url)
+                metadata = api_client.get(url, params=params)
         else:
-            metadata = api_client.get(url)
+            metadata = api_client.get(url, params=params)
 
         return metadata
 
@@ -290,15 +290,15 @@ class LibraryItem:
                                     api_client: Optional[
                                         audible.AsyncClient] = None):
 
-        url = self._build_metadata_request_url(quality)
+        url, params = self._build_metadata_request_url(quality)
         if api_client is None:
             assert self._auth is not None
             cc = self._locale.country_code
             async with audible.AsyncClient(auth=self._auth,
                                            country_code=cc) as api_client:
-                metadata = await api_client.get(url)
+                metadata = await api_client.get(url, params=params)
         else:
-            metadata = await api_client.get(url)
+            metadata = await api_client.get(url, params=params)
 
         return metadata
 
