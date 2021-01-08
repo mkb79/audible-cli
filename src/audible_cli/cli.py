@@ -16,6 +16,7 @@ from .options import (
     profile_option,
     quickstart_config_option
 )
+from . import __version__
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -25,6 +26,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 @profile_option
 @auth_file_password_option
 @plugin_cmds_option
+@click.version_option(__version__)
 def cli():
     """Entrypoint for all other subcommands and groups."""
 
