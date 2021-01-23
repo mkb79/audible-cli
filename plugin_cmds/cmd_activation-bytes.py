@@ -1,3 +1,6 @@
+# In v0.0.dev9 this command was aded to the build-in commands.
+
+
 import httpx
 import click
 from audible.activation_bytes import extract_activation_bytes
