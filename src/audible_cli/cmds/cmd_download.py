@@ -157,21 +157,35 @@ async def consume(queue):
 
 
 async def main(auth, **params):
-    ignore_errors = params.get("ignore_errors")
+    output_dir = pathlib.Path(params.get("output_dir")).resolve()
+
+    # which item(s) to download
     get_all = params.get("all") is True
     asins = params.get("asin")
     titles = params.get("title")
-    output_dir = pathlib.Path(params.get("output_dir")).resolve()
-    overwrite_existing = params.get("overwrite")
-    quality = params.get("quality")
-    get_pdf = params.get("pdf")
-    get_cover = params.get("cover")
-    cover_size = params.get("cover_size")
-    get_chapters = params.get("chapter")
-    get_audio = params.get("no_audio") is not True
-    get_aaxc = params.get("aaxc")
-    sim_jobs = params.get("jobs")
+    if get_all and (asins or titles):
+        ctx = click.get_current_context()
+        ctx.fail(f"Do not mix *asin* or *title* option with *all* option.")
 
+    # what to download
+    get_aax = params.get("aax")
+    get_aaxc = params.get("aaxc")
+    get_chapters = params.get("chapter")
+    get_cover = params.get("cover")
+    get_pdf = params.get("pdf")
+    if not any([get_aax, get_aaxc, get_chapters, get_cover, get_pdf]):
+        ctx = click.get_current_context()
+        ctx.fail(f"Please select a option what you want download.")
+
+    # additional options
+    sim_jobs = params.get("jobs")
+    quality = params.get("quality")
+    cover_size = params.get("cover_size")
+    overwrite_existing = params.get("overwrite")
+    ignore_errors = params.get("ignore_errors")
+    no_confirm = params.get("no_confirm")
+
+    # fetch the user library
     async with audible.AsyncClient(auth) as client:
         library = await Library.aget_from_api(
             client,
@@ -211,7 +225,7 @@ async def main(auth, **params):
                 colalign=("center", "left", "center"))
             echo(table)
 
-            if click.confirm("Proceed with this audiobook(s)"):
+            if no_confirm or click.confirm("Proceed with this audiobook(s)"):
                 jobs.extend([i[0].asin for i in full_match or match])
 
         else:
@@ -247,22 +261,22 @@ async def main(auth, **params):
                                       quality=quality,
                                       overwrite_existing=overwrite_existing))
 
-            if get_audio:
-                if get_aaxc:
-                    queue.put_nowait(
-                        download_aaxc(api_client=api_client,
-                                      client=client,
-                                      output_dir=output_dir,
-                                      item=item,
-                                      quality=quality,
-                                      overwrite_existing=overwrite_existing))
-                else:
-                    queue.put_nowait(
-                        download_aax(client=client,
-                                     output_dir=output_dir,
-                                     item=item,
-                                     quality=quality,
-                                     overwrite_existing=overwrite_existing))
+            if get_aax:
+                queue.put_nowait(
+                    download_aax(client=client,
+                                 output_dir=output_dir,
+                                 item=item,
+                                 quality=quality,
+                                 overwrite_existing=overwrite_existing))
+
+            if get_aaxc:
+                queue.put_nowait(
+                    download_aaxc(api_client=api_client,
+                                  client=client,
+                                  output_dir=output_dir,
+                                  item=item,
+                                  quality=quality,
+                                  overwrite_existing=overwrite_existing))
 
         # schedule the consumer
         consumers = [asyncio.ensure_future(consume(queue)) for _ in
@@ -284,6 +298,11 @@ async def main(auth, **params):
     help="output dir, uses current working dir as default"
 )
 @click.option(
+    "--all",
+    is_flag=True,
+    help="download all library items, overrides --asin and --title options"
+)
+@click.option(
     "--asin", "-a",
     multiple=True,
     help="asin of the audiobook"
@@ -294,9 +313,14 @@ async def main(auth, **params):
     help="tile of the audiobook (partial search)"
 )
 @click.option(
-    "--no-confirm", "-y",
+    "--aax",
     is_flag=True,
-    help="start without confirm"
+    help="Download book in aax format"
+)
+@click.option(
+    "--aaxc",
+    is_flag=True,
+    help="Download book in aaxc format incl. voucher file"
 )
 @click.option(
     "--quality", "-q",
@@ -304,11 +328,6 @@ async def main(auth, **params):
     show_default=True,
     type=click.Choice(["best", "high", "normal"]),
     help="download quality"
-)
-@click.option(
-    "--all",
-    is_flag=True,
-    help="download all library items, overrides --asin and --title options"
 )
 @click.option(
     "--pdf",
@@ -333,14 +352,9 @@ async def main(auth, **params):
     help="saves chapter metadata as JSON file"
 )
 @click.option(
-    "--no-audio",
+    "--no-confirm", "-y",
     is_flag=True,
-    help="skip download audiobook (useful if you only want cover/pdf)"
-)
-@click.option(
-    "--link-only", "-lo",
-    is_flag=True,
-    help="returns the download link(s) only"
+    help="start without confirm"
 )
 @click.option(
     "--overwrite",
@@ -358,11 +372,6 @@ async def main(auth, **params):
     default=3,
     show_default=True,
     help="number of simultaneous downloads"
-)
-@click.option(
-    "--aaxc",
-    is_flag=True,
-    help="Experimental: Downloading aaxc files and voucher instead of aax"
 )
 @pass_session
 def cli(session, **params):
