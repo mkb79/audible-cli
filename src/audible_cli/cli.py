@@ -3,6 +3,7 @@ import sys
 import click
 
 from .cmds import (
+    cmd_activation_bytes,
     cmd_download,
     cmd_library,
     cmd_manage,
@@ -32,6 +33,7 @@ def cli():
 
 
 cli_cmds = [
+    cmd_activation_bytes.cli,
     cmd_download.cli,
     cmd_library.cli,
     cmd_manage.cli,
