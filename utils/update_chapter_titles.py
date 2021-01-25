@@ -1,6 +1,6 @@
 """
 This script replaces the chapter titles from a ffmetadata file with the one
-extracted from a api metadata file
+extracted from a api metadata/voucher file
 
 Example:
 
@@ -30,6 +30,7 @@ Example:
 """
 
 import json
+import operator
 import pathlib
 import re
 import sys
@@ -44,7 +45,8 @@ class ApiMeta:
         self._meta_parsed = self._parse_meta()
 
     def _parse_meta(self):
-        return json.loads(self._meta_raw)
+        data = json.loads(self._meta_raw)
+        return data.get("content_license", data)
 
     def count_chapters(self):
         return len(self.get_chapters())
@@ -53,6 +55,17 @@ class ApiMeta:
         return self._meta_parsed["content_metadata"]["chapter_info"][
             "chapters"]
 
+    def get_intro_duration_ms(self):
+        return self._meta_parsed["content_metadata"]["chapter_info"][
+            "brandIntroDurationMs"]
+
+    def get_outro_duration_ms(self):
+        return self._meta_parsed["content_metadata"]["chapter_info"][
+            "brandOutroDurationMs"]
+
+    def get_runtime_length_ms(self):
+        return self._meta_parsed["content_metadata"]["chapter_info"][
+            "runtime_length_ms"]
 
 class FFMeta:
     SECTION = re.compile(r"\[(?P<header>[^]]+)\]")
@@ -137,6 +150,68 @@ class FFMeta:
                 if key == "title":
                     self.set_chapter_option(num_chap, "title", value)
 
+    def update_chapters_from_api_meta(self, api_meta, separate_branding=True):
+        """Replace all chapter data from api meta file.
+        
+        This replaces TIMEBASE, START, END and title. If api meta files contains
+        more chapters than ffmetadata file, the additionell chapters are added.
+        If separate_branding is True Audible Branding Intro and Outro will become
+        there own chapter.
+        """
+        if not isinstance(api_meta, ApiMeta):
+            api_meta = ApiMeta(api_meta)
+
+        if api_meta.count_chapters() != self.count_chapters():
+            # This happens on some of my books
+            # but runtime is identical +- few ms
+            echo("Missmatch between chapter numbers.")
+            click.confirm('Do you want to continue?', abort=True)
+
+        echo(f"Found {self.count_chapters()} chapters to prepare.")
+
+        api_chapters = api_meta.get_chapters()
+        if separate_branding:
+            echo("Separate Audible Brand Intro and Outro to own Chapter.")
+            api_chapters.sort(key=operator.itemgetter("start_offset_ms"))
+
+            first = api_chapters[0]
+            intro_dur_ms = api_meta.get_intro_duration_ms()
+            first["start_offset_ms"] = intro_dur_ms
+            first["start_offset_sec"] = round(first["start_offset_ms"] / 1000)
+            first["length_ms"] -= intro_dur_ms
+
+            last = api_chapters[-1]
+            outro_dur_ms = api_meta.get_outro_duration_ms()
+            last["length_ms"] -= outro_dur_ms
+
+            api_chapters.append({
+                "length_ms": intro_dur_ms,
+                "start_offset_ms": 0,
+                "start_offset_sec": 0,
+                "title": "Intro"
+            })
+            api_chapters.append({
+                "length_ms": outro_dur_ms,
+                "start_offset_ms": api_meta.get_runtime_length_ms() - outro_dur_ms,
+                "start_offset_sec": round((api_meta.get_runtime_length_ms() - outro_dur_ms) / 1000),
+                "title": "Outro"
+            })
+            api_chapters.sort(key=operator.itemgetter("start_offset_ms"))
+
+        num_chap = 0
+        new_chapters = {}
+        for chapter in api_chapters:
+            chap_start = chapter["start_offset_ms"]
+            chap_end = chap_start + chapter["length_ms"]
+            num_chap += 1
+            new_chapters[num_chap] = {
+                "TIMEBASE": "1/1000",
+                "START": chap_start,
+                "END": chap_end,
+                "title": chapter["title"]
+            }
+        self._ffmeta_parsed["CHAPTER"] = new_chapters
+
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -164,9 +239,17 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
     required=True,
     help="filename to store prepared ffmeta"
 )
-def cli(ffmeta, apimeta, outfile):
+@click.option(
+    "--separate-branding", "-s",
+    is_flag=True,
+    help="Separate Intro and Outro branding into own chapters"
+)
+def cli(ffmeta, apimeta, outfile, separate_branding):
     ffmeta_class = FFMeta(ffmeta)
-    ffmeta_class.update_title_from_api_meta(apimeta)
+    if separate_branding:
+        ffmeta_class.update_chapters_from_api_meta(apimeta)
+    else:
+        ffmeta_class.update_title_from_api_meta(apimeta)
     ffmeta_class.write(outfile)
     click.echo(f"Replaced all titles. Save file to {outfile}")
 
