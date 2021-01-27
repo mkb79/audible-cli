@@ -30,6 +30,13 @@ pip install .
 
 ```
 
+## Tab Completion
+
+Tab completion can be provided for commands, options and choice values. Bash, Zsh and Fish 
+are supported. More information can be found 
+[here](https://github.com/mkb79/audible-cli/tree/master/utils/code_completion).
+
+
 ## Basic informations
 
 ### config dir
