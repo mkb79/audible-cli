@@ -9,7 +9,7 @@ from .config import (
     add_param_to_session
 )
 from .constants import PLUGIN_ENTRY_POINT
-from . import plugins
+from . import __version__, plugins
 
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -33,12 +33,14 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
     expose_value=False,
     help="The password for the profile auth file."
 )
+@click.version_option(__version__)
 def cli():
     """Entrypoint for all other subcommands and groups."""
 
 
 @click.command(context_settings=CONTEXT_SETTINGS)
 @click.pass_context
+@click.version_option(__version__)
 def quickstart(ctx):
     """Entrypoint for the quickstart command"""
     try:
