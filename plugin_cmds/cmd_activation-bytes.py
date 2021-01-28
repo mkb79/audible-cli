@@ -1,4 +1,4 @@
-# In v0.0.dev9 this command was aded to the build-in commands.
+# In v0.0.dev9 this command was added to the build-in commands.
 
 
 import httpx
@@ -7,7 +7,7 @@ from audible.activation_bytes import extract_activation_bytes
 from audible_cli.config import pass_session
 
 
-@click.command()
+@click.command("activation-bytes")
 @click.option(
     "--save", "-s",
     is_flag=True,

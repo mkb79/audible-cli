@@ -1,10 +1,12 @@
 # audible-cli
 
-**audible-cli** is a command line interface for the [Audible](https://github.com/mkb79/Audible) package. Both are written in python.
+**audible-cli** is a command line interface for the 
+[Audible](https://github.com/mkb79/Audible) package. 
+Both are written with Python.
 
 ## Requirements
 
-audible-cli needs at least *Python 3.6* and *Audible v0.5.0*.
+audible-cli needs at least *Python 3.6* and *Audible v0.5.3*.
 
 It depends on the following packages:
 
@@ -32,20 +34,20 @@ pip install .
 
 ## Tab Completion
 
-Tab completion can be provided for commands, options and choice values. Bash, Zsh and Fish 
-are supported. More information can be found 
+Tab completion can be provided for commands, options and choice values. Bash, 
+Zsh and Fish are supported. More information can be found 
 [here](https://github.com/mkb79/audible-cli/tree/master/utils/code_completion).
 
 
-## Basic informations
+## Basic information
 
-### config dir
+### App dir
 
-audible-cli uses a config dir where it stores and search for all necessary files.
+audible-cli use an app dir where it expects all necessary files.
 
-If the ``AUDIBLE_CONFIG_DIR`` environment variable is set, it uses the value as config dir. 
-
-Otherwise it will use a folder depending on the operating system.
+If the ``AUDIBLE_CONFIG_DIR`` environment variable is set, it uses the value 
+as config dir. Otherwise, it will use a folder depending on the operating 
+system.
 
 | OS       | Path                                      |
 | ---      | ---                                       |
@@ -53,46 +55,106 @@ Otherwise it will use a folder depending on the operating system.
 | Unix     | ``~/.audible``                            |
 | Mac OS X | ``~/.audible``                            |
 
-To override this behavior, you can call `audible` or `audible-quickstart` with the `-c PATH_TO_CONF_DIR` option. You have to do this on each call. So if you want to make use of a custom folder best practice is to use the environment variable method.
-
 ### The config file
 
-The config data will be stored in the [toml](https://github.com/toml-lang/toml) format as ``config.toml``.
+The config data will be stored in the [toml](https://github.com/toml-lang/toml) 
+format as ``config.toml``.
 
-It has a main section named ``APP`` and sections for each profile you created named ``profile.<profile_name>``
+It has a main section named ``APP`` and sections for each profile created 
+named ``profile.<profile_name>``
 
 ### profiles
 
-audible-cli make use of profiles. Each profile contains the name of the corresponding auth file and the country code for the audible marketplace. If you have audiobooks on multiple marketplaces, you have to create a profile for each one with the same auth file.
+audible-cli make use of profiles. Each profile contains the name of the 
+corresponding auth file and the country code for the audible marketplace. If 
+you have audiobooks on multiple marketplaces, you have to create a profile for 
+each one with the same auth file.
 
-In the main section of the config file, a primary profile is defined. This profile is used, if no other is specified. You can call `audible -P PROFILE_NAME`, to select another profile.
+In the main section of the config file, a primary profile is defined. 
+This profile is used, if no other is specified. You can call 
+`audible -P PROFILE_NAME`, to select another profile.
 
 ### auth files
 
-Like the config file, auth files are stored in the config dir too. If you protected your auth file with a password call `audible -p PASSWORD`, to provide the password.
+Like the config file, auth files are stored in the config dir too. If you 
+protected your auth file with a password call `audible -p PASSWORD`, to 
+provide the password.
 
-If the auth file is encrypted and you don’t provide the password, you will be asked for it with a „hidden“ input field. 
+If the auth file is encrypted, and you don’t provide the password, you will be 
+asked for it with a „hidden“ input field. 
 
 ## Getting started
 
-Use the `audible-quickstart` command in your shell to create your first config, profile and auth file. `audible-quickstart` runs on interactive mode, so you have to answer multiple questions to finish.
+Use the `audible-quickstart` command in your shell to create your first config, 
+profile and auth file. `audible-quickstart` runs on the interactive mode, so 
+you have to answer multiple questions to finish.
 
 ## Commands
 
-Call `audible -h` to let you show all main subcommands. At this time, there are the `manage`, `download` and `library` subcommand. The `manage` command has multiple subcommands. So take a look with the `audible manage -h` and `audible manage <subcommand> -h`. 
+Call `audible -h` to let you show all main subcommands. At this time, there 
+are the `activation_bytes`, `download`, `library` and `manage` subcommands. 
+The `manage` command has multiple subcommands. So take a look with the 
+`audible manage -h` and `audible manage <subcommand> -h`. 
 
 ## Plugins
 
-### Location
+### Plugin Folder
 
-Audible-cli expected plugins in the `plugins` subdir of the config dir. Read above how Audible-cli searches the config dir. You can provide a custom dir with the `audible --plugins PATH_TO_PLUGIN_DIR`.
+If the ``AUDIBLE_PLUGIN_DIR`` environment variable is set, it uses the value 
+as location for the plugin dir. Otherwise, it will use a the `plugins` subdir 
+of the app dir. Read above how Audible-cli searches the app dir.
 
 ### Custom Commands
 
-You can provide own subcommands and execute them with `audible plugin-cmds SUBCOMMAND`.
-All plugin commands must be placed in the plugin folder. Every subcommand must have his own file.
-Every file have to be named ``cmd_{SUBCOMMAND}.py``. Each subcommand file must have a function called `cli` as entrypoint. This function have to be decorated with ``@click.group()`` or  ``@click.command()``.
+You can provide own subcommands and execute them with `audible SUBCOMMAND`.
+All plugin commands must be placed in the plugin folder. Every subcommand must 
+have his own file. Every file have to be named ``cmd_{SUBCOMMAND}.py``. 
+Each subcommand file must have a function called `cli` as entrypoint. 
+This function have to be decorated with ``@click.group(name="GROUP_NAME")`` or  
+``@click.command(name="GROUP_NAME")``.
 
-Relative imports in the command files doesn't work. So you have to work with absolute imports. Please take care about this.
+Relative imports in the command files doesn't work. So you have to work with 
+absolute imports. Please take care about this.
 
-Examples can be found [here](https://github.com/mkb79/audible-cli/tree/master/plugin_cmds).
+Examples can be found 
+[here](https://github.com/mkb79/audible-cli/tree/master/plugin_cmds).
+
+
+## Own Plugin Packages
+
+If you want to develop a complete plugin package for ``audible-cli`` you can
+do this on an easy way. You only need to register your sub-commands or 
+sub-groups to an entry-point in your setup.py that is loaded by the core 
+package.
+
+Example for a setup.py
+
+```python
+from setuptools import setup
+
+setup(
+    name="yourscript",
+    version="0.1",
+    py_modules=["yourscript"],
+    install_requires=[
+        "click",
+        "audible_cli"
+    ],
+    entry_points="""
+        [audible.cli_plugins]
+        cool_subcommand=yourscript.cli:cool_subcommand
+        another_subcommand=yourscript.cli:another_subcommand
+    """,
+)
+```
+
+## Command priority order
+
+Commands will be added in the following order:
+
+1. plugin dir commands
+2. plugin packages commands
+3. build-in commands
+
+If a command is added, all further commands with the same name will be ignored.
+This enables you to "replace" build-in commands very easy.

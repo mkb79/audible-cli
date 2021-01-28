@@ -1,7 +1,10 @@
-import httpx
 import click
-from audible.activation_bytes import extract_activation_bytes
-from audible_cli.config import pass_session
+from audible.activation_bytes import (
+    extract_activation_bytes,
+    fetch_activation_sign_auth
+)
+
+from ..config import pass_session
 
 
 @click.command("activation-bytes")
@@ -11,21 +14,15 @@ from audible_cli.config import pass_session
     help="Save activation bytes to auth file.")
 @pass_session
 def cli(session, **options):
-    "Get activation bytes"
-
-    if session.auth.activation_bytes is None:
+    """Get activation bytes."""
+    auth = session.auth
+    if auth.activation_bytes is None:
         click.echo("Activation bytes not found in auth file. Fetching online.")
-        url = "https://www.audible.com/license/token"
-        params = {
-            "player_manuf": "Audible,iPhone",
-            "action": "register",
-            "player_model": "iPhone"
-        }
-        with httpx.Client(auth=session.auth) as client:    
-            r = client.get(url, params=params)
-        session.auth.activation_bytes = extract_activation_bytes(r.content)
+        ab = fetch_activation_sign_auth(auth)
+        ab = extract_activation_bytes(ab)
+        auth.activation_bytes = ab
         if options.get("save"):
             click.echo("Save activation bytes to file.")
-            session.auth.to_file()
+            auth.to_file()
 
-    click.echo(session.auth.activation_bytes)
+    click.echo(auth.activation_bytes)

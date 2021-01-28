@@ -41,7 +41,7 @@ async def _export_library(auth, **params):
         "percent_complete", "release_date"
     )
 
-    with pathlib.Path(params.get("output")).open("w", encoding="utf-8") as f:
+    with pathlib.Path(params.get("output")).open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=headers, dialect="excel-tab")
         writer.writeheader()
 

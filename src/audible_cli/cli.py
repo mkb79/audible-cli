@@ -1,50 +1,43 @@
 import sys
+from pkg_resources import iter_entry_points
 
 import click
 
-from .cmds import (
-    cmd_activation_bytes,
-    cmd_download,
-    cmd_library,
-    cmd_manage,
-    cmd_plugins,
-    cmd_quickstart
+from .cmds import build_in_cmds, cmd_quickstart
+from .config import (
+    get_plugin_dir,
+    add_param_to_session
 )
-from .options import (
-    auth_file_password_option,
-    cli_config_option,
-    plugin_cmds_option,
-    profile_option,
-    quickstart_config_option
-)
-from . import __version__
+from .constants import PLUGIN_ENTRY_POINT
+from . import plugins
+
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
+@plugins.from_folder(get_plugin_dir())
+@plugins.from_entry_point(iter_entry_points(PLUGIN_ENTRY_POINT))
+@build_in_cmds()
 @click.group(context_settings=CONTEXT_SETTINGS)
-@cli_config_option
-@profile_option
-@auth_file_password_option
-@plugin_cmds_option
-@click.version_option(__version__)
+@click.option(
+    "--profile",
+    "-P",
+    callback=add_param_to_session,
+    expose_value=False,
+    help="The profile to use instead primary profile (case sensitive!)."
+)
+@click.option(
+    "--password",
+    "-p",
+    callback=add_param_to_session,
+    expose_value=False,
+    help="The password for the profile auth file."
+)
 def cli():
     """Entrypoint for all other subcommands and groups."""
 
 
-cli_cmds = [
-    cmd_activation_bytes.cli,
-    cmd_download.cli,
-    cmd_library.cli,
-    cmd_manage.cli,
-    cmd_plugins.cli
-]
-
-[cli.add_command(cmd) for cmd in cli_cmds]
-
-
 @click.command(context_settings=CONTEXT_SETTINGS)
-@quickstart_config_option
 @click.pass_context
 def quickstart(ctx):
     """Entrypoint for the quickstart command"""

@@ -9,10 +9,10 @@ from audible.exceptions import FileEncryptionError
 from click import echo, prompt
 
 from .constants import (
-    APP_NAME,
-    CONFIG_ENV_DIR,
+    CONFIG_DIR_ENV,
     CONFIG_FILE,
     DEFAULT_CONFIG_DATA,
+    PLUGIN_DIR_ENV,
     PLUGIN_PATH
 )
 
@@ -40,6 +40,10 @@ class Config:
         return self.filename.parent.exists()
 
     @property
+    def is_read(self) -> bool:
+        return self._is_read
+
+    @property
     def data(self) -> Dict[str, Union[str, Dict]]:
         return self._config_data
 
@@ -63,12 +67,12 @@ class Config:
                     **additional_options) -> None:
 
         if self.has_profile(name) and abort_on_existing_profile:
-            message = "Profile already exists."
+            message = f"Profile {name} already exists."
             try:
                 ctx = click.get_current_context()
                 ctx.fail(message)
-            except RuntimeError:
-                raise RuntimeError(message)
+            except RuntimeError as exc:
+                raise RuntimeError(message) from exc
 
         profile_data = {"auth_file": str(auth_file),
                         "country_code": country_code,
@@ -91,7 +95,7 @@ class Config:
         try:
             self.data.update(toml.load(f))
         except FileNotFoundError as exc:
-            message = f"Config file {f} could not be found"
+            message = f"Config file {f} could not be found."
             try:
                 ctx = click.get_current_context()
                 ctx.fail(message)
@@ -113,72 +117,90 @@ class Config:
 
 class Session:
     """Holds the settings for the current session."""
-
-    def __init__(self):
-        self._params: Dict[str, Any] = {}
+    def __init__(self) -> None:
         self._auth: Optional[Authenticator] = None
-        self._config: Config = Config()
-        self._plugin_path: Optional[pathlib.Path] = None
-
-    @property
-    def auth(self):
-        if self._auth is not None:
-            return self._auth
-
-        name = self.params.get("profile") or self.config.primary_profile
-        if name is None:
-            message = ("No profile provided and primary profile not set "
-                       "properly in config.")
-            try:
-                ctx = click.get_current_context()
-                ctx.fail(message)
-            except RuntimeError:
-                raise KeyError(message)
-
-        if not self.config.has_profile(name):
-            message = "Provided profile not found in config."
-            try:
-                ctx = click.get_current_context()
-                ctx.fail(message)
-            except RuntimeError:
-                raise UserWarning(message)
-
-        profile = self.config.get_profile(name)
-        auth_file = self.config.dirname / profile["auth_file"]
-        country_code = profile["country_code"]
-        password = self.params.get("password")
-
-        while True:
-            try:
-                self._auth = Authenticator.from_file(
-                    filename=auth_file,
-                    password=password,
-                    locale=country_code)
-                return self._auth
-            except (FileEncryptionError, ValueError):
-                echo(
-                    "Auth file is encrypted but no/wrong password is provided")
-                password = prompt(
-                    "Please enter the password (or enter to exit)",
-                    hide_input=True, default="")
-                if password == "":
-                    ctx = click.get_current_context()
-                    ctx.abort()
-
-    @property
-    def config(self):
-        return self._config
+        self._config: Optional[Config] = None
+        self._params: Dict[str, Any] = {}
+        self._app_dir = get_app_dir()
+        self._plugin_dir = get_plugin_dir()
 
     @property
     def params(self):
         return self._params
 
     @property
-    def plugin_path(self):
-        return self._plugin_path
+    def app_dir(self):
+        return self._app_dir
+
+    @property
+    def plugin_dir(self):
+        return self._plugin_dir
+
+    @property
+    def config(self):
+        if self._config is None:
+            conf_file = self.app_dir / CONFIG_FILE
+            self._config = Config()
+            self._config.read_config(conf_file)
+        return self._config
+
+    @property
+    def auth(self):
+        if self._auth is None:
+            name = self.params.get("profile") or self.config.primary_profile
+            if name is None:
+                message = ("No profile provided and primary profile not set "
+                           "properly in config.")
+                try:
+                    ctx = click.get_current_context()
+                    ctx.fail(message)
+                except RuntimeError:
+                    raise KeyError(message)
+
+            if not self.config.has_profile(name):
+                message = "Provided profile not found in config."
+                try:
+                    ctx = click.get_current_context()
+                    ctx.fail(message)
+                except RuntimeError:
+                    raise UserWarning(message)
+
+            profile = self.config.get_profile(name)
+            auth_file = self.config.dirname / profile["auth_file"]
+            country_code = profile["country_code"]
+            password = self.params.get("password")
+
+            while True:
+                try:
+                    self._auth = Authenticator.from_file(
+                        filename=auth_file,
+                        password=password,
+                        locale=country_code)
+                    break
+                except (FileEncryptionError, ValueError):
+                    echo("Auth file is encrypted but no/wrong password "
+                         "is provided")
+                    password = prompt(
+                        "Please enter the password (or enter to exit)",
+                        hide_input=True, default="")
+                    if password == "":
+                        ctx = click.get_current_context()
+                        ctx.abort()
+        return self._auth
 
 
 pass_session = click.make_pass_decorator(Session, ensure=True)
+
+
+def get_app_dir() -> pathlib.Path:
+    app_dir = os.getenv(CONFIG_DIR_ENV) or click.get_app_dir(
+        "Audible", roaming=False, force_posix=True)
+    return pathlib.Path(app_dir).resolve()
+
+
+def get_plugin_dir() -> pathlib.Path:
+    plugin_dir = os.getenv(PLUGIN_DIR_ENV) or (get_app_dir() / PLUGIN_PATH)
+    return pathlib.Path(plugin_dir).resolve()
 
 
 def add_param_to_session(ctx: click.Context, param, value):
@@ -188,47 +210,20 @@ def add_param_to_session(ctx: click.Context, param, value):
     return value
 
 
-def add_plugin_path_to_session(ctx: click.Context, param, value):
-    """Add a plugin cmds path to :class:`Session` `param` attribute"""
-    session = ctx.ensure_object(Session)
-    session._plugin_path = pathlib.Path(value).resolve()
-    return value
-
-
-def config_dir_path(ignore_env: bool = False) -> pathlib.Path:
-    env_dir = os.getenv(CONFIG_ENV_DIR)
-    if env_dir and not ignore_env:
-        return pathlib.Path(env_dir).resolve()
-
-    return pathlib.Path(
-        click.get_app_dir(APP_NAME, roaming=False, force_posix=True)
-    )
-
-
-def config_file_path(ignore_env: bool = False) -> pathlib.Path:
-    return (config_dir_path(ignore_env) / CONFIG_FILE).resolve()
-
-
-def plugin_path(ignore_env: bool = False) -> pathlib.Path:
-    return (config_dir_path(ignore_env) / PLUGIN_PATH).resolve()
-
-
 def read_config(ctx, param, value):
-    """Callback that is used whenever --config is passed.  We use this to
+    """Callback that is used whenever --config-dir is passed.  We use this to
     always load the correct config.  This means that the config is loaded
     even if the group itself never executes so our config stay always
     available.
     """
-    session = ctx.ensure_object(Session)
-    session.config.read_config(value)
+    print("Config dir:" + str(value))
     return value
 
 
-def set_config(ctx, param, value):
-    """
-    Callback like `read_config` but without reading the config file. The use 
-    case is when config file doesn't exists but a `Config` object is needed.
-    """
-    session = ctx.ensure_object(Session)
-    session.config._config_file = pathlib.Path(value)
+def add_plugin_path_to_session(ctx: click.Context, param, value):
+    """Add a plugin cmds path to :class:`Session` `param` attribute"""
+    add_param_to_session(ctx, param, value)
+    print("Plugin dir:" + str(value))
+    session = ctx
+    print(session.__dict__)
     return value
