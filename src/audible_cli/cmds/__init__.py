@@ -1,12 +1,19 @@
 import click
 
-from . import cmd_activation_bytes, cmd_download, cmd_library, cmd_manage
+from . import (
+    cmd_activation_bytes,
+    cmd_download,
+    cmd_library,
+    cmd_manage,
+    cmd_quickstart
+)
 
 cli_cmds = [
     cmd_activation_bytes.cli,
     cmd_download.cli,
     cmd_library.cli,
-    cmd_manage.cli
+    cmd_manage.cli,
+    cmd_quickstart.cli
 ]
 
 def build_in_cmds():

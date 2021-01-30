@@ -85,9 +85,9 @@ asked for it with a „hidden“ input field.
 
 ## Getting started
 
-Use the `audible-quickstart` command in your shell to create your first config, 
-profile and auth file. `audible-quickstart` runs on the interactive mode, so 
-you have to answer multiple questions to finish.
+Use the `audible-quickstart` or `audible quickstart` command in your shell 
+to create your first config, profile and auth file. `audible-quickstart` 
+runs on the interactive mode, so you have to answer multiple questions to finish.
 
 ## Commands
 
