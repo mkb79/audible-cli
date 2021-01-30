@@ -210,16 +210,6 @@ def add_param_to_session(ctx: click.Context, param, value):
     return value
 
 
-def read_config(ctx, param, value):
-    """Callback that is used whenever --config-dir is passed.  We use this to
-    always load the correct config.  This means that the config is loaded
-    even if the group itself never executes so our config stay always
-    available.
-    """
-    print("Config dir:" + str(value))
-    return value
-
-
 def add_plugin_path_to_session(ctx: click.Context, param, value):
     """Add a plugin cmds path to :class:`Session` `param` attribute"""
     add_param_to_session(ctx, param, value)
