@@ -6,7 +6,7 @@ from click import echo, secho, prompt
 from tabulate import tabulate
 
 from ..config import Config, pass_session
-from ..constants import DEFAULT_AUTH_FILE_EXTENSION
+from ..constants import CONFIG_FILE, DEFAULT_AUTH_FILE_EXTENSION
 from ..utils import build_auth_file
 
 
@@ -121,7 +121,9 @@ an authentication to the audible server is necessary to register a new device.
 @pass_session
 def cli(session, ctx):
     """Quicksetup audible"""
+    session._config = Config()
     config = session.config
+    config._config_file = session.app_dir / CONFIG_FILE
     if config.file_exists():
         m = f"Config file {config.filename} already exists. Quickstart will " \
             f"not overwrite existing files."
