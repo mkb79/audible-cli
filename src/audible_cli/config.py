@@ -1,6 +1,6 @@
 import os
 import pathlib
-from typing import Any, Dict, Optional, Union
+from typing import Dict, Optional, Union
 
 import click
 import toml
@@ -144,48 +144,51 @@ class Session:
             self._config.read_config(conf_file)
         return self._config
 
+    def _set_auth(self):
+        name = self.params.get("profile") or self.config.primary_profile
+        if name is None:
+            message = ("No profile provided and primary profile not set "
+                       "properly in config.")
+            try:
+                ctx = click.get_current_context()
+                ctx.fail(message)
+            except RuntimeError:
+                raise KeyError(message)
+
+        if not self.config.has_profile(name):
+            message = "Provided profile not found in config."
+            try:
+                ctx = click.get_current_context()
+                ctx.fail(message)
+            except RuntimeError:
+                raise UserWarning(message)
+
+        profile = self.config.get_profile(name)
+        auth_file = self.config.dirname / profile["auth_file"]
+        country_code = profile["country_code"]
+        password = self.params.get("password")
+
+        while True:
+            try:
+                self._auth = Authenticator.from_file(
+                    filename=auth_file,
+                    password=password,
+                    locale=country_code)
+                break
+            except (FileEncryptionError, ValueError):
+                echo("Auth file is encrypted but no/wrong password "
+                     "is provided")
+                password = prompt(
+                    "Please enter the password (or enter to exit)",
+                    hide_input=True, default="")
+                if password == "":
+                    ctx = click.get_current_context()
+                    ctx.abort()
+
     @property
     def auth(self):
         if self._auth is None:
-            name = self.params.get("profile") or self.config.primary_profile
-            if name is None:
-                message = ("No profile provided and primary profile not set "
-                           "properly in config.")
-                try:
-                    ctx = click.get_current_context()
-                    ctx.fail(message)
-                except RuntimeError:
-                    raise KeyError(message)
-
-            if not self.config.has_profile(name):
-                message = "Provided profile not found in config."
-                try:
-                    ctx = click.get_current_context()
-                    ctx.fail(message)
-                except RuntimeError:
-                    raise UserWarning(message)
-
-            profile = self.config.get_profile(name)
-            auth_file = self.config.dirname / profile["auth_file"]
-            country_code = profile["country_code"]
-            password = self.params.get("password")
-
-            while True:
-                try:
-                    self._auth = Authenticator.from_file(
-                        filename=auth_file,
-                        password=password,
-                        locale=country_code)
-                    break
-                except (FileEncryptionError, ValueError):
-                    echo("Auth file is encrypted but no/wrong password "
-                         "is provided")
-                    password = prompt(
-                        "Please enter the password (or enter to exit)",
-                        hide_input=True, default="")
-                    if password == "":
-                        ctx = click.get_current_context()
-                        ctx.abort()
+            self._set_auth()
         return self._auth
 
 
