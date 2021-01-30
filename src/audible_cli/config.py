@@ -209,11 +209,3 @@ def add_param_to_session(ctx: click.Context, param, value):
     session.params[param.name] = value
     return value
 
-
-def add_plugin_path_to_session(ctx: click.Context, param, value):
-    """Add a plugin cmds path to :class:`Session` `param` attribute"""
-    add_param_to_session(ctx, param, value)
-    print("Plugin dir:" + str(value))
-    session = ctx
-    print(session.__dict__)
-    return value
