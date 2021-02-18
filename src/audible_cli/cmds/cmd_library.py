@@ -15,6 +15,7 @@ def cli():
 
 
 async def _export_library(auth, **params):
+    timeout = params.get("timeout")
     async with audible.AsyncClient(auth) as client:
         library = await Library.aget_from_api(
             client,
@@ -27,7 +28,8 @@ async def _export_library(auth, **params):
                 "is_returnable, origin_asin, pdf_url, percent_complete, "
                 "provided_review"
             ),
-            num_results=1000
+            num_results=1000,
+            timeout=timeout
         )
 
     headers = (
@@ -84,6 +86,13 @@ async def _export_library(auth, **params):
     default=pathlib.Path().cwd() / "library.csv",
     show_default=True,
     help="output file"
+)
+@click.option(
+    "--timeout", "-t",
+    type=click.INT,
+    default=10,
+    show_default=True,
+    help="Increase the timeout time if you got any TimeoutErrors."
 )
 @pass_session
 def export_library(session, **params):
