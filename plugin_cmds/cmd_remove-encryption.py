@@ -187,7 +187,7 @@ def decrypt_aax(files, session):
                "-activation_bytes", ab,
                "-i", str(file),
                "-f", "ffmetadata",
-               metafile]
+               str(metafile)]
         subprocess.check_output(cmd, universal_newlines=True)
     
         ffmeta_class = FFMeta(metafile)
@@ -202,7 +202,7 @@ def decrypt_aax(files, session):
                "-map_metadata", "0",
                "-map_chapters", "1",
                "-c", "copy",
-               outfile]
+               str(outfile)]
         subprocess.check_output(cmd, universal_newlines=True)
         metafile.unlink()
         metafile_new.unlink()
@@ -229,7 +229,7 @@ def decrypt_aaxc(files, session):
                "-audible_iv", audible_iv,
                "-i", str(file),
                "-f", "ffmetadata",
-               metafile]
+               str(metafile)]
         subprocess.check_output(cmd, universal_newlines=True)
     
         ffmeta_class = FFMeta(metafile)
@@ -245,7 +245,7 @@ def decrypt_aaxc(files, session):
                "-map_metadata", "0",
                "-map_chapters", "1",
                "-c", "copy",
-               outfile]
+               str(outfile)]
         subprocess.check_output(cmd, universal_newlines=True)
         metafile.unlink()
         metafile_new.unlink()
