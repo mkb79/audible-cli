@@ -1,11 +1,3 @@
-"""
-This is a proof-of-concept and for testing purposes only. No error handling. 
-Need further work. Some options does not work or options are missing.
-
-Needs at least ffmpeg 4.1 with aaxc patch.
-"""
-
-
 import json
 import operator
 import pathlib
@@ -170,91 +162,10 @@ class FFMeta:
         self._ffmeta_parsed["CHAPTER"] = new_chapters
 
 
-def decrypt_aax(files, session):
-    for file in files:
-        outfile = file.with_suffix(".m4b")
-        metafile = file.with_suffix(".meta")
-        metafile_new = file.with_suffix(".new.meta")
-        # apimeta = CHAPTERFILE
-
-        if outfile.exists():
-            secho(f"file {outfile} already exists Skip.", fg="blue")
-            continue
-    
-        ab = session.auth.activation_bytes
-    
-        cmd = ["ffmpeg",
-               "-activation_bytes", ab,
-               "-i", str(file),
-               "-f", "ffmetadata",
-               str(metafile)]
-        subprocess.check_output(cmd, universal_newlines=True)
-    
-        ffmeta_class = FFMeta(metafile)
-        #ffmeta_class.update_chapters_from_api_meta(apimeta)
-        ffmeta_class.write(metafile_new)
-        click.echo("Replaced all titles.")
-    
-        cmd = ["ffmpeg",
-               "-activation_bytes", ab,
-               "-i", str(file),
-               "-i", str(metafile_new),
-               "-map_metadata", "0",
-               "-map_chapters", "1",
-               "-c", "copy",
-               str(outfile)]
-        subprocess.check_output(cmd, universal_newlines=True)
-        metafile.unlink()
-        metafile_new.unlink()
-
-
-def decrypt_aaxc(files, session):
-    for file in files:
-        metafile = file.with_suffix(".meta")
-        metafile_new = file.with_suffix(".new.meta")
-        voucher = file.with_suffix(".voucher")
-        voucher = json.loads(voucher.read_text())
-        outfile = file.with_suffix(".m4b")
-
-        if outfile.exists():
-            secho(f"file {outfile} already exists Skip.", fg="blue")
-            continue
-    
-        apimeta = voucher["content_license"]
-        audible_key = apimeta["license_response"]["key"]
-        audible_iv = apimeta["license_response"]["iv"]
-    
-        cmd = ["ffmpeg",
-               "-audible_key", audible_key,
-               "-audible_iv", audible_iv,
-               "-i", str(file),
-               "-f", "ffmetadata",
-               str(metafile)]
-        subprocess.check_output(cmd, universal_newlines=True)
-    
-        ffmeta_class = FFMeta(metafile)
-        ffmeta_class.update_chapters_from_api_meta(apimeta)
-        ffmeta_class.write(metafile_new)
-        click.echo("Replaced all titles.")
-    
-        cmd = ["ffmpeg",
-               "-audible_key", audible_key,
-               "-audible_iv", audible_iv,
-               "-i", str(file),
-               "-i", str(metafile_new),
-               "-map_metadata", "0",
-               "-map_chapters", "1",
-               "-c", "copy",
-               str(outfile)]
-        subprocess.check_output(cmd, universal_newlines=True)
-        metafile.unlink()
-        metafile_new.unlink()
-
-
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
-@click.command("remove-encryption", context_settings=CONTEXT_SETTINGS)
+@click.command(context_settings=CONTEXT_SETTINGS)
 @click.option(
     "--input", "-i",
     type=click.Path(exists=True, file_okay=True),
@@ -276,25 +187,49 @@ def cli(session, **options):
         ctx = click.get_current_context()
         ctx.fail("ffmpeg not found")
 
-    jobs = {"aaxc": [], "aax":[]}
-
     if options.get("all"):
         cwd = pathlib.Path.cwd()
-        jobs["aaxc"].extend(list(cwd.glob('*.aaxc')))
-        jobs["aax"].extend(list(cwd.glob('*.aax')))
-        for suffix in jobs:
-            for i in jobs[suffix]:
-                i = i.resolve()
-        
+        infiles = list(cwd.glob('**/*.aaxc'))
+        [file.resolve() for file in infiles]
     else:
-        for file in options.get("input"):
-            file = pathlib.Path(file).resolve()
-            if file.match("*.aaxc"):
-                jobs["aaxc"].append(file)
-            elif file.match("*.aax"):
-                jobs["aax"].append(file)
-            else:
-                secho(f"file suffix {file.suffix} not supported", fg="red")
+        infiles = [pathlib.Path(file).resolve() for file in options.get("input")]
 
-    decrypt_aaxc(jobs["aaxc"], session)
-    decrypt_aax(jobs["aax"], session)
+    for infile in infiles:
+        metafile = infile.with_suffix(".meta")
+        metafile_new = infile.with_suffix(".new.meta")
+        voucher = infile.with_suffix(".voucher")
+        voucher = json.loads(voucher.read_text())
+        outfile = infile.with_suffix(".m4b")
+        if outfile.exists():
+            secho(f"file {outfile} already exists Skip.", fg="blue")
+            continue
+    
+        apimeta = voucher["content_license"]
+        audible_key = apimeta["license_response"]["key"]
+        audible_iv = apimeta["license_response"]["iv"]
+    
+        cmd = ["ffmpeg",
+               "-audible_key", audible_key,
+               "-audible_iv", audible_iv,
+               "-i", str(infile),
+               "-f", "ffmetadata",
+               metafile]
+        subprocess.check_output(cmd, universal_newlines=True)
+    
+        ffmeta_class = FFMeta(metafile)
+        ffmeta_class.update_chapters_from_api_meta(apimeta)
+        ffmeta_class.write(metafile_new)
+        click.echo(f"Replaced all titles. Save file to {metafile_new}")
+    
+        cmd = ["ffmpeg",
+               "-audible_key", audible_key,
+               "-audible_iv", audible_iv,
+               "-i", infile,
+               "-i", metafile_new,
+               "-map_metadata", "0",
+               "-map_chapters", "1",
+               "-c", "copy",
+               outfile]
+        subprocess.check_output(cmd, universal_newlines=True)
+        metafile.unlink()
+        metafile_new.unlink()
