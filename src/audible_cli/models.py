@@ -331,6 +331,7 @@ class Library:
                      locale: Optional[Locale] = None,
                      country_code: Optional[str] = None,
                      close_session: bool = False,
+                     timeout: int = 10,
                      **request_params):
 
         if locale is not None and country_code is not None:
@@ -343,9 +344,11 @@ class Library:
 
         if close_session:
             with api_client:
-                resp = api_client.get("library", params=request_params)
+                resp = api_client.get(
+                    "library", params=request_params, timeout=timeout)
         else:
-            resp = api_client.get("library", params=request_params)
+            resp = api_client.get(
+                "library", params=request_params, timeout=timeout)
 
         return cls(resp, auth=api_client.auth)
 
@@ -355,6 +358,7 @@ class Library:
                             locale: Optional[Locale] = None,
                             country_code: Optional[str] = None,
                             close_session: bool = False,
+                            timeout: int = 10,
                             **request_params):
 
         if locale is not None and country_code is not None:
@@ -367,9 +371,11 @@ class Library:
 
         if close_session:
             async with api_client:
-                resp = await api_client.get("library", params=request_params)
+                resp = await api_client.get(
+                    "library", params=request_params, timeout=timeout)
         else:
-            resp = await api_client.get("library", params=request_params)
+            resp = await api_client.get(
+                "library", params=request_params, timeout=timeout)
 
         return cls(resp, auth=api_client.auth)
 
