@@ -114,9 +114,9 @@ This function have to be decorated with ``@click.group(name="GROUP_NAME")`` or
 ``@click.command(name="GROUP_NAME")``.
 
 Relative imports in the command files doesn't work. So you have to work with 
-absolute imports. Please take care about this.
-If you have and issues with absolute imports please add this lines of code at the begining
-of your command script:
+absolute imports. Please take care about this. If you have any issues with 
+absolute imports please add your plugin path to the `PYTHONPATH` variable or 
+add this lines of code to the begining of your command script:
 
 ```python
 import sys
