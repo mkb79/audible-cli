@@ -6,7 +6,7 @@ import os
 import pathlib
 import sys
 import traceback
-from importlib import util
+from importlib import import_module
 
 import click
 
@@ -32,19 +32,19 @@ def from_folder(plugin_dir):
 
         pdir = pathlib.Path(plugin_dir)
         cmds = [x for x in pdir.glob("cmd_*.py")]
+        sys.path.insert(0, str(pdir.resolve()))
 
         for cmd in cmds:
+            mod_name = cmd.stem
             try:
-                spec = util.spec_from_file_location(cmd.stem, cmd)
-                mod = util.module_from_spec(spec)
-                spec.loader.exec_module(mod)
-                name = cmd.stem[4:] if mod.cli.name == "cli" else mod.cli.name
+                mod = import_module(mod_name)
+                name = mod_name[4:] if mod.cli.name == "cli" else mod.cli.name
                 group.add_command(mod.cli, name=name)
             except Exception:
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
                 # other than explain the error.
-                group.add_command(BrokenCommand(cmd.stem[4:]))
+                group.add_command(BrokenCommand(mod_name[4:]))
 
         return group
 
