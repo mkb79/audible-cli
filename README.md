@@ -115,6 +115,14 @@ This function have to be decorated with ``@click.group(name="GROUP_NAME")`` or
 
 Relative imports in the command files doesn't work. So you have to work with 
 absolute imports. Please take care about this.
+If you have and issues with absolute imports please add this lines of code at the begining
+of your command script:
+
+```python
+import sys
+import pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+```
 
 Examples can be found 
 [here](https://github.com/mkb79/audible-cli/tree/master/plugin_cmds).
