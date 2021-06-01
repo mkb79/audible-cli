@@ -4,6 +4,7 @@ import pathlib
 
 import audible
 import click
+from click import echo
 
 from ..config import pass_session
 from ..models import Library
@@ -14,7 +15,7 @@ def cli():
     """interact with library"""
 
 
-async def _export_library(auth, **params):
+async def _get_library(auth, **params):
     timeout = params.get("timeout")
     async with audible.AsyncClient(auth) as client:
         library = await Library.aget_from_api(
@@ -31,6 +32,33 @@ async def _export_library(auth, **params):
             num_results=1000,
             timeout=timeout
         )
+    return library
+
+
+async def _list_library(auth, **params):
+    library = await _get_library(auth, **params)
+
+    books = []
+
+    for item in library:
+        authors = ', '.join(sorted(a['name'] for a in item.authors) if item.authors else '')
+        series = ', '.join(sorted(s['title'] for s in item.series) if item.series else '')
+        title = item.title
+        books.append((authors, series, title))
+
+    for authors, series, title in sorted(books):
+        fields = []
+        if authors:
+            fields.append(authors)
+        if series:
+            fields.append(series)
+        fields.append(title)
+        echo(": ".join(fields))
+
+
+
+async def _export_library(auth, **params):
+    library = await _get_library(auth, **params)
 
     headers = (
         "asin", "title", "subtitle", "authors", "narrators", "series_title",
@@ -100,6 +128,25 @@ def export_library(session, **params):
     loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(_export_library(session.auth, **params))
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
+
+
+@cli.command("list")
+@click.option(
+    "--timeout", "-t",
+    type=click.INT,
+    default=10,
+    show_default=True,
+    help="Increase the timeout time if you got any TimeoutErrors."
+)
+@pass_session
+def list_library(session, **params):
+    """list titles in library"""
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(_list_library(session.auth, **params))
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
