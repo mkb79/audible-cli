@@ -41,8 +41,8 @@ async def _list_library(auth, **params):
     books = []
 
     for item in library:
-        authors = ', '.join(sorted(a['name'] for a in item.authors) if item.authors else '')
-        series = ', '.join(sorted(s['title'] for s in item.series) if item.series else '')
+        authors = ", ".join(sorted(a["name"] for a in item.authors) if item.authors else "")
+        series = ", ".join(sorted(s["title"] for s in item.series) if item.series else "")
         title = item.title
         books.append((authors, series, title))
 
@@ -54,7 +54,6 @@ async def _list_library(auth, **params):
             fields.append(series)
         fields.append(title)
         echo(": ".join(fields))
-
 
 
 async def _export_library(auth, **params):
