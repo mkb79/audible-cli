@@ -62,7 +62,7 @@ an authentication to the audible server is necessary to register a new device.
         default="audible")
 
     available_country_codes = [
-        "us", "ca", "uk", "au", "fr", "de", "jp", "it", "in"]
+        "us", "ca", "uk", "au", "fr", "de", "es", "jp", "it", "in"]
     echo()
     d["country_code"] = prompt(
         "Enter a country code for the profile",
