@@ -58,7 +58,11 @@ class LibraryItem:
         cleaned_title = unicodedata.normalize("NFKD", self.full_title)
         cleaned_title = cleaned_title.encode("ASCII", "ignore")
         cleaned_title = cleaned_title.replace(b" ", b"_")
-        return "".join(chr(c) for c in cleaned_title if chr(c) in valid_chars)
+        slug_title = "".join(chr(c) for c in cleaned_title if chr(c) in valid_chars)
+        
+        if len(slug_title) < 2:
+            return self.asin
+        return slug_title
 
     def substring_in_title_accuracy(self, substring):
         match = LongestSubString(substring, self.full_title)
