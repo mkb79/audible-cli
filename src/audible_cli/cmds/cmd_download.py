@@ -233,7 +233,10 @@ async def main(auth, **params):
 
     queue = asyncio.Queue()
 
-    client = httpx.AsyncClient(auth=auth, timeout=15)
+    headers = {
+        "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
+    }
+    client = httpx.AsyncClient(auth=auth, timeout=15, headers=headers)
     api_client = audible.AsyncClient(auth, timeout=15)
     async with client, api_client:
         for job in jobs:
