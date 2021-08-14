@@ -45,10 +45,11 @@ def prompt_otp_callback() -> str:
 
 
 def build_auth_file(filename: Union[str, pathlib.Path],
-                    username: str,
-                    password: str,
+                    username: Optional[str],
+                    password: Optional[str],
                     country_code: str,
-                    file_password: Optional[str] = None) -> None:
+                    file_password: Optional[str] = None,
+                    external_login=False) -> None:
     echo()
     secho("Login with amazon to your audible account now.", bold=True)
 
@@ -57,12 +58,16 @@ def build_auth_file(filename: Union[str, pathlib.Path],
         file_options.update(
             password=file_password, encryption=DEFAULT_AUTH_FILE_ENCRYPTION)
 
-    auth = Authenticator.from_login(
-        username=username,
-        password=password,
-        locale=country_code,
-        captcha_callback=prompt_captcha_callback,
-        otp_callback=prompt_otp_callback)
+    if external_login:
+        auth = Authenticator.from_login_external(
+            locale=country_code)
+    else:
+        auth = Authenticator.from_login(
+            username=username,
+            password=password,
+            locale=country_code,
+            captcha_callback=prompt_captcha_callback,
+            otp_callback=prompt_otp_callback)
 
     echo()
     secho("Login was successful. Now registering a new device.", bold=True)
