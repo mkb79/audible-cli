@@ -157,7 +157,7 @@ def cli(session, ctx):
             username=d.get("audible_username"),
             password=d.get("audible_password"),
             country_code=d.get("country_code"),
-            file_password=d.get("auth_file_password",
+            file_password=d.get("auth_file_password"),
             external_login=d.get("external_login")
         )
 
