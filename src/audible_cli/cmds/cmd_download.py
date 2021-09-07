@@ -225,7 +225,8 @@ async def main(auth, **params):
                 colalign=("center", "left", "center"))
             echo(table)
 
-            if no_confirm or click.confirm("Proceed with this audiobook(s)"):
+            if no_confirm or click.confirm("Proceed with this audiobook(s)",
+                    default=True):
                 jobs.extend([i[0].asin for i in full_match or match])
 
         else:
