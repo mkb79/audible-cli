@@ -110,7 +110,7 @@ async def _export_library(auth, **params):
 @click.option(
     "--output", "-o",
     type=click.Path(),
-    default=pathlib.Path().cwd() / "library.csv",
+    default=pathlib.Path().cwd() / "library.tsv",
     show_default=True,
     help="output file"
 )
