@@ -158,16 +158,28 @@ def check_if_auth_file_not_exists(session, ctx, value):
     prompt="Please enter the country code",
     help="The country code for the marketplace you want to authenticate."
 )
+@click.option(
+    "--external-login",
+    is_flag=True,
+    help="Authenticate using a webbrowser."
+)
+@click.option(
+    "--with-username",
+    is_flag=True,
+    help="Using a pre-amazon Audible account to login."
+)
 @pass_session
 def add_auth_file(session, auth_file, password, audible_username,
-                  audible_password, country_code):
+                  audible_password, country_code, external_login, with_username):
     """Register a new device and add an auth file to config dir"""
     build_auth_file(
         filename=session.config.dirname / auth_file,
         username=audible_username,
         password=audible_password,
         country_code=country_code,
-        file_password=password
+        file_password=password,
+        external_login=external_login,
+        with_username=with_username
     )
 
 

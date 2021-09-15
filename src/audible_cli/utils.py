@@ -49,7 +49,8 @@ def build_auth_file(filename: Union[str, pathlib.Path],
                     password: Optional[str],
                     country_code: str,
                     file_password: Optional[str] = None,
-                    external_login=False) -> None:
+                    external_login=False,
+                    with_username=False) -> None:
     echo()
     secho("Login with amazon to your audible account now.", bold=True)
 
@@ -60,7 +61,8 @@ def build_auth_file(filename: Union[str, pathlib.Path],
 
     if external_login:
         auth = Authenticator.from_login_external(
-            locale=country_code)
+            locale=country_code,
+            with_username=with_username)
     else:
         auth = Authenticator.from_login(
             username=username,

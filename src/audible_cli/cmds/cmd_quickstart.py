@@ -115,6 +115,11 @@ an authentication to the audible server is necessary to register a new device.
     d["audible_username"] = None
     d["audible_password"] = None
 
+    echo()
+    d["with_username"] = click.confirm(
+        "Do you want to login with a pre-amazon Audible account?",
+        default=False)
+
     if not d["external_login"]:
         d["audible_username"] = prompt("Please enter your amazon username")
         d["audible_password"] = prompt("Please enter your amazon password",
@@ -158,7 +163,8 @@ def cli(session, ctx):
             password=d.get("audible_password"),
             country_code=d.get("country_code"),
             file_password=d.get("auth_file_password"),
-            external_login=d.get("external_login")
+            external_login=d.get("external_login"),
+            with_username=d.get("with_username")
         )
 
     config.write_config()
