@@ -92,7 +92,7 @@ runs on the interactive mode, so you have to answer multiple questions to finish
 ## Commands
 
 Call `audible -h` to let you show all main subcommands. At this time, there 
-are the `activation_bytes`, `download`, `library` and `manage` subcommands. 
+are the `activation-bytes`, `download`, `library` and `manage` subcommands. 
 The `manage` command has multiple subcommands. So take a look with the 
 `audible manage -h` and `audible manage <subcommand> -h`. 
 
