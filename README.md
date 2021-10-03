@@ -22,7 +22,15 @@ It depends on the following packages:
 
 ## Installation
 
-This package is not on PyPi at this moment. To install audible-cli you have to clone it from this repo. 
+You can install audible-cli from pypi with
+
+```shell
+
+pip install audible-cli
+
+```
+
+or install it directly from github with
 
 ```shell
 
