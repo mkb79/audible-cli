@@ -97,6 +97,11 @@ Use the `audible-quickstart` or `audible quickstart` command in your shell
 to create your first config, profile and auth file. `audible-quickstart` 
 runs on the interactive mode, so you have to answer multiple questions to finish.
 
+## How to download and convert
+
+audible download --aax -t insertaudiobook -o . -j 1  -q high
+ffmpeg -activation_bytes "$(audible activation-bytes | tail -1)" -i outputaudiobook.aax -c copy outputaudiobook.m4b
+
 ## Commands
 
 Call `audible -h` to let you show all main subcommands. At this time, there 
