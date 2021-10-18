@@ -98,7 +98,7 @@ to create your first config, profile and auth file. `audible-quickstart`
 runs on the interactive mode, so you have to answer multiple questions to finish.
 
 ## How to download and convert
-
+if [ "$(audible activation-bytes | grep file -c)" = "1" ] ; then audible activation-bytes -s ; fi
 audible download --aax -t insertaudiobook -o . -j 1  -q high
 ffmpeg -activation_bytes "$(audible activation-bytes | tail -1)" -i outputaudiobook.aax -c copy outputaudiobook.m4b
 
