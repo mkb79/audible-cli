@@ -161,9 +161,9 @@ class LibraryItem:
         if client is None:
             assert self._auth is not None
             with httpx.Client(auth=self._auth) as client:
-                resp = client.head(url=url, allow_redirects=False)
+                resp = client.head(url=url, follow_redirects=False)
         else:
-            resp = client.head(url=url, allow_redirects=False)
+            resp = client.head(url=url, follow_redirects=False)
 
         return self._extract_link_from_response(resp), codec
 
@@ -181,9 +181,9 @@ class LibraryItem:
         if client is None:
             assert self._auth is not None
             async with httpx.AsyncClient(auth=self._auth) as client:
-                resp = await client.head(url=url, allow_redirects=False)
+                resp = await client.head(url=url, follow_redirects=False)
         else:
-            resp = await client.head(url=url, allow_redirects=False)
+            resp = await client.head(url=url, follow_redirects=False)
 
         return self._extract_link_from_response(resp), codec
 
