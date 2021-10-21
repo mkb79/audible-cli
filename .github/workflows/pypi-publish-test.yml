@@ -1,0 +1,27 @@
+name: Upload Python Package to TestPyPI
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build-n-publish:
+    name: Build and publish Audible-cli to TestPyPI
+    runs-on: ubuntu-18.04
+    
+    steps:
+      - uses: actions/checkout@master
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.9
+      - name: Install setuptools and wheel
+        run: pip install --upgrade pip setuptools wheel
+      - name: Build a binary wheel and a source tarball
+        run: python setup.py sdist bdist_wheel
+      - name: Publish distribution to Test PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          repository_url: https://test.pypi.org/legacy/
