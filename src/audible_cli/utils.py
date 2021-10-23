@@ -72,11 +72,9 @@ def build_auth_file(filename: Union[str, pathlib.Path],
             otp_callback=prompt_otp_callback)
 
     echo()
-    secho("Login was successful. Now registering a new device.", bold=True)
 
-    auth.register_device()
     device_name = auth.device_info["device_name"]
-    echo()
+
     secho(f"Successfully registered {device_name}.", bold=True)
 
     if not filename.parent.exists():
