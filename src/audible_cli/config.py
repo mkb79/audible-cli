@@ -1,6 +1,6 @@
 import os
 import pathlib
-from typing import Any, Dict, Optional, Union
+from typing import Dict, Optional, Union
 
 import click
 import toml
@@ -23,7 +23,6 @@ class Config:
     def __init__(self) -> None:
         self._config_file: Optional[pathlib.Path] = None
         self._config_data: Dict[str, Union[str, Dict]] = DEFAULT_CONFIG_DATA
-        self._current_profile: Optional[str] = None
         self._is_read: bool = False
 
     @property
@@ -49,19 +48,14 @@ class Config:
         return self._config_data
 
     @property
-    def app_config(self) -> Dict[str, str]:
-        return self.data.get("APP", {})
-
-    @property
-    def profile_config(self) -> Dict[str, str]:
-        return self.data["profile"][self._current_profile]
-
-    @property
     def primary_profile(self) -> Optional[str]:
-        return self.app_config.get("primary_profile")
+        return self.data.get("APP", {}).get("primary_profile")
 
     def has_profile(self, name: str) -> bool:
         return name in self.data.get("profile", {})
+
+    def get_profile(self, name: str) -> Dict[str, str]:
+        return self.data["profile"][name]
 
     def add_profile(self,
                     name: str,
@@ -148,31 +142,28 @@ class Session:
             conf_file = self.app_dir / CONFIG_FILE
             self._config = Config()
             self._config.read_config(conf_file)
-
-            name = self.params.get("profile") or self.config.primary_profile
-            if name is None:
-                message = ("No profile provided and primary profile not set "
-                           "properly in config.")
-                try:
-                    ctx = click.get_current_context()
-                    ctx.fail(message)
-                except RuntimeError:
-                    raise KeyError(message)
-
-            if not self.config.has_profile(name):
-                message = "Provided profile not found in config."
-                try:
-                    ctx = click.get_current_context()
-                    ctx.fail(message)
-                except RuntimeError:
-                    raise UserWarning(message)
-
-            self.config._current_profile = name
-
         return self._config
 
     def _set_auth(self):
-        profile = self.config.profile_config
+        name = self.params.get("profile") or self.config.primary_profile
+        if name is None:
+            message = ("No profile provided and primary profile not set "
+                       "properly in config.")
+            try:
+                ctx = click.get_current_context()
+                ctx.fail(message)
+            except RuntimeError:
+                raise KeyError(message)
+
+        if not self.config.has_profile(name):
+            message = "Provided profile not found in config."
+            try:
+                ctx = click.get_current_context()
+                ctx.fail(message)
+            except RuntimeError:
+                raise UserWarning(message)
+
+        profile = self.config.get_profile(name)
         auth_file = self.config.dirname / profile["auth_file"]
         country_code = profile["country_code"]
         password = self.params.get("password")
@@ -220,3 +211,4 @@ def add_param_to_session(ctx: click.Context, param, value):
     session = ctx.ensure_object(Session)
     session.params[param.name] = value
     return value
+
