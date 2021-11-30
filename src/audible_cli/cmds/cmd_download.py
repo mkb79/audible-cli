@@ -204,7 +204,7 @@ async def main(config, auth, **params):
     no_confirm = params.get("no_confirm")
 
     filename_mode = params.get("filename_mode")
-    if filename_mode == "auto":
+    if filename_mode == "config":
         filename_mode = config.profile_config.get("filename_mode") or \
                         config.app_config.get("filename_mode") or \
                         "ascii"
@@ -410,10 +410,10 @@ async def main(config, auth, **params):
 @click.option(
     "--filename-mode", "-f",
     type=click.Choice(
-        ["auto", "ascii", "asin_ascii", "unicode", "asin_unicode"]
+        ["config", "ascii", "asin_ascii", "unicode", "asin_unicode"]
     ),
-    default="auto",
-    help="Filename mode to use. [default: auto]"
+    default="config",
+    help="Filename mode to use. [default: config]"
 )
 @pass_session
 def cli(session, **params):

@@ -91,6 +91,26 @@ provide the password.
 If the auth file is encrypted, and you don’t provide the password, you will be 
 asked for it with a „hidden“ input field. 
 
+### Config options
+
+An option in the config file is separated by an underline. In the CLI prompt,
+an option must be entered with a dash.
+
+#### APP section
+
+The APP section supports the following options:
+- primary_profile: The profile to use, if no other is specified
+- filename_mode: When using the `download` command, a filename mode can be 
+  specified here. If not present, "ascii" will be used as default. To override
+  these option, you can provide a mode with the `filename-mode` option of the
+  download command.
+
+#### Profile section
+
+- auth_file: The auth file for this profile
+- country_code: The marketplace for this profile
+- filename_mode: See APP section above. Will override the option in APP section.
+
 ## Getting started
 
 Use the `audible-quickstart` or `audible quickstart` command in your shell 
