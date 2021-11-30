@@ -5,6 +5,7 @@ import json
 import pathlib
 import ssl
 import sys
+import unicodedata
 
 import aiofiles
 import audible
@@ -69,9 +70,25 @@ def ignore_httpx_ssl_eror(loop):
     loop.set_exception_handler(ignore_ssl_error)
 
 
-async def download_cover(client, output_dir, item, res,
+def create_base_filename(item, mode):
+    if "ascii" in mode:
+        base_filename = item.full_title_slugify
+
+    elif "unicode" in mode:
+        base_filename = unicodedata.normalize("NFKD", item.full_title)
+
+    else:
+        base_filename = item.asin
+
+    if "asin" in mode:
+        base_filename = item.asin + "_" + base_filename
+
+    return base_filename
+
+
+async def download_cover(client, output_dir, base_filename, item, res,
                          overwrite_existing):
-    filename = f"{item.full_title_slugify}_({str(res)}).jpg"
+    filename = f"{base_filename}_({str(res)}).jpg"
     filepath = output_dir / filename
 
     url = item.get_cover_url(res)
@@ -85,24 +102,25 @@ async def download_cover(client, output_dir, item, res,
     await dl.arun(stream=False, pb=False)
 
 
-async def download_pdf(client, output_dir, item, overwrite_existing):
+async def download_pdf(client, output_dir, base_filename, item,
+                       overwrite_existing):
     url = item.get_pdf_url()
     if url is None:
         secho(f"No PDF found for {item.full_title}.", fg="yellow")
         return
 
-    filename = item.full_title_slugify + ".pdf"
+    filename = base_filename + ".pdf"
     filepath = output_dir / filename
     dl = Downloader(url, filepath, client, overwrite_existing)
     await dl.arun(stream=False, pb=False)
 
 
-async def download_chapters(api_client, output_dir, item, quality,
-                            overwrite_existing):
+async def download_chapters(api_client, output_dir, base_filename, item,
+                            quality, overwrite_existing):
     if not output_dir.is_dir():
         raise Exception("Output dir doesn't exists")
 
-    filename = item.full_title_slugify + "-chapters.json"
+    filename = base_filename + "-chapters.json"
     file = output_dir / filename
     if file.exists() and not overwrite_existing:
         secho(f"File {file} already exists. Skip saving chapters.", fg="blue")
@@ -120,21 +138,21 @@ async def download_chapters(api_client, output_dir, item, quality,
     tqdm.tqdm.write(f"Chapter file saved to {file}.")
 
 
-async def download_aax(client, output_dir, item, quality,
+async def download_aax(client, output_dir, base_filename, item, quality,
                        overwrite_existing):
     url, codec = await item.aget_aax_url(quality, client)
-    filename = item.full_title_slugify + f"-{codec}.aax"
+    filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
     dl = Downloader(url, filepath, client, overwrite_existing)
     await dl.arun(pb=True)
 
 
-async def download_aaxc(api_client, client, output_dir, item, quality,
-                        overwrite_existing):
+async def download_aaxc(api_client, client, output_dir, base_filename, item,
+                        quality, overwrite_existing):
     url, codec, dlr = await item.aget_aaxc_url(quality, api_client)
 
     filepath = pathlib.Path(
-        output_dir) / f"{item.full_title_slugify}-{codec}.aaxc"
+        output_dir) / f"{base_filename}-{codec}.aaxc"
     dlr_file = filepath.with_suffix(".voucher")
 
     dlr = json.dumps(dlr, indent=4)
@@ -156,7 +174,7 @@ async def consume(queue):
         queue.task_done()
 
 
-async def main(auth, **params):
+async def main(config, auth, **params):
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
 
     # which item(s) to download
@@ -184,6 +202,12 @@ async def main(auth, **params):
     overwrite_existing = params.get("overwrite")
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
+
+    filename_mode = params.get("filename_mode")
+    if filename_mode == "auto":
+        filename_mode = config.profile_config.get("filename_mode") or \
+                        config.app_config.get("filename_mode") or \
+                        "ascii"
 
     # fetch the user library
     async with audible.AsyncClient(auth) as client:
@@ -242,10 +266,12 @@ async def main(auth, **params):
     async with client, api_client:
         for job in jobs:
             item = library.get_item_by_asin(job)
+            base_filename = create_base_filename(item=item, mode=filename_mode)
             if get_cover:
                 queue.put_nowait(
                     download_cover(client=client,
                                    output_dir=output_dir,
+                                   base_filename=base_filename,
                                    item=item,
                                    res=cover_size,
                                    overwrite_existing=overwrite_existing))
@@ -254,6 +280,7 @@ async def main(auth, **params):
                 queue.put_nowait(
                     download_pdf(client=client,
                                  output_dir=output_dir,
+                                 base_filename=base_filename,
                                  item=item,
                                  overwrite_existing=overwrite_existing))
 
@@ -261,6 +288,7 @@ async def main(auth, **params):
                 queue.put_nowait(
                     download_chapters(api_client=api_client,
                                       output_dir=output_dir,
+                                      base_filename=base_filename,
                                       item=item,
                                       quality=quality,
                                       overwrite_existing=overwrite_existing))
@@ -269,6 +297,7 @@ async def main(auth, **params):
                 queue.put_nowait(
                     download_aax(client=client,
                                  output_dir=output_dir,
+                                 base_filename=base_filename,
                                  item=item,
                                  quality=quality,
                                  overwrite_existing=overwrite_existing))
@@ -278,6 +307,7 @@ async def main(auth, **params):
                     download_aaxc(api_client=api_client,
                                   client=client,
                                   output_dir=output_dir,
+                                  base_filename=base_filename,
                                   item=item,
                                   quality=quality,
                                   overwrite_existing=overwrite_existing))
@@ -377,14 +407,23 @@ async def main(auth, **params):
     show_default=True,
     help="number of simultaneous downloads"
 )
+@click.option(
+    "--filename-mode", "-f",
+    type=click.Choice(
+        ["auto", "ascii", "asin_ascii", "unicode", "asin_unicode"]
+    ),
+    default="auto",
+    help="Filename mode to use. [default: auto]"
+)
 @pass_session
 def cli(session, **params):
     """download audiobook(s) from library"""
     loop = asyncio.get_event_loop()
     ignore_httpx_ssl_eror(loop)
     auth = session.auth
+    config = session.config
     try:
-        loop.run_until_complete(main(auth, **params))
+        loop.run_until_complete(main(config, auth, **params))
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
