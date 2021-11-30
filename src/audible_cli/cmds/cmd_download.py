@@ -174,7 +174,7 @@ async def consume(queue):
         queue.task_done()
 
 
-async def main(auth, **params):
+async def main(config, auth, **params):
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
 
     # which item(s) to download
@@ -202,7 +202,12 @@ async def main(auth, **params):
     overwrite_existing = params.get("overwrite")
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
+
     filename_mode = params.get("filename_mode")
+    if filename_mode == "auto":
+        filename_mode = config.profile_config.get("filename_mode") or \
+                        config.app_config.get("filename_mode") or \
+                        "ascii"
 
     # fetch the user library
     async with audible.AsyncClient(auth) as client:
@@ -244,7 +249,9 @@ async def main(auth, **params):
                 colalign=("center", "left", "center"))
             echo(table)
 
-            if no_confirm or click.confirm("Proceed with this audiobook(s)"):
+            if no_confirm or click.confirm(
+                    "Proceed with this audiobook(s)", default=True
+            ):
                 jobs.extend([i[0].asin for i in full_match or match])
 
         else:
@@ -400,9 +407,11 @@ async def main(auth, **params):
 )
 @click.option(
     "--filename-mode", "-f",
-    type=click.Choice(["ascii", "asin_ascii", "unicode", "asin_unicode"]),
-    default="ascii",
-    help="Filename mode to use."
+    type=click.Choice(
+        ["auto", "ascii", "asin_ascii", "unicode", "asin_unicode"]
+    ),
+    default="auto",
+    help="Filename mode to use. [default: auto]"
 )
 @pass_session
 def cli(session, **params):
@@ -410,8 +419,9 @@ def cli(session, **params):
     loop = asyncio.get_event_loop()
     ignore_httpx_ssl_eror(loop)
     auth = session.auth
+    config = session.config
     try:
-        loop.run_until_complete(main(auth, **params))
+        loop.run_until_complete(main(config, auth, **params))
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
