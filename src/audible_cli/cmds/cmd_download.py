@@ -155,10 +155,14 @@ async def download_aaxc(api_client, client, output_dir, base_filename, item,
         output_dir) / f"{base_filename}-{codec}.aaxc"
     dlr_file = filepath.with_suffix(".voucher")
 
-    dlr = json.dumps(dlr, indent=4)
-    async with aiofiles.open(dlr_file, "w") as f:
-        await f.write(dlr)
-    secho(f"Voucher file saved to {dlr_file}.")
+    if dlr_file.is_file() and not overwrite_existing:
+        secho(f"File {self._file} already exists. Skip download.",
+              fg="blue")
+    else:
+        dlr = json.dumps(dlr, indent=4)
+        async with aiofiles.open(dlr_file, "w") as f:
+            await f.write(dlr)
+        secho(f"Voucher file saved to {dlr_file}.")
 
     dl = Downloader(url, filepath, client, overwrite_existing)
     await dl.arun(pb=True)
