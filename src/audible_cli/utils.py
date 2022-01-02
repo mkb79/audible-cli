@@ -98,8 +98,9 @@ def build_auth_file(filename: Union[str, pathlib.Path],
 
 class LongestSubString:
     def __init__(self, search_for, search_in, case_sensitiv=False):
-        search_for = search_for if case_sensitiv else search_for.lower()
-        search_in = search_in if case_sensitiv else search_in.lower()
+        if case_sensitiv is False:
+            search_for = search_for.lower()
+            search_in = search_in.lower()
 
         self._search_for = search_for
         self._search_in = search_in
@@ -166,17 +167,17 @@ class Downloader:
     def _file_okay(self):
         if not self._file.parent.is_dir():
             secho(f"Folder {self._file.parent} doesn't exists! Skip download.",
-                  fg="red")
+                  fg="red", err=True)
             return False
 
         if self._file.exists() and not self._file.is_file():
             secho(f"Object {self._file} exists but is no file. Skip download.",
-                  fg="red")
+                  fg="red", err=True)
             return False
 
         if self._file.is_file() and not self._overwrite_existing:
             secho(f"File {self._file} already exists. Skip download.",
-                  fg="blue")
+                  fg="blue", err=True)
             return False
 
         return True
