@@ -60,6 +60,13 @@ def build_auth_file(filename: Union[str, pathlib.Path],
             password=file_password, encryption=DEFAULT_AUTH_FILE_ENCRYPTION)
 
     if external_login:
+        # import readline to prevent issues when input URL in 
+        # CLI prompt when using MacOS
+        try:
+            import readline
+        except ImportError:
+            pass
+
         auth = Authenticator.from_login_external(
             locale=country_code,
             with_username=with_username)
