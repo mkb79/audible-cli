@@ -156,7 +156,7 @@ async def download_aaxc(api_client, client, output_dir, base_filename, item,
     dlr_file = filepath.with_suffix(".voucher")
 
     if dlr_file.is_file() and not overwrite_existing:
-        secho(f"File {self._file} already exists. Skip download.",
+        secho(f"File {dlr_file} already exists. Skip download.",
               fg="blue", err=True)
     else:
         dlr = json.dumps(dlr, indent=4)
