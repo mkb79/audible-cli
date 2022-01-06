@@ -95,7 +95,7 @@ async def download_cover(client, output_dir, base_filename, item, res,
     if url is None:
         secho(
             f"No COVER found for {item.full_title} with given resolution.",
-            fg="yellow")
+            fg="yellow", err=True)
         return
 
     dl = Downloader(url, filepath, client, overwrite_existing)
@@ -106,7 +106,7 @@ async def download_pdf(client, output_dir, base_filename, item,
                        overwrite_existing):
     url = item.get_pdf_url()
     if url is None:
-        secho(f"No PDF found for {item.full_title}.", fg="yellow")
+        secho(f"No PDF found for {item.full_title}.", fg="yellow", err=True)
         return
 
     filename = base_filename + ".pdf"
@@ -123,14 +123,14 @@ async def download_chapters(api_client, output_dir, base_filename, item,
     filename = base_filename + "-chapters.json"
     file = output_dir / filename
     if file.exists() and not overwrite_existing:
-        secho(f"File {file} already exists. Skip saving chapters.", fg="blue")
+        secho(f"File {file} already exists. Skip saving chapters.", fg="blue", err=True)
         return True
 
     try:
         metadata = await item.aget_content_metadata(quality, api_client)
     except NotFoundError:
         secho(f"Can't get chapters for {item.full_title}. Skip item.",
-              fg="red")
+              fg="red", err=True)
         return
     metadata = json.dumps(metadata, indent=4)
     async with aiofiles.open(file, "w") as f:
@@ -155,10 +155,14 @@ async def download_aaxc(api_client, client, output_dir, base_filename, item,
         output_dir) / f"{base_filename}-{codec}.aaxc"
     dlr_file = filepath.with_suffix(".voucher")
 
-    dlr = json.dumps(dlr, indent=4)
-    async with aiofiles.open(dlr_file, "w") as f:
-        await f.write(dlr)
-    secho(f"Voucher file saved to {dlr_file}.")
+    if dlr_file.is_file() and not overwrite_existing:
+        secho(f"File {dlr_file} already exists. Skip download.",
+              fg="blue", err=True)
+    else:
+        dlr = json.dumps(dlr, indent=4)
+        async with aiofiles.open(dlr_file, "w") as f:
+            await f.write(dlr)
+        secho(f"Voucher file saved to {dlr_file}.")
 
     dl = Downloader(url, filepath, client, overwrite_existing)
     await dl.arun(pb=True)
@@ -170,7 +174,7 @@ async def consume(queue):
         try:
             await item
         except Exception as e:
-            secho(f"Error in job: {e}", fg="red")
+            secho(f"Error in job: {e}", fg="red", err=True)
         queue.task_done()
 
 
@@ -233,7 +237,7 @@ async def main(config, auth, **params):
             if not ignore_errors:
                 ctx = click.get_current_context()
                 ctx.fail(f"Asin {asin} not found in library.")
-            secho(f"Skip asin {asin}: Not found in library", fg="red")
+            secho(f"Skip asin {asin}: Not found in library", fg="red", err=True)
 
     for title in titles:
         match = library.search_item_by_title(title)
@@ -254,7 +258,7 @@ async def main(config, auth, **params):
                 jobs.extend([i[0].asin for i in full_match or match])
 
         else:
-            secho(f"Skip title {title}: Not found in library", fg="red")
+            secho(f"Skip title {title}: Not found in library", fg="red", err=True)
 
     queue = asyncio.Queue()
 

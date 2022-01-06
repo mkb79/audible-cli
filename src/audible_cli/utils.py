@@ -11,6 +11,7 @@ import httpx
 import tqdm
 from PIL import Image
 from audible import Authenticator
+from audible.login import default_login_url_callback
 from click import echo, secho, prompt
 
 from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
@@ -44,6 +45,17 @@ def prompt_otp_callback() -> str:
     return str(guess).strip().lower()
 
 
+def prompt_external_callback(url: str) -> str:
+    # import readline to prevent issues when input URL in
+    # CLI prompt when using MacOS
+    try:
+        import readline  # noqa
+    except ImportError:
+        pass
+
+    return default_login_url_callback(url)
+
+
 def build_auth_file(filename: Union[str, pathlib.Path],
                     username: Optional[str],
                     password: Optional[str],
@@ -62,7 +74,8 @@ def build_auth_file(filename: Union[str, pathlib.Path],
     if external_login:
         auth = Authenticator.from_login_external(
             locale=country_code,
-            with_username=with_username)
+            with_username=with_username,
+            login_url_callback=prompt_external_callback)
     else:
         auth = Authenticator.from_login(
             username=username,
@@ -85,8 +98,9 @@ def build_auth_file(filename: Union[str, pathlib.Path],
 
 class LongestSubString:
     def __init__(self, search_for, search_in, case_sensitiv=False):
-        search_for = search_for if case_sensitiv else search_for.lower()
-        search_in = search_in if case_sensitiv else search_in.lower()
+        if case_sensitiv is False:
+            search_for = search_for.lower()
+            search_in = search_in.lower()
 
         self._search_for = search_for
         self._search_in = search_in
@@ -153,17 +167,17 @@ class Downloader:
     def _file_okay(self):
         if not self._file.parent.is_dir():
             secho(f"Folder {self._file.parent} doesn't exists! Skip download.",
-                  fg="red")
+                  fg="red", err=True)
             return False
 
         if self._file.exists() and not self._file.is_file():
             secho(f"Object {self._file} exists but is no file. Skip download.",
-                  fg="red")
+                  fg="red", err=True)
             return False
 
         if self._file.is_file() and not self._overwrite_existing:
             secho(f"File {self._file} already exists. Skip download.",
-                  fg="blue")
+                  fg="blue", err=True)
             return False
 
         return True
