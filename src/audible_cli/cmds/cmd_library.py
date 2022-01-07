@@ -95,7 +95,7 @@ async def _export_library(auth, **params):
                 elif key == "library_status":
                     data_row["date_added"] = v["date_added"]
                 elif key == "product_images":
-                    data_row["cover_url"] = v["500"]
+                    data_row["cover_url"] = v.get("500", "-")
                 elif key == "category_ladders":
                     genres = []
                     for genre in v:
