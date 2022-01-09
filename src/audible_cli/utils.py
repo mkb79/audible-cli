@@ -182,7 +182,16 @@ class Downloader:
 
         return True
 
-    def _postpare(self, elapsed):
+    def _postpare(self, elapsed, status_code):
+        if not 200 <= status_code < 400:
+            try:
+                msg = self._tmp_file.read_text()
+            except:
+                msg = "Unknown"
+            secho(f"Error downloading {self._file}. Message: {msg}.",
+                  fg="red", err=True)
+            return
+
         file = self._file
         tmp_file = self._tmp_file
         if file.exists() and self._overwrite_existing:
@@ -208,14 +217,14 @@ class Downloader:
                     f.write(chunk)
                     progressbar.update(len(chunk))
 
-            self._postpare(r.elapsed)
+            self._postpare(r.elapsed, r.status_code)
             return True
 
     def _load(self):
         r = self._client.get(self._url)
         with open(self._tmp_file, mode="wb") as f:
             f.write(r.content)
-        self._postpare(r.elapsed)
+        self._postpare(r.elapsed, r.status_code)
         return True
 
     async def _astream_load(self, pb: bool = True):
@@ -230,14 +239,14 @@ class Downloader:
                         await f.write(chunk)
                         progressbar.update(len(chunk))
 
-            self._postpare(r.elapsed)
+            self._postpare(r.elapsed, r.status_code)
             return True
 
     async def _aload(self):
         r = await self._client.get(self._url)
         async with aiofiles.open(self._tmp_file, mode="wb") as f:
             await f.write(r.content)
-        self._postpare(r.elapsed)
+        self._postpare(r.elapsed, r.status_code)
         return True
 
     def run(self, stream: bool = True, pb: bool = True):
