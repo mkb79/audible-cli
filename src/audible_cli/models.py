@@ -164,6 +164,10 @@ class LibraryItem:
             return
 
         codec = self._get_codec(quality)
+        if codec is None:
+            secho(f"{self.full_title} is not downloadable. No AAX codec found.",
+                  fg="red")
+            return
         url = self._build_aax_request_url(codec)
         if client is None:
             assert self._auth is not None
@@ -184,6 +188,10 @@ class LibraryItem:
             return
 
         codec = self._get_codec(quality)
+        if codec is None:
+            secho(f"{self.full_title} is not downloadable. No AAX codec found.",
+                  fg="red")
+            return
         url = self._build_aax_request_url(codec)
         if client is None:
             assert self._auth is not None
