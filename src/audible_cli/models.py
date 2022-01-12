@@ -320,7 +320,7 @@ class LibraryItem:
 
 class Library:
     def __init__(self,
-                 data: dict,
+                 data: Union[dict, list],
                  locale: Optional[Locale] = None,
                  country_code: Optional[str] = None,
                  auth: Optional[Authenticator] = None):
@@ -334,8 +334,11 @@ class Library:
         locale = Locale(country_code) if country_code else locale
         self._locale = locale or auth.locale
         self._auth = auth
+
+        if isinstance(data, dict):
+            data = data.get("items", data)
         self._data = [LibraryItem(i, locale=self._locale, auth=self._auth)
-                      for i in data.get("items", data)]
+                      for i in data]
 
     def __iter__(self):
         return iter(self._data)
@@ -349,6 +352,25 @@ class Library:
                      timeout: int = 10,
                      **request_params):
 
+        def fetch_library(params):
+            entire_lib = False
+            if "page" not in params and "num_results" not in params:
+                entire_lib = True
+                params["page"] = 1
+                params["num_results"] = 1000
+
+            library = []
+            while True:
+                r = api_client.get(
+                    "library", params=params, timeout=timeout)
+                items = r["items"]
+                len_items = len(items)
+                library.extend(items)
+                if not entire_lib or len_items < 1000:
+                    break
+                params["page"] += 1
+            return library
+
         if locale is not None and country_code is not None:
             raise ValueError("Locale and country_code provided. Expected only "
                              "one of them.")
@@ -359,11 +381,9 @@ class Library:
 
         if close_session:
             with api_client:
-                resp = api_client.get(
-                    "library", params=request_params, timeout=timeout)
+                resp = fetch_library(request_params)
         else:
-            resp = api_client.get(
-                "library", params=request_params, timeout=timeout)
+            resp = fetch_library(request_params)
 
         return cls(resp, auth=api_client.auth)
 
@@ -376,6 +396,25 @@ class Library:
                             timeout: int = 10,
                             **request_params):
 
+        async def fetch_library(params):
+            entire_lib = False
+            if "page" not in params and "num_results" not in params:
+                entire_lib = True
+                params["page"] = 1
+                params["num_results"] = 1000
+
+            library = []
+            while True:
+                r = await api_client.get(
+                    "library", params=params, timeout=timeout)
+                items = r["items"]
+                len_items = len(items)
+                library.extend(items)
+                if not entire_lib or len_items < 1000:
+                    break
+                params["page"] += 1
+            return library
+
         if locale is not None and country_code is not None:
             raise ValueError("Locale and country_code provided. Expected only "
                              "one of them.")
@@ -386,11 +425,9 @@ class Library:
 
         if close_session:
             async with api_client:
-                resp = await api_client.get(
-                    "library", params=request_params, timeout=timeout)
+                resp = await fetch_library(request_params)
         else:
-            resp = await api_client.get(
-                "library", params=request_params, timeout=timeout)
+            resp = await fetch_library(request_params)
 
         return cls(resp, auth=api_client.auth)
 

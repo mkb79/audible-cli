@@ -219,8 +219,7 @@ async def main(config, auth, **params):
             client,
             response_groups=("product_desc, pdf_url, media, product_attrs, "
                              "relationships"),
-            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500",
-            num_results=1000)
+            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500")
 
     jobs = []
 
