@@ -40,6 +40,26 @@ pip install .
 
 ```
 
+## Standalone executables
+
+If you don't want to install `Python` and `audible-cli` on your machine, you can
+find standalone exe files in the `bin` folder of this repo. At this moment only
+Windows and linux are supported.
+
+You can create them yourself this way
+
+```shell
+
+git clone https://github.com/mkb79/audible-cli.git
+cd audible-cli
+pip install .[pyi]
+pyinstall audible.spec
+
+```
+
+There are some limitations when using plugins. The binarys maybe does not contain
+all the dependencies from your plugin script. 
+
 ## Tab Completion
 
 Tab completion can be provided for commands, options and choice values. Bash, 
