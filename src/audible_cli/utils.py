@@ -14,7 +14,7 @@ from audible import Authenticator
 from audible.login import default_login_url_callback
 from click import echo, secho, prompt
 
-from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
+from .constants import DEFAULT_AUTH_FILE_ENCRYPTION, MINIMUM_FILE_SIZE
 
 
 def prompt_captcha_callback(captcha_url: str) -> str:
@@ -183,17 +183,28 @@ class Downloader:
         return True
 
     def _postpare(self, elapsed, status_code):
+        print("HTTP response code:", status_code, " in ", elapsed)
         if not 200 <= status_code < 400:
             try:
                 msg = self._tmp_file.read_text()
             except:
                 msg = "Unknown"
-            secho(f"Error downloading {self._file}. Message: {msg}.",
+            secho(f"Error downloading {self._file}. Message: {msg}",
                   fg="red", err=True)
             return
 
         file = self._file
         tmp_file = self._tmp_file
+        
+        if tmp_file.stat().st_size < MINIMUM_FILE_SIZE:
+            try:
+                msg = self._tmp_file.read_text()
+            except:
+                msg = "Unknown"
+            secho(f"Error downloading {self._file}, file too small. Message: {msg}",
+                  fg="red", err=True)
+            return
+        
         if file.exists() and self._overwrite_existing:
             i = 0
             while file.with_suffix(f"{file.suffix}.old.{i}").exists():
