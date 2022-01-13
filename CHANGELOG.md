@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+### Bugfix
+
+- utils.py: Downloading pdf files was broken. Downloader now follows a redirect when downloading a file.
+
 ### Added
 
 - Add spec file to create binary with pyinstaller
@@ -16,8 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - models.py: If no supported codec is found when downloading aax files, no url
   is returned now.
 - utils.py: Downloading a file with the `Downloader` class now checks the 
-  response status code. If the status code is not okay, the error message is
-  printed out. The downloaded tmp file is kept in download dir.
+  response status code, the content type and compares the file size.
 - models.py: Now all books are fetched if the library is greater than 1000.
   This works for the download and library command.
 
