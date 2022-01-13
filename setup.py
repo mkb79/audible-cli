@@ -55,6 +55,11 @@ setup(
         "toml",
         "tqdm"
     ],
+    extras_require={
+        'pyi': [
+            'pyinstaller'
+        ]
+    },
     python_requires=">=3.6",
     keywords="Audible, API, async, cli",
     long_description=long_description,
