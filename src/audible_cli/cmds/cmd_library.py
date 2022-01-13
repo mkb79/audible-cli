@@ -17,6 +17,8 @@ def cli():
 
 async def _get_library(auth, **params):
     timeout = params.get("timeout")
+    if timeout == 0:
+        timeout = None
     async with audible.AsyncClient(auth, timeout=timeout) as client:
         library = await Library.aget_from_api(
             client,
@@ -28,8 +30,7 @@ async def _get_library(auth, **params):
                 "category_ladders, claim_code_url, is_downloaded, is_finished, "
                 "is_returnable, origin_asin, pdf_url, percent_complete, "
                 "provided_review"
-            ),
-            timeout=timeout
+            )
         )
     return library
 

@@ -349,7 +349,6 @@ class Library:
                      locale: Optional[Locale] = None,
                      country_code: Optional[str] = None,
                      close_session: bool = False,
-                     timeout: int = 10,
                      **request_params):
 
         def fetch_library(params):
@@ -362,7 +361,7 @@ class Library:
             library = []
             while True:
                 r = api_client.get(
-                    "library", params=params, timeout=timeout)
+                    "library", params=params)
                 items = r["items"]
                 len_items = len(items)
                 library.extend(items)
@@ -393,7 +392,6 @@ class Library:
                             locale: Optional[Locale] = None,
                             country_code: Optional[str] = None,
                             close_session: bool = False,
-                            timeout: int = 10,
                             **request_params):
 
         async def fetch_library(params):
@@ -406,7 +404,7 @@ class Library:
             library = []
             while True:
                 r = await api_client.get(
-                    "library", params=params, timeout=timeout)
+                    "library", params=params)
                 items = r["items"]
                 len_items = len(items)
                 library.extend(items)
