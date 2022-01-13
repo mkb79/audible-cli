@@ -29,7 +29,6 @@ async def _get_library(auth, **params):
                 "is_returnable, origin_asin, pdf_url, percent_complete, "
                 "provided_review"
             ),
-            num_results=1000,
             timeout=timeout
         )
     return library
