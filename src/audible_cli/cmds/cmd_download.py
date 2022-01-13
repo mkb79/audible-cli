@@ -422,7 +422,7 @@ async def main(config, auth, **params):
     help="Filename mode to use. [default: config]"
 )
 @click.option(
-    "--timeout", "-t",
+    "--timeout",
     type=click.INT,
     default=10,
     show_default=True,
