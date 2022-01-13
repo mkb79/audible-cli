@@ -206,6 +206,9 @@ async def main(config, auth, **params):
     overwrite_existing = params.get("overwrite")
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
+    timeout = params.get("timeout")
+    if timeout == 0:
+        timeout = None
 
     filename_mode = params.get("filename_mode")
     if filename_mode == "config":
@@ -214,7 +217,7 @@ async def main(config, auth, **params):
                         "ascii"
 
     # fetch the user library
-    async with audible.AsyncClient(auth) as client:
+    async with audible.AsyncClient(auth, timeout=timeout) as client:
         library = await Library.aget_from_api(
             client,
             response_groups=("product_desc, pdf_url, media, product_attrs, "
@@ -264,8 +267,8 @@ async def main(config, auth, **params):
     headers = {
         "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
     }
-    client = httpx.AsyncClient(auth=auth, timeout=15, headers=headers)
-    api_client = audible.AsyncClient(auth, timeout=15)
+    client = httpx.AsyncClient(auth=auth, timeout=timeout, headers=headers)
+    api_client = audible.AsyncClient(auth, timeout=timeout)
     async with client, api_client:
         for job in jobs:
             item = library.get_item_by_asin(job)
@@ -417,6 +420,13 @@ async def main(config, auth, **params):
     ),
     default="config",
     help="Filename mode to use. [default: config]"
+)
+@click.option(
+    "--timeout", "-t",
+    type=click.INT,
+    default=10,
+    show_default=True,
+    help="Increase the timeout time if you got any TimeoutErrors. Set to 0 to disable timeout."
 )
 @pass_session
 def cli(session, **params):

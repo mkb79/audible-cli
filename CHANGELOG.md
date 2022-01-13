@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Add spec file to create binary with pyinstaller
 - Add binary for some platforms
+- Add timeout option to download command
 
 ### Changed
 - models.py: If no supported codec is found when downloading aax files, no url
