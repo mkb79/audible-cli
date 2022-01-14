@@ -356,7 +356,7 @@ class Library:
             if "page" not in params and "num_results" not in params:
                 entire_lib = True
                 params["page"] = 1
-                num_results = 200
+                num_results = 1000
                 params["num_results"] = num_results
 
             library = []
@@ -400,7 +400,7 @@ class Library:
             if "page" not in params and "num_results" not in params:
                 entire_lib = True
                 params["page"] = 1
-                num_results = 200
+                num_results = 1000
                 params["num_results"] = num_results
 
             library = []
