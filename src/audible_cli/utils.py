@@ -189,7 +189,7 @@ class Downloader:
                 msg = self._tmp_file.read_text()
             except:
                 msg = "Unknown"
-            secho(f"Error downloading {self._file}. Message: {msg}.",
+            secho(f"Error downloading {self._file}. Message: {msg}",
                   fg="red", err=True)
             return
 
@@ -206,9 +206,15 @@ class Downloader:
             expected_content_type = self._expected_content_type
             if isinstance(expected_content_type, str):
                 expected_content_type = [expected_content_type,]
+
             if content_type not in expected_content_type:
+                try:
+                    msg = self._tmp_file.read_text()
+                except:
+                    msg = "Unknown"
                 secho(f"Error downloading {self._file}. Wrong content type. "
-                      f"Expected type(s): {expected_content_type}; Got: {content_type}",
+                      f"Expected type(s): {expected_content_type}; Got: {content_type}"
+                      f"{Message}: {msg}}",
                       fg="red", err=True)
                 return
 
