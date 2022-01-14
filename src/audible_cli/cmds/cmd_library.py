@@ -88,9 +88,10 @@ async def _export_library(auth, **params):
                     data_row["series_title"] = v[0]["title"]
                     data_row["series_sequence"] = v[0]["sequence"]
                 elif key == "rating":
-                    data_row["rating"] = v.get("overall_distribution", {}).get(
+                    overall_distributing = v.get("overall_distribution") or {}
+                    data_row["rating"] = overall_distributing.get(
                         "display_average_rating", "-")
-                    data_row["num_ratings"] = v.get("overall_distribution", {}).get(
+                    data_row["num_ratings"] = overall_distributing.get(
                         "num_ratings", "-")
                 elif key == "library_status":
                     data_row["date_added"] = v["date_added"]
