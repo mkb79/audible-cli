@@ -120,7 +120,7 @@ async def _export_library(auth, **params):
     type=click.INT,
     default=10,
     show_default=True,
-    help="Increase the timeout time if you got any TimeoutErrors."
+    help="Increase the timeout time if you got any TimeoutErrors. Set to 0 to disable timeout."
 )
 @pass_session
 def export_library(session, **params):
