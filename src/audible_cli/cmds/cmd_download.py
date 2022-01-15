@@ -98,7 +98,7 @@ async def download_cover(client, output_dir, base_filename, item, res,
             fg="yellow", err=True)
         return
 
-    dl = Downloader(url, filepath, client, overwrite_existing)
+    dl = Downloader(url, filepath, client, overwrite_existing, "image/jpeg")
     await dl.arun(stream=False, pb=False)
 
 
@@ -111,7 +111,10 @@ async def download_pdf(client, output_dir, base_filename, item,
 
     filename = base_filename + ".pdf"
     filepath = output_dir / filename
-    dl = Downloader(url, filepath, client, overwrite_existing)
+    dl = Downloader(
+        url, filepath, client, overwrite_existing,
+        ["application/octet-stream", "application/pdf"]
+    )
     await dl.arun(stream=False, pb=False)
 
 
@@ -123,7 +126,10 @@ async def download_chapters(api_client, output_dir, base_filename, item,
     filename = base_filename + "-chapters.json"
     file = output_dir / filename
     if file.exists() and not overwrite_existing:
-        secho(f"File {file} already exists. Skip saving chapters.", fg="blue", err=True)
+        secho(
+            f"File {file} already exists. Skip saving chapters.",
+            fg="blue", err=True
+        )
         return True
 
     try:
@@ -143,7 +149,10 @@ async def download_aax(client, output_dir, base_filename, item, quality,
     url, codec = await item.aget_aax_url(quality, client)
     filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
-    dl = Downloader(url, filepath, client, overwrite_existing)
+    dl = Downloader(
+        url, filepath, client, overwrite_existing,
+        ["audio/aax", "audio/vnd.audible.aax"]
+    )
     await dl.arun(pb=True)
 
 
@@ -164,7 +173,10 @@ async def download_aaxc(api_client, client, output_dir, base_filename, item,
             await f.write(dlr)
         secho(f"Voucher file saved to {dlr_file}.")
 
-    dl = Downloader(url, filepath, client, overwrite_existing)
+    dl = Downloader(
+        url, filepath, client, overwrite_existing,
+        ["audio/aax", "audio/vnd.audible.aax"]
+    )
     await dl.arun(pb=True)
 
 
@@ -422,7 +434,7 @@ async def main(config, auth, **params):
     help="Filename mode to use. [default: config]"
 )
 @click.option(
-    "--timeout", "-t",
+    "--timeout",
     type=click.INT,
     default=10,
     show_default=True,

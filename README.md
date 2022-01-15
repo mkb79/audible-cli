@@ -43,8 +43,8 @@ pip install .
 ## Standalone executables
 
 If you don't want to install `Python` and `audible-cli` on your machine, you can
-find standalone exe files in the `bin` folder of this repo. At this moment only
-Windows and linux are supported.
+find standalone exe files on the [releases](https://github.com/mkb79/audible-cli/releases) 
+page when version 0.0.7 is finished. At this moment only Windows and linux are supported.
 
 You can create them yourself this way
 

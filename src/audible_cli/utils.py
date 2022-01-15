@@ -153,12 +153,13 @@ class DummyProgressBar:
 
 
 class Downloader:
-    def __init__(self, url, file, client, overwrite_existing):
+    def __init__(self, url, file, client, overwrite_existing, content_type=None):
         self._url = url
         self._file = pathlib.Path(file).resolve()
         self._tmp_file = self._file.with_suffix(".tmp")
         self._client = client
         self._overwrite_existing = overwrite_existing
+        self._expected_content_type = content_type
 
     def _progressbar(self, total: int):
         return tqdm.tqdm(desc=str(self._file), total=total, unit="B",
@@ -182,15 +183,40 @@ class Downloader:
 
         return True
 
-    def _postpare(self, elapsed, status_code):
+    def _postpare(self, elapsed, status_code, length, content_type):
         if not 200 <= status_code < 400:
             try:
                 msg = self._tmp_file.read_text()
             except:
                 msg = "Unknown"
-            secho(f"Error downloading {self._file}. Message: {msg}.",
+            secho(f"Error downloading {self._file}. Message: {msg}",
                   fg="red", err=True)
             return
+
+        if length is not None:
+            downloaded_size = self._tmp_file.stat().st_size
+            length = int(length)
+            if downloaded_size != length:
+                secho(f"Error downloading {self._file}. File size missmatch. "
+                      f"Expected size: {length}; Downloaded: {downloaded_size}",
+                      fg="red", err=True)
+                return
+
+        if self._expected_content_type is not None:
+            expected_content_type = self._expected_content_type
+            if isinstance(expected_content_type, str):
+                expected_content_type = [expected_content_type,]
+
+            if content_type not in expected_content_type:
+                try:
+                    msg = self._tmp_file.read_text()
+                except:
+                    msg = "Unknown"
+                secho(f"Error downloading {self._file}. Wrong content type. "
+                      f"Expected type(s): {expected_content_type}; Got: {content_type}"
+                      f"{Message}: {msg}}",
+                      fg="red", err=True)
+                return
 
         file = self._file
         tmp_file = self._tmp_file
@@ -207,8 +233,9 @@ class Downloader:
         self._tmp_file.unlink() if self._tmp_file.exists() else None
 
     def _stream_load(self, pb: bool = True):
-        with self._client.stream("GET", self._url) as r:
+        with self._client.stream("GET", self._url, follow_redirects=True) as r:
             length = r.headers.get("Content-Length")
+            content_type = r.headers.get("Content-Type")
             progressbar = self._progressbar(int(length)) if length and pb \
                 else DummyProgressBar()
 
@@ -217,19 +244,22 @@ class Downloader:
                     f.write(chunk)
                     progressbar.update(len(chunk))
 
-            self._postpare(r.elapsed, r.status_code)
+            self._postpare(r.elapsed, r.status_code, length, content_type)
             return True
 
     def _load(self):
-        r = self._client.get(self._url)
+        r = self._client.get(self._url, follow_redirects=True)
+        length = r.headers.get("Content-Length")
+        content_type = r.headers.get("Content-Type")
         with open(self._tmp_file, mode="wb") as f:
             f.write(r.content)
-        self._postpare(r.elapsed, r.status_code)
+        self._postpare(r.elapsed, r.status_code, length, content_type)
         return True
 
     async def _astream_load(self, pb: bool = True):
-        async with self._client.stream("GET", self._url) as r:
+        async with self._client.stream("GET", self._url, follow_redirects=True) as r:
             length = r.headers.get("Content-Length")
+            content_type = r.headers.get("Content-Type")
             progressbar = self._progressbar(int(length)) if length and pb \
                 else DummyProgressBar()
 
@@ -239,14 +269,16 @@ class Downloader:
                         await f.write(chunk)
                         progressbar.update(len(chunk))
 
-            self._postpare(r.elapsed, r.status_code)
+            self._postpare(r.elapsed, r.status_code, length, content_type)
             return True
 
     async def _aload(self):
-        r = await self._client.get(self._url)
+        r = await self._client.get(self._url, follow_redirects=True)
+        length = r.headers.get("Content-Length")
+        content_type = r.headers.get("Content-Type")
         async with aiofiles.open(self._tmp_file, mode="wb") as f:
             await f.write(r.content)
-        self._postpare(r.elapsed, r.status_code)
+        self._postpare(r.elapsed, r.status_code, length, content_type)
         return True
 
     def run(self, stream: bool = True, pb: bool = True):
