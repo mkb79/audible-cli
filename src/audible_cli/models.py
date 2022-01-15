@@ -356,7 +356,8 @@ class Library:
             if "page" not in params and "num_results" not in params:
                 entire_lib = True
                 params["page"] = 1
-                params["num_results"] = 1000
+                num_results = 1000
+                params["num_results"] = num_results
 
             library = []
             while True:
@@ -365,7 +366,7 @@ class Library:
                 items = r["items"]
                 len_items = len(items)
                 library.extend(items)
-                if not entire_lib or len_items < 1000:
+                if not entire_lib or len_items < num_results:
                     break
                 params["page"] += 1
             return library
@@ -399,7 +400,8 @@ class Library:
             if "page" not in params and "num_results" not in params:
                 entire_lib = True
                 params["page"] = 1
-                params["num_results"] = 1000
+                num_results = 1000
+                params["num_results"] = num_results
 
             library = []
             while True:
@@ -408,7 +410,7 @@ class Library:
                 items = r["items"]
                 len_items = len(items)
                 library.extend(items)
-                if not entire_lib or len_items < 1000:
+                if not entire_lib or len_items < num_results:
                     break
                 params["page"] += 1
             return library
