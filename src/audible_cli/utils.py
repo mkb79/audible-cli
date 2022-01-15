@@ -214,7 +214,7 @@ class Downloader:
                     msg = "Unknown"
                 secho(f"Error downloading {self._file}. Wrong content type. "
                       f"Expected type(s): {expected_content_type}; Got: {content_type}"
-                      f"{Message}: {msg}}",
+                      f"Message: {msg}",
                       fg="red", err=True)
                 return
 
