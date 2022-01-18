@@ -121,7 +121,7 @@ def remove_profile(session, profile):
 
 
 @pass_session
-def check_if_auth_file_not_exists(session, ctx, value):
+def check_if_auth_file_not_exists(session, ctx, param, value):
     value = session.config.dirname / value
     if pathlib.Path(value).exists():
         ctx.fail("The file already exists.")
@@ -184,7 +184,7 @@ def add_auth_file(session, auth_file, password, audible_username,
 
 
 @pass_session
-def check_if_auth_file_exists(session, ctx, value):
+def check_if_auth_file_exists(session, ctx, param, value):
     value = session.config.dirname / value
     if not pathlib.Path(value).exists():
         ctx.fail("The file doesn't exists.")
