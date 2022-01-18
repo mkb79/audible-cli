@@ -5,10 +5,10 @@ block_cipher = None
 
 
 a = Analysis(['pyi_entrypoint.py'],
-             pathex=['.\\src\\'],
+             pathex=[],
              binaries=[],
              datas=[],
-             hiddenimports=[],
+             hiddenimports=['audible_cli'],
              hookspath=[],
              hooksconfig={},
              runtime_hooks=[],
