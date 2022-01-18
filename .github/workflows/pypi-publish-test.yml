@@ -1,8 +1,6 @@
 name: Upload Python Package to TestPyPI
 
 on:
-  push:
-    branches: [master]
   workflow_dispatch:
 
 jobs:
