@@ -24,7 +24,7 @@ jobs:
     - name: Output Release URL File
       run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
     - name: Save Release URL File for publish
-      uses: actions/upload-artifact@v1
+      uses: actions/upload-artifact@v2
       with:
         name: release_url
         path: release_url.txt
@@ -41,8 +41,16 @@ jobs:
             CMD_BUILD: >
                 pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
-                zip -r9 audible_linux audible
-            OUT_FILE_NAME: audible_linux.zip
+                zip -r9 audible_linux_ubuntu_latest audible
+            OUT_FILE_NAME: audible_linux_ubuntu_latest.zip
+            ASSET_MIME: application/zip  # application/octet-stream
+          - os: ubuntu-18.04
+            TARGET: linux
+            CMD_BUILD: >
+                pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                cd dist/ &&
+                zip -r9 audible_linux_ubuntu_18_04 audible
+            OUT_FILE_NAME: audible_linux_ubuntu_18_04.zip
             ASSET_MIME: application/zip  # application/octet-stream
           - os: macos-latest
             TARGET: macos
