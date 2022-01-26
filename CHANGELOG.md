@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
--
+### Changed
+
+- Bump `audible` to v0.7.0
 
 ## [0.0.9] - 2022-01-18
 
