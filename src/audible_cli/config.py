@@ -63,14 +63,16 @@ class Config:
     def has_profile(self, name: str) -> bool:
         return name in self.data.get("profile", {})
 
-    def add_profile(self,
-                    name: str,
-                    auth_file: Union[str, pathlib.Path],
-                    country_code: str,
-                    is_primary: bool = False,
-                    abort_on_existing_profile: bool = True,
-                    write_config: bool = True,
-                    **additional_options) -> None:
+    def add_profile(
+            self,
+            name: str,
+            auth_file: Union[str, pathlib.Path],
+            country_code: str,
+            is_primary: bool = False,
+            abort_on_existing_profile: bool = True,
+            write_config: bool = True,
+            **additional_options
+    ) -> None:
 
         if self.has_profile(name) and abort_on_existing_profile:
             message = f"Profile {name} already exists."
@@ -80,9 +82,11 @@ class Config:
             except RuntimeError as exc:
                 raise RuntimeError(message) from exc
 
-        profile_data = {"auth_file": str(auth_file),
-                        "country_code": country_code,
-                        **additional_options}
+        profile_data = {
+            "auth_file": str(auth_file),
+            "country_code": country_code,
+            **additional_options
+        }
         self.data["profile"][name] = profile_data
 
         if is_primary:
@@ -94,8 +98,10 @@ class Config:
     def delete_profile(self, name: str) -> None:
         del self.data["profile"][name]
 
-    def read_config(self, filename: Optional[
-            Union[str, pathlib.Path]] = None) -> None:
+    def read_config(
+            self,
+            filename: Optional[Union[str, pathlib.Path]] = None
+    ) -> None:
         f = pathlib.Path(filename or self.filename).resolve()
 
         try:
@@ -111,8 +117,10 @@ class Config:
         self._config_file = f
         self._is_read = True
 
-    def write_config(self, filename: Optional[
-            Union[str, pathlib.Path]] = None) -> None:
+    def write_config(
+            self,
+            filename: Optional[Union[str, pathlib.Path]] = None
+    ) -> None:
         f = pathlib.Path(filename or self.filename).resolve()
 
         if not f.parent.is_dir():
@@ -151,8 +159,10 @@ class Session:
 
             name = self.params.get("profile") or self.config.primary_profile
             if name is None:
-                message = ("No profile provided and primary profile not set "
-                           "properly in config.")
+                message = (
+                    "No profile provided and primary profile not set "
+                    "properly in config."
+                )
                 try:
                     ctx = click.get_current_context()
                     ctx.fail(message)
@@ -185,11 +195,13 @@ class Session:
                     locale=country_code)
                 break
             except (FileEncryptionError, ValueError):
-                echo("Auth file is encrypted but no/wrong password "
-                     "is provided")
+                echo(
+                    "Auth file is encrypted but no/wrong password is provided"
+                )
                 password = prompt(
                     "Please enter the password (or enter to exit)",
-                    hide_input=True, default="")
+                    hide_input=True,
+                    default="")
                 if password == "":
                     ctx = click.get_current_context()
                     ctx.abort()
@@ -206,7 +218,8 @@ pass_session = click.make_pass_decorator(Session, ensure=True)
 
 def get_app_dir() -> pathlib.Path:
     app_dir = os.getenv(CONFIG_DIR_ENV) or click.get_app_dir(
-        "Audible", roaming=False, force_posix=True)
+        "Audible", roaming=False, force_posix=True
+    )
     return pathlib.Path(app_dir).resolve()
 
 

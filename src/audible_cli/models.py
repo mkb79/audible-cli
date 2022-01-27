@@ -14,19 +14,22 @@ from .utils import LongestSubString
 
 
 class LibraryItem:
-    def __init__(self,
-                 data: dict,
-                 locale: Optional[Locale] = None,
-                 country_code: Optional[str] = None,
-                 auth: Optional[Authenticator] = None):
+    def __init__(
+            self,
+            data: dict,
+            locale: Optional[Union[Locale, str]] = None,
+            country_code: Optional[str] = None,
+            auth: Optional[Authenticator] = None
+    ) -> None:
 
         if locale is None and country_code is None and auth is None:
             raise ValueError("No locale, country_code or auth provided.")
         if locale is not None and country_code is not None:
-            raise ValueError("Locale and country_code provided. Expected only "
-                             "one of them.")
+            raise ValueError(
+                "Locale and country_code provided. Expected only one of them."
+            )
 
-        if country_code is not None:
+        if country_code is not None and isinstance(country_code, str):
             locale = Locale(country_code)
 
         self._data = data.get("item", data)
@@ -88,8 +91,10 @@ class LibraryItem:
             return f"https://www.audible.{domain}/companion-file/{self.asin}"
 
     def _build_aax_request_url(self, codec: str):
-        url = ("https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
-               "FSDownloadContent")
+        url = (
+            "https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
+            "FSDownloadContent"
+        )
         params = {
             "type": "AUDI",
             "currentTransportMethod": "WIFI",
@@ -106,8 +111,10 @@ class LibraryItem:
             domain = self._locale.domain
             return link.replace("cds.audible.com", f"cds.audible.{domain}")
         except Exception as e:
-            secho(f"Error: {e} occured. Can't get download link. "
-                  f"Skip asin {self.asin}.")
+            secho(
+                f"Error: {e} occurred. Can't get download link. "
+                f"Skip asin {self.asin}."
+            )
 
     def _get_codec(self, quality: str):
         """If quality is not ``best``, ensures the given quality is present in
@@ -149,24 +156,30 @@ class LibraryItem:
 
     @property
     def _is_downloadable(self):
-        if self.content_delivery_type in ("Periodical",):
+        if self.content_delivery_type in ("Periodical", ):
             return False
 
         return True
 
-    def get_aax_url(self,
-                    quality: str = "high",
-                    client: Optional[httpx.Client] = None):
+    def get_aax_url(
+            self,
+            quality: str = "high",
+            client: Optional[httpx.Client] = None
+    ):
 
         if not self._is_downloadable:
-            secho(f"{self.full_title} is not downloadable. Skip item.",
-                  fg="red")
+            secho(
+                f"{self.full_title} is not downloadable. Skip item.",
+                fg="red"
+            )
             return
 
         codec = self._get_codec(quality)
         if codec is None:
-            secho(f"{self.full_title} is not downloadable. No AAX codec found.",
-                  fg="red")
+            secho(
+                f"{self.full_title} is not downloadable. No AAX codec found.",
+                fg="red"
+            )
             return
         url = self._build_aax_request_url(codec)
         if client is None:
@@ -178,19 +191,25 @@ class LibraryItem:
 
         return self._extract_link_from_response(resp), codec
 
-    async def aget_aax_url(self,
-                           quality: str = "high",
-                           client: Optional[httpx.AsyncClient] = None):
+    async def aget_aax_url(
+            self,
+            quality: str = "high",
+            client: Optional[httpx.AsyncClient] = None
+    ):
 
         if not self._is_downloadable:
-            secho(f"{self.full_title} is not downloadable. Skip item.",
-                  fg="red")
+            secho(
+                f"{self.full_title} is not downloadable. Skip item.",
+                fg="red"
+            )
             return
 
         codec = self._get_codec(quality)
         if codec is None:
-            secho(f"{self.full_title} is not downloadable. No AAX codec found.",
-                  fg="red")
+            secho(
+                f"{self.full_title} is not downloadable. No AAX codec found.",
+                fg="red"
+            )
             return
         url = self._build_aax_request_url(codec)
         if client is None:
@@ -209,8 +228,9 @@ class LibraryItem:
             "supported_drm_types": ["Mpeg", "Adrm"],
             "quality": "Extreme" if quality in ("best", "high") else "Normal",
             "consumption_type": "Download",
-            "response_groups": ("last_position_heard, pdf_url, "
-                                "content_reference, chapter_info")
+            "response_groups": (
+                "last_position_heard, pdf_url, content_reference, chapter_info"
+            )
         }
 
     @staticmethod
@@ -229,21 +249,26 @@ class LibraryItem:
         r["content_license"]["license_response"] = voucher
         return r
 
-    def get_aaxc_url(self,
-                     quality: str = "high",
-                     api_client: Optional[audible.Client] = None):
+    def get_aaxc_url(
+            self,
+            quality: str = "high",
+            api_client: Optional[audible.Client] = None
+    ):
 
         body = self._build_aaxc_request_body(quality)
         if api_client is None:
             assert self._auth is not None
             cc = self._locale.country_code
-            with audible.Client(auth=self._auth,
-                                country_code=cc) as api_client:
+            with audible.Client(
+                    auth=self._auth, country_code=cc
+            ) as api_client:
                 lr = api_client.post(
-                    f"content/{self.asin}/licenserequest", body=body)
+                    f"content/{self.asin}/licenserequest", body=body
+                )
         else:
-            lr = api_client.post(f"content/{self.asin}/licenserequest",
-                                 body=body)
+            lr = api_client.post(
+                f"content/{self.asin}/licenserequest", body=body
+            )
 
         url = self._extract_url_from_aaxc_response(lr)
         codec = self._extract_codec_from_aaxc_response(lr)
@@ -251,21 +276,26 @@ class LibraryItem:
 
         return url, codec, dlr
 
-    async def aget_aaxc_url(self,
-                            quality: str = "high",
-                            api_client: Optional[audible.AsyncClient] = None):
+    async def aget_aaxc_url(
+            self,
+            quality: str = "high",
+            api_client: Optional[audible.AsyncClient] = None
+    ):
 
         body = self._build_aaxc_request_body(quality)
         if api_client is None:
             assert self._auth is not None
             cc = self._locale.country_code
-            async with audible.AsyncClient(auth=self._auth,
-                                           country_code=cc) as api_client:
+            async with audible.AsyncClient(
+                    auth=self._auth, country_code=cc
+            ) as api_client:
                 lr = await api_client.post(
-                    f"content/{self.asin}/licenserequest", body=body)
+                    f"content/{self.asin}/licenserequest", body=body
+                )
         else:
-            lr = await api_client.post(f"content/{self.asin}/licenserequest",
-                                       body=body)
+            lr = await api_client.post(
+                f"content/{self.asin}/licenserequest", body=body
+            )
 
         url = self._extract_url_from_aaxc_response(lr)
         codec = self._extract_codec_from_aaxc_response(lr)
@@ -284,33 +314,38 @@ class LibraryItem:
         }
         return url, params
 
-    def get_content_metadata(self,
-                             quality: str = "high",
-                             api_client: Optional[audible.Client] = None):
+    def get_content_metadata(
+            self,
+            quality: str = "high",
+            api_client: Optional[audible.Client] = None
+    ):
 
         url, params = self._build_metadata_request_url(quality)
         if api_client is None:
             assert self._auth is not None
             cc = self._locale.country_code
-            with audible.Client(auth=self._auth,
-                                country_code=cc) as api_client:
+            with audible.Client(
+                    auth=self._auth, country_code=cc
+            ) as api_client:
                 metadata = api_client.get(url, params=params)
         else:
             metadata = api_client.get(url, params=params)
 
         return metadata
 
-    async def aget_content_metadata(self,
-                                    quality: str = "high",
-                                    api_client: Optional[
-                                        audible.AsyncClient] = None):
+    async def aget_content_metadata(
+            self,
+            quality: str = "high",
+            api_client: Optional[audible.AsyncClient] = None
+    ):
 
         url, params = self._build_metadata_request_url(quality)
         if api_client is None:
             assert self._auth is not None
             cc = self._locale.country_code
-            async with audible.AsyncClient(auth=self._auth,
-                                           country_code=cc) as api_client:
+            async with audible.AsyncClient(
+                    auth=self._auth, country_code=cc
+            ) as api_client:
                 metadata = await api_client.get(url, params=params)
         else:
             metadata = await api_client.get(url, params=params)
@@ -319,11 +354,13 @@ class LibraryItem:
 
 
 class Library:
-    def __init__(self,
-                 data: Union[dict, list],
-                 locale: Optional[Locale] = None,
-                 country_code: Optional[str] = None,
-                 auth: Optional[Authenticator] = None):
+    def __init__(
+            self,
+            data: Union[dict, list],
+            locale: Optional[Locale] = None,
+            country_code: Optional[str] = None,
+            auth: Optional[Authenticator] = None
+    ):
 
         if locale is None and country_code is None and auth is None:
             raise ValueError("No locale, country_code or auth provided.")
@@ -337,19 +374,22 @@ class Library:
 
         if isinstance(data, dict):
             data = data.get("items", data)
-        self._data = [LibraryItem(i, locale=self._locale, auth=self._auth)
-                      for i in data]
+        self._data = [
+            LibraryItem(i, locale=self._locale, auth=self._auth) for i in data
+        ]
 
     def __iter__(self):
         return iter(self._data)
 
     @classmethod
-    def get_from_api(cls,
-                     api_client: audible.Client,
-                     locale: Optional[Locale] = None,
-                     country_code: Optional[str] = None,
-                     close_session: bool = False,
-                     **request_params):
+    def get_from_api(
+            cls,
+            api_client: audible.Client,
+            locale: Optional[Locale] = None,
+            country_code: Optional[str] = None,
+            close_session: bool = False,
+            **request_params
+    ):
 
         def fetch_library(params):
             entire_lib = False
@@ -372,8 +412,9 @@ class Library:
             return library
 
         if locale is not None and country_code is not None:
-            raise ValueError("Locale and country_code provided. Expected only "
-                             "one of them.")
+            raise ValueError(
+                "Locale and country_code provided. Expected only one of them."
+            )
 
         locale = Locale(country_code) if country_code else locale
         if locale:
@@ -388,12 +429,14 @@ class Library:
         return cls(resp, auth=api_client.auth)
 
     @classmethod
-    async def aget_from_api(cls,
-                            api_client: audible.AsyncClient,
-                            locale: Optional[Locale] = None,
-                            country_code: Optional[str] = None,
-                            close_session: bool = False,
-                            **request_params):
+    async def aget_from_api(
+            cls,
+            api_client: audible.AsyncClient,
+            locale: Optional[Locale] = None,
+            country_code: Optional[str] = None,
+            close_session: bool = False,
+            **request_params
+    ):
 
         async def fetch_library(params):
             entire_lib = False
@@ -405,8 +448,7 @@ class Library:
 
             library = []
             while True:
-                r = await api_client.get(
-                    "library", params=params)
+                r = await api_client.get("library", params=params)
                 items = r["items"]
                 len_items = len(items)
                 library.extend(items)
@@ -416,8 +458,9 @@ class Library:
             return library
 
         if locale is not None and country_code is not None:
-            raise ValueError("Locale and country_code provided. Expected only "
-                             "one of them.")
+            raise ValueError(
+                "Locale and country_code provided. Expected only one of them."
+            )
 
         locale = Locale(country_code) if country_code else locale
         if locale:
