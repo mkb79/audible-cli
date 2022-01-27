@@ -1,6 +1,8 @@
 import asyncio
 import csv
+import json
 import pathlib
+from typing import Union
 
 import audible
 import click
@@ -56,8 +58,75 @@ async def _list_library(auth, **params):
         echo(": ".join(fields))
 
 
+def _prepare_library_for_export(library: dict):
+    keys_with_raw_values = (
+        "asin", "title", "subtitle", "runtime_length_min", "is_finished",
+        "percent_complete", "release_date"
+    )
+
+    prepared_library = []
+
+    for item in library:
+        data_row = {}
+        for key in item:
+            v = getattr(item, key)
+            if v is None:
+                pass
+            elif key in keys_with_raw_values:
+                data_row[key] = v
+            elif key in ("authors", "narrators"):
+                data_row[key] = ", ".join([i["name"] for i in v])
+            elif key == "series":
+                data_row["series_title"] = v[0]["title"]
+                data_row["series_sequence"] = v[0]["sequence"]
+            elif key == "rating":
+                overall_distributing = v.get("overall_distribution") or {}
+                data_row["rating"] = overall_distributing.get(
+                    "display_average_rating", "-")
+                data_row["num_ratings"] = overall_distributing.get(
+                    "num_ratings", "-")
+            elif key == "library_status":
+                data_row["date_added"] = v["date_added"]
+            elif key == "product_images":
+                data_row["cover_url"] = v.get("500", "-")
+            elif key == "category_ladders":
+                genres = []
+                for genre in v:
+                    for ladder in genre["ladder"]:
+                        genres.append(ladder["name"])
+                data_row["genres"] = ", ".join(genres)
+
+        prepared_library.append(data_row)
+
+    prepared_library.sort(key=lambda x: x["asin"])
+
+    return prepared_library
+
+
+def _export_to_csv(
+        file: pathlib.Path,
+        data: list,
+        headers: Union[list, tuple],
+        dialect: str
+):
+    with file.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=headers, dialect=dialect)
+        writer.writeheader()
+
+        for i in data:
+            writer.writerow(i)
+
+
 async def _export_library(auth, **params):
+    output_format = params.get("format")
+    output_filename: pathlib.Path = params.get("output")
+    if output_filename.suffix == r".{format}":
+        suffix = "." + output_format
+        output_filename = output_filename.with_suffix(suffix)
+
     library = await _get_library(auth, **params)
+
+    prepared_library = _prepare_library_for_export(library)
 
     headers = (
         "asin", "title", "subtitle", "authors", "narrators", "series_title",
@@ -65,53 +134,24 @@ async def _export_library(auth, **params):
         "percent_complete", "rating", "num_ratings", "date_added",
         "release_date", "cover_url"
     )
-    keys_with_raw_values = (
-        "asin", "title", "subtitle", "runtime_length_min", "is_finished",
-        "percent_complete", "release_date"
-    )
 
-    with pathlib.Path(params.get("output")).open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=headers, dialect="excel-tab")
-        writer.writeheader()
+    if output_format in ("tsv", "csv"):
+        if output_format == csv:
+            dialect = "excel"
+        else:
+            dialect = "excel-tab"
+        _export_to_csv(output_filename, prepared_library, headers, dialect)
 
-        for item in library:
-            data_row = {}
-            for key in item:
-                v = getattr(item, key)
-                if v is None:
-                    pass
-                elif key in keys_with_raw_values:
-                    data_row[key] = v
-                elif key in ("authors", "narrators"):
-                    data_row[key] = ", ".join([i["name"] for i in v])
-                elif key == "series":
-                    data_row["series_title"] = v[0]["title"]
-                    data_row["series_sequence"] = v[0]["sequence"]
-                elif key == "rating":
-                    overall_distributing = v.get("overall_distribution") or {}
-                    data_row["rating"] = overall_distributing.get(
-                        "display_average_rating", "-")
-                    data_row["num_ratings"] = overall_distributing.get(
-                        "num_ratings", "-")
-                elif key == "library_status":
-                    data_row["date_added"] = v["date_added"]
-                elif key == "product_images":
-                    data_row["cover_url"] = v.get("500", "-")
-                elif key == "category_ladders":
-                    genres = []
-                    for genre in v:
-                        for ladder in genre["ladder"]:
-                            genres.append(ladder["name"])
-                    data_row["genres"] = ", ".join(genres)
-    
-            writer.writerow(data_row)
+    if output_format == "json":
+        data = json.dumps(prepared_library, indent=4)
+        output_filename.write_text(data)
 
 
 @cli.command("export")
 @click.option(
     "--output", "-o",
     type=click.Path(),
-    default=pathlib.Path().cwd() / "library.tsv",
+    default=pathlib.Path().cwd() / r"library.{format}",
     show_default=True,
     help="output file"
 )
@@ -120,7 +160,17 @@ async def _export_library(auth, **params):
     type=click.INT,
     default=10,
     show_default=True,
-    help="Increase the timeout time if you got any TimeoutErrors. Set to 0 to disable timeout."
+    help=(
+        "Increase the timeout time if you got any TimeoutErrors. "
+        "Set to 0 to disable timeout."
+    )
+)
+@click.option(
+    "--format", "-f",
+    type=click.Choice(["tsv", "csv", "json"]),
+    default="tsv",
+    show_default=True,
+    help="Output format"
 )
 @pass_session
 def export_library(session, **params):
@@ -139,7 +189,10 @@ def export_library(session, **params):
     type=click.INT,
     default=10,
     show_default=True,
-    help="Increase the timeout time if you got any TimeoutErrors. Set to 0 to disable timeout."
+    help=(
+        "Increase the timeout time if you got any TimeoutErrors. "
+        "Set to 0 to disable timeout."
+    )
 )
 @pass_session
 def list_library(session, **params):
