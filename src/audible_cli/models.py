@@ -13,7 +13,7 @@ from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
 from .utils import LongestSubString
 
 
-class LibraryItem:
+class BaseItem:
     def __init__(
             self,
             data: dict,
@@ -32,7 +32,7 @@ class LibraryItem:
         if country_code is not None and isinstance(country_code, str):
             locale = Locale(country_code)
 
-        self._data = data.get("item", data)
+        self._data = self._prepare_data(data)
         self._locale = locale or auth.locale
         self._auth = auth
 
@@ -47,6 +47,9 @@ class LibraryItem:
             return self.__getitem__(attr)
         except KeyError:
             return None
+
+    def _prepare_data(self, data: dict) -> dict:
+        return data
 
     @property
     def full_title(self):
@@ -89,6 +92,11 @@ class LibraryItem:
         if self.pdf_url is not None:
             domain = self._locale.domain
             return f"https://www.audible.{domain}/companion-file/{self.asin}"
+
+
+class LibraryItem(BaseItem):
+    def _prepare_data(self, data: dict) -> dict:
+        return data.get("item", data)
 
     def _build_aax_request_url(self, codec: str):
         url = (
@@ -353,7 +361,11 @@ class LibraryItem:
         return metadata
 
 
-class Library:
+class WishlistItem(BaseItem):
+    pass
+
+
+class BaseList:
     def __init__(
             self,
             data: Union[dict, list],
@@ -371,12 +383,40 @@ class Library:
         locale = Locale(country_code) if country_code else locale
         self._locale = locale or auth.locale
         self._auth = auth
+        self._data = self._prepare_data(data)
 
+    def __iter__(self):
+        return iter(self._data)
+
+    def _prepare_data(self, data: Union[dict, list]) -> Union[dict, list]:
+        return data
+
+    def get_item_by_asin(self, asin):
+        try:
+            return next(i for i in self._data if asin in i.asin)
+        except StopIteration:
+            return None
+
+    def has_asin(self, asin):
+        return True if self.get_item_by_asin(asin) else False
+
+    def search_item_by_title(self, search_title, p=80):
+        match = []
+        for i in self._data:
+            accuracy = i.substring_in_title_accuracy(search_title)
+            match.append([i, accuracy]) if accuracy >= p else ""
+
+        return match
+
+
+class Library(BaseList):
+    def _prepare_data(self, data: Union[dict, list]) -> list:
         if isinstance(data, dict):
             data = data.get("items", data)
-        self._data = [
+        data = [
             LibraryItem(i, locale=self._locale, auth=self._auth) for i in data
         ]
+        return data
 
     def __iter__(self):
         return iter(self._data)
@@ -474,51 +514,15 @@ class Library:
 
         return cls(resp, auth=api_client.auth)
 
-    def get_item_by_asin(self, asin):
-        try:
-            return next(i for i in self._data if asin in i.asin)
-        except StopIteration:
-            return None
 
-    def asin_in_library(self, asin):
-        return True if self.get_item_by_asin(asin) else False
-
-    def search_item_by_title(self, search_title, p=80):
-        match = []
-        for i in self._data:
-            accuracy = i.substring_in_title_accuracy(search_title)
-            match.append([i, accuracy]) if accuracy >= p else ""
-
-        return match
-
-
-class Wishlist:
-    def __init__(
-            self,
-            data: Union[dict, list],
-            locale: Optional[Locale] = None,
-            country_code: Optional[str] = None,
-            auth: Optional[Authenticator] = None
-    ):
-
-        if locale is None and country_code is None and auth is None:
-            raise ValueError("No locale, country_code or auth provided.")
-        if locale is not None and country_code is not None:
-            raise ValueError("Locale and country_code provided. Expected only "
-                             "one of them.")
-
-        locale = Locale(country_code) if country_code else locale
-        self._locale = locale or auth.locale
-        self._auth = auth
-
+class Wishlist(BaseList):
+    def _prepare_data(self, data: Union[dict, list]) -> list:
         if isinstance(data, dict):
             data = data.get("products", data)
-        self._data = [
-            LibraryItem(i, locale=self._locale, auth=self._auth) for i in data
+        data = [
+            WishlistItem(i, locale=self._locale, auth=self._auth) for i in data
         ]
-
-    def __iter__(self):
-        return iter(self._data)
+        return data
 
     @classmethod
     def get_from_api(
@@ -612,20 +616,3 @@ class Wishlist:
             resp = await fetch_wishlist(request_params)
 
         return cls(resp, auth=api_client.auth)
-
-    def get_item_by_asin(self, asin):
-        try:
-            return next(i for i in self._data if asin in i.asin)
-        except StopIteration:
-            return None
-
-    def asin_in_wishlist(self, asin):
-        return True if self.get_item_by_asin(asin) else False
-
-    def search_item_by_title(self, search_title, p=80):
-        match = []
-        for i in self._data:
-            accuracy = i.substring_in_title_accuracy(search_title)
-            match.append([i, accuracy]) if accuracy >= p else ""
-
-        return match

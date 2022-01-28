@@ -245,7 +245,7 @@ async def main(config, auth, **params):
             jobs.append(i.asin)
 
     for asin in asins:
-        if library.asin_in_library(asin):
+        if library.has_asin(asin):
             jobs.append(asin)
         else:
             if not ignore_errors:
