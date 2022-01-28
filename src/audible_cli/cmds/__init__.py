@@ -5,7 +5,8 @@ from . import (
     cmd_download,
     cmd_library,
     cmd_manage,
-    cmd_quickstart
+    cmd_quickstart,
+    cmd_wishlist
 )
 
 cli_cmds = [
@@ -13,8 +14,10 @@ cli_cmds = [
     cmd_download.cli,
     cmd_library.cli,
     cmd_manage.cli,
-    cmd_quickstart.cli
+    cmd_quickstart.cli,
+    cmd_wishlist.cli
 ]
+
 
 def build_in_cmds():
     """

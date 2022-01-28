@@ -490,3 +490,142 @@ class Library:
             match.append([i, accuracy]) if accuracy >= p else ""
 
         return match
+
+
+class Wishlist:
+    def __init__(
+            self,
+            data: Union[dict, list],
+            locale: Optional[Locale] = None,
+            country_code: Optional[str] = None,
+            auth: Optional[Authenticator] = None
+    ):
+
+        if locale is None and country_code is None and auth is None:
+            raise ValueError("No locale, country_code or auth provided.")
+        if locale is not None and country_code is not None:
+            raise ValueError("Locale and country_code provided. Expected only "
+                             "one of them.")
+
+        locale = Locale(country_code) if country_code else locale
+        self._locale = locale or auth.locale
+        self._auth = auth
+
+        if isinstance(data, dict):
+            data = data.get("products", data)
+        self._data = [
+            LibraryItem(i, locale=self._locale, auth=self._auth) for i in data
+        ]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    @classmethod
+    def get_from_api(
+            cls,
+            api_client: audible.Client,
+            locale: Optional[Locale] = None,
+            country_code: Optional[str] = None,
+            close_session: bool = False,
+            **request_params
+    ):
+
+        def fetch_wishlist(params):
+            entire_lib = False
+            if "page" not in params and "num_results" not in params:
+                entire_lib = True
+                params["page"] = 0
+                num_results = 50
+                params["num_results"] = num_results
+
+            wishlist = []
+            while True:
+                r = api_client.get(
+                    "wishlist", params=params)
+                items = r["products"]
+                len_items = len(items)
+                wishlist.extend(items)
+                if not entire_lib or len_items < num_results:
+                    break
+                params["page"] += 1
+            return wishlist
+
+        if locale is not None and country_code is not None:
+            raise ValueError(
+                "Locale and country_code provided. Expected only one of them."
+            )
+
+        locale = Locale(country_code) if country_code else locale
+        if locale:
+            api_client.locale = locale
+
+        if close_session:
+            with api_client:
+                resp = fetch_wishlist(request_params)
+        else:
+            resp = fetch_wishlist(request_params)
+
+        return cls(resp, auth=api_client.auth)
+
+    @classmethod
+    async def aget_from_api(
+            cls,
+            api_client: audible.AsyncClient,
+            locale: Optional[Locale] = None,
+            country_code: Optional[str] = None,
+            close_session: bool = False,
+            **request_params
+    ):
+
+        async def fetch_wishlist(params):
+            entire_lib = False
+            if "page" not in params and "num_results" not in params:
+                entire_lib = False
+                params["page"] = 0
+                num_results = 50
+                params["num_results"] = num_results
+
+            wishlist = []
+            while True:
+                r = await api_client.get("wishlist", params=params)
+                items = r["products"]
+                len_items = len(items)
+                wishlist.extend(items)
+                if not entire_lib or len_items < num_results:
+                    break
+                params["page"] += 1
+            return wishlist
+
+        if locale is not None and country_code is not None:
+            raise ValueError(
+                "Locale and country_code provided. Expected only one of them."
+            )
+
+        locale = Locale(country_code) if country_code else locale
+        if locale:
+            api_client.locale = locale
+
+        if close_session:
+            async with api_client:
+                resp = await fetch_wishlist(request_params)
+        else:
+            resp = await fetch_wishlist(request_params)
+
+        return cls(resp, auth=api_client.auth)
+
+    def get_item_by_asin(self, asin):
+        try:
+            return next(i for i in self._data if asin in i.asin)
+        except StopIteration:
+            return None
+
+    def asin_in_wishlist(self, asin):
+        return True if self.get_item_by_asin(asin) else False
+
+    def search_item_by_title(self, search_title, p=80):
+        match = []
+        for i in self._data:
+            accuracy = i.substring_in_title_accuracy(search_title)
+            match.append([i, accuracy]) if accuracy >= p else ""
+
+        return match
