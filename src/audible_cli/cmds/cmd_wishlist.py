@@ -35,13 +35,14 @@ async def _list_wishlist(auth, **params):
     books = []
 
     for item in wishlist:
+        asin = item.asin
         authors = ", ".join(sorted(a["name"] for a in item.authors) if item.authors else "")
         series = ", ".join(sorted(s["title"] for s in item.series) if item.series else "")
         title = item.title
-        books.append((authors, series, title))
+        books.append((asin, authors, series, title))
 
-    for authors, series, title in sorted(books):
-        fields = []
+    for asin, authors, series, title in sorted(books):
+        fields = [asin]
         if authors:
             fields.append(authors)
         if series:
@@ -77,8 +78,8 @@ def _prepare_wishlist_for_export(wishlist: dict):
                     "display_average_rating", "-")
                 data_row["num_ratings"] = overall_distributing.get(
                     "num_ratings", "-")
-            elif key == "library_status":
-                data_row["date_added"] = v["date_added"]
+            elif key == "added_timestamp":
+                data_row["date_added"] = v
             elif key == "product_images":
                 data_row["cover_url"] = v.get("500", "-")
             elif key == "category_ladders":

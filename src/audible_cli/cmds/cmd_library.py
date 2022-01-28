@@ -43,13 +43,14 @@ async def _list_library(auth, **params):
     books = []
 
     for item in library:
+        asin = item.asin
         authors = ", ".join(sorted(a["name"] for a in item.authors) if item.authors else "")
         series = ", ".join(sorted(s["title"] for s in item.series) if item.series else "")
         title = item.title
-        books.append((authors, series, title))
+        books.append((asin, authors, series, title))
 
-    for authors, series, title in sorted(books):
-        fields = []
+    for asin, authors, series, title in sorted(books):
+        fields = [asin]
         if authors:
             fields.append(authors)
         if series:
