@@ -60,3 +60,4 @@ class AudibleCliLogHelper:
 
 
 log_helper = AudibleCliLogHelper()
+

@@ -608,3 +608,4 @@ class Wishlist(BaseList):
             resp = await fetch_wishlist(request_params)
 
         return cls(resp, auth=api_client.auth)
+

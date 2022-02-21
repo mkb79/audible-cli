@@ -233,3 +233,4 @@ def add_param_to_session(ctx: click.Context, param, value):
     session = ctx.ensure_object(Session)
     session.params[param.name] = value
     return value
+

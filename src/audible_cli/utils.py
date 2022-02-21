@@ -341,3 +341,4 @@ class Downloader:
                 await self._aload()
         finally:
             self._remove_tmp_file()
+

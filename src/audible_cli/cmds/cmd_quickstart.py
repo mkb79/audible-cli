@@ -168,3 +168,4 @@ def cli(session, ctx):
         )
 
     config.write_config()
+

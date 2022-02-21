@@ -128,3 +128,4 @@ class BrokenCommand(click.Command):
 
     def parse_args(self, ctx, args):
         return args
+

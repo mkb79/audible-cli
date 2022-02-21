@@ -212,3 +212,4 @@ def remove_auth_file(auth_file, password):
     echo(f"{device_name} deregistered")
     auth_file.unlink()
     echo(f"{auth_file} removed from config dir")
+
