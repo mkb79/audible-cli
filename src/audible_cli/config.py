@@ -38,7 +38,7 @@ class Config:
         return self.filename.parent
 
     def dir_exists(self) -> bool:
-        return self.filename.parent.exists()
+        return self.dirname.exists()
 
     @property
     def is_read(self) -> bool:
