@@ -99,25 +99,17 @@ class LibraryItem(BaseItem):
         return data.get("item", data)
 
     def _build_aax_request_url(self, codec: str):
-        url = (
-            "https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
-            "FSDownloadContent"
-        )
+        domain = self._locale.domain
+        url = f"https://www.audible.{domain}/library/download"
         params = {
-            "type": "AUDI",
-            "currentTransportMethod": "WIFI",
-            "key": self.asin,
+            "asin": self.asin,
             "codec": codec
         }
         return httpx.URL(url, params=params)
 
     def _extract_link_from_response(self, r: httpx.Response):
-        # prepare link
-        # see https://github.com/mkb79/Audible/issues/3#issuecomment-518099852
         try:
-            link = r.headers["Location"]
-            domain = self._locale.domain
-            return link.replace("cds.audible.com", f"cds.audible.{domain}")
+            return r.headers["Location"]
         except Exception as e:
             secho(
                 f"Error: {e} occurred. Can't get download link. "
@@ -137,7 +129,7 @@ class LibraryItem(BaseItem):
 
         best = (None, 0, 0)
         for codec in self.available_codecs:
-            if verify is not None and verify == codec["enhanced_codec"]:
+            if verify is not None and verify == codec["name"]:
                 return verify
 
             if codec["name"].startswith("aax_"):
@@ -148,7 +140,7 @@ class LibraryItem(BaseItem):
                     bitrate = int(bitrate)
                     if sample_rate > best[1] or bitrate > best[2]:
                         best = (
-                            codec["enhanced_codec"],
+                            codec["name"],
                             sample_rate,
                             bitrate
                         )
@@ -160,7 +152,7 @@ class LibraryItem(BaseItem):
         if verify is not None:
             secho(f"{verify} codec was not found, using {best[0]} instead")
 
-        return best[0]
+        return best[0].upper()
 
     @property
     def _is_downloadable(self):
