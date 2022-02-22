@@ -272,31 +272,7 @@ class Downloader:
     def _remove_tmp_file(self):
         self._tmp_file.unlink() if self._tmp_file.exists() else None
 
-    def _stream_load(self, pb: bool = True):
-        with self._client.stream("GET", self._url, follow_redirects=True) as r:
-            length = r.headers.get("Content-Length")
-            content_type = r.headers.get("Content-Type")
-            progressbar = self._progressbar(int(length)) if length and pb \
-                else DummyProgressBar()
-
-            with progressbar, open(self._tmp_file, mode="wb") as f:
-                for chunk in r.iter_bytes():
-                    f.write(chunk)
-                    progressbar.update(len(chunk))
-
-            self._postpare(r.elapsed, r.status_code, length, content_type)
-            return True
-
-    def _load(self):
-        r = self._client.get(self._url, follow_redirects=True)
-        length = r.headers.get("Content-Length")
-        content_type = r.headers.get("Content-Type")
-        with open(self._tmp_file, mode="wb") as f:
-            f.write(r.content)
-        self._postpare(r.elapsed, r.status_code, length, content_type)
-        return True
-
-    async def _astream_load(self, pb: bool = True):
+    async def _stream_load(self, pb: bool = True):
         async with self._client.stream(
                 "GET", self._url, follow_redirects=True
         ) as r:
@@ -314,7 +290,7 @@ class Downloader:
             self._postpare(r.elapsed, r.status_code, length, content_type)
             return True
 
-    async def _aload(self):
+    async def _load(self):
         r = await self._client.get(self._url, follow_redirects=True)
         length = r.headers.get("Content-Length")
         content_type = r.headers.get("Content-Type")
@@ -323,22 +299,13 @@ class Downloader:
         self._postpare(r.elapsed, r.status_code, length, content_type)
         return True
 
-    def run(self, stream: bool = True, pb: bool = True):
+    async def run(self, stream: bool = True, pb: bool = True):
         if not self._file_okay():
             return
 
         try:
-            return self._stream_load(pb) if stream else self._load()
-        finally:
-            self._remove_tmp_file()
-
-    async def arun(self, stream: bool = True, pb: bool = True):
-        if not self._file_okay():
-            return
-
-        try:
-            return await self._astream_load(pb) if stream else \
-                await self._aload()
+            return await self._stream_load(pb) if stream else \
+                await self._load()
         finally:
             self._remove_tmp_file()
 

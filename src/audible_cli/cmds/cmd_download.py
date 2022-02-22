@@ -86,8 +86,9 @@ def create_base_filename(item, mode):
     return base_filename
 
 
-async def download_cover(client, output_dir, base_filename, item, res,
-                         overwrite_existing):
+async def download_cover(
+        client, output_dir, base_filename, item, res, overwrite_existing
+):
     filename = f"{base_filename}_({str(res)}).jpg"
     filepath = output_dir / filename
 
@@ -99,11 +100,12 @@ async def download_cover(client, output_dir, base_filename, item, res,
         return
 
     dl = Downloader(url, filepath, client, overwrite_existing, "image/jpeg")
-    await dl.arun(stream=False, pb=False)
+    await dl.run(stream=False, pb=False)
 
 
-async def download_pdf(client, output_dir, base_filename, item,
-                       overwrite_existing):
+async def download_pdf(
+        client, output_dir, base_filename, item, overwrite_existing
+):
     url = item.get_pdf_url()
     if url is None:
         secho(f"No PDF found for {item.full_title}.", fg="yellow", err=True)
@@ -115,11 +117,12 @@ async def download_pdf(client, output_dir, base_filename, item,
         url, filepath, client, overwrite_existing,
         ["application/octet-stream", "application/pdf"]
     )
-    await dl.arun(stream=False, pb=False)
+    await dl.run(stream=False, pb=False)
 
 
-async def download_chapters(api_client, output_dir, base_filename, item,
-                            quality, overwrite_existing):
+async def download_chapters(
+        api_client, output_dir, base_filename, item, quality, overwrite_existing
+):
     if not output_dir.is_dir():
         raise Exception("Output dir doesn't exists")
 
@@ -133,10 +136,12 @@ async def download_chapters(api_client, output_dir, base_filename, item,
         return True
 
     try:
-        metadata = await item.aget_content_metadata(quality, api_client)
+        metadata = await item.get_content_metadata(quality, api_client)
     except NotFoundError:
-        secho(f"Can't get chapters for {item.full_title}. Skip item.",
-              fg="red", err=True)
+        secho(
+            f"Can't get chapters for {item.full_title}. Skip item.",
+            fg="red", err=True
+        )
         return
     metadata = json.dumps(metadata, indent=4)
     async with aiofiles.open(file, "w") as f:
@@ -144,40 +149,45 @@ async def download_chapters(api_client, output_dir, base_filename, item,
     tqdm.tqdm.write(f"Chapter file saved to {file}.")
 
 
-async def download_aax(client, output_dir, base_filename, item, quality,
-                       overwrite_existing):
-    url, codec = await item.aget_aax_url(quality, client)
+async def download_aax(
+        client, output_dir, base_filename, item, quality, overwrite_existing
+):
+    url, codec = await item.get_aax_url(quality, client)
     filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
     dl = Downloader(
         url, filepath, client, overwrite_existing,
         ["audio/aax", "audio/vnd.audible.aax"]
     )
-    await dl.arun(pb=True)
+    await dl.run(pb=True)
 
 
-async def download_aaxc(api_client, client, output_dir, base_filename, item,
-                        quality, overwrite_existing):
-    url, codec, dlr = await item.aget_aaxc_url(quality, api_client)
+async def download_aaxc(
+        api_client, client, output_dir, base_filename, item,
+        quality, overwrite_existing
+):
+    url, codec, lr = await item.get_aaxc_url(quality, api_client)
 
     filepath = pathlib.Path(
         output_dir) / f"{base_filename}-{codec}.aaxc"
-    dlr_file = filepath.with_suffix(".voucher")
+    lr_file = filepath.with_suffix(".voucher")
 
-    if dlr_file.is_file() and not overwrite_existing:
-        secho(f"File {dlr_file} already exists. Skip download.",
-              fg="blue", err=True)
+    if lr_file.is_file() and not overwrite_existing:
+        secho(
+            f"File {lr_file} already exists. Skip download.",
+            fg="blue", err=True
+        )
     else:
-        dlr = json.dumps(dlr, indent=4)
-        async with aiofiles.open(dlr_file, "w") as f:
-            await f.write(dlr)
-        secho(f"Voucher file saved to {dlr_file}.")
+        lr = json.dumps(lr, indent=4)
+        async with aiofiles.open(lr_file, "w") as f:
+            await f.write(lr)
+        secho(f"Voucher file saved to {lr_file}.")
 
     dl = Downloader(
         url, filepath, client, overwrite_existing,
         ["audio/aax", "audio/vnd.audible.aax"]
     )
-    await dl.arun(pb=True)
+    await dl.run(pb=True)
 
 
 async def consume(queue):
@@ -209,7 +219,7 @@ async def main(config, auth, **params):
     get_pdf = params.get("pdf")
     if not any([get_aax, get_aaxc, get_chapters, get_cover, get_pdf]):
         ctx = click.get_current_context()
-        ctx.fail(f"Please select a option what you want download.")
+        ctx.fail(f"Please select an option what you want download.")
 
     # additional options
     sim_jobs = params.get("jobs")
@@ -230,7 +240,7 @@ async def main(config, auth, **params):
 
     # fetch the user library
     async with audible.AsyncClient(auth, timeout=timeout) as client:
-        library = await Library.aget_from_api(
+        library = await Library.get_from_api(
             client,
             response_groups=("product_desc, pdf_url, media, product_attrs, "
                              "relationships"),

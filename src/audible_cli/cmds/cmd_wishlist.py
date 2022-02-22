@@ -16,8 +16,9 @@ async def _get_wishlist(auth, **params):
     timeout = params.get("timeout")
     if timeout == 0:
         timeout = None
+
     async with audible.AsyncClient(auth, timeout=timeout) as client:
-        wishlist = await Wishlist.aget_from_api(
+        wishlist = await Wishlist.get_from_api(
             client,
             response_groups=(
                 "contributors, media, price, product_attrs, product_desc, "
