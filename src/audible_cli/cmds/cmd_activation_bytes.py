@@ -17,7 +17,7 @@ def cli(session, **options):
     """Get activation bytes."""
     auth = session.auth
     if auth.activation_bytes is None or options.get("reload"):
-        click.echo("Fetching activation bytes online.", err=True)
+        click.echo("Fetching activation bytes from Audible server.", err=True)
         ab = fetch_activation_sign_auth(auth)
         ab = extract_activation_bytes(ab)
         auth.activation_bytes = ab
