@@ -3,7 +3,7 @@ import io
 import pathlib
 from difflib import SequenceMatcher
 from functools import partial, wraps
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import aiofiles
 import click
@@ -167,13 +167,16 @@ class Downloader:
             file: Union[pathlib.Path, str],
             client,
             overwrite_existing: bool,
-            content_type: Optional[str] = None
+            content_type: Optional[Union[List[str], str]] = None
     ) -> None:
         self._url = url
         self._file = pathlib.Path(file).resolve()
         self._tmp_file = self._file.with_suffix(".tmp")
         self._client = client
         self._overwrite_existing = overwrite_existing
+
+        if isinstance(content_type, str):
+            content_type = [content_type, ]
         self._expected_content_type = content_type
 
     def _progressbar(self, total: int):
@@ -216,7 +219,7 @@ class Downloader:
         if not 200 <= status_code < 400:
             try:
                 msg = self._tmp_file.read_text()
-            except:
+            except:  # noqa
                 msg = "Unknown"
             secho(
                 f"Error downloading {self._file}. Message: {msg}",
@@ -238,18 +241,14 @@ class Downloader:
                 return
 
         if self._expected_content_type is not None:
-            expected_content_type = self._expected_content_type
-            if isinstance(expected_content_type, str):
-                expected_content_type = [expected_content_type, ]
-
-            if content_type not in expected_content_type:
+            if content_type not in self._expected_content_type:
                 try:
                     msg = self._tmp_file.read_text()
-                except:
+                except:  # noqa
                     msg = "Unknown"
                 secho(
                     f"Error downloading {self._file}. Wrong content type. "
-                    f"Expected type(s): {expected_content_type}; "
+                    f"Expected type(s): {self._expected_content_type}; "
                     f"Got: {content_type}; Message: {msg}",
                     fg="red",
                     err=True
@@ -308,4 +307,3 @@ class Downloader:
                 await self._load()
         finally:
             self._remove_tmp_file()
-

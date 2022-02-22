@@ -30,8 +30,10 @@ def build_in_cmds():
     """
     def decorator(group):
         if not isinstance(group, click.Group):
-            raise TypeError("Plugins can only be attached to an instance of "
-                            "click.Group()")
+            raise TypeError(
+                "Plugins can only be attached to an instance of "
+                "click.Group()"
+            )
 
         for cmd in cli_cmds:
             group.add_command(cmd)
@@ -39,4 +41,3 @@ def build_in_cmds():
         return group
 
     return decorator
-

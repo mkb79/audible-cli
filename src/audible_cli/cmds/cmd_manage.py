@@ -169,8 +169,10 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
     help="Using a pre-amazon Audible account to login."
 )
 @pass_session
-def add_auth_file(session, auth_file, password, audible_username,
-                  audible_password, country_code, external_login, with_username):
+def add_auth_file(
+        session, auth_file, password, audible_username,
+        audible_password, country_code, external_login, with_username
+):
     """Register a new device and add an auth file to config dir"""
     build_auth_file(
         filename=session.config.dirname / auth_file,
@@ -212,4 +214,3 @@ def remove_auth_file(auth_file, password):
     echo(f"{device_name} deregistered")
     auth_file.unlink()
     echo(f"{auth_file} removed from config dir")
-

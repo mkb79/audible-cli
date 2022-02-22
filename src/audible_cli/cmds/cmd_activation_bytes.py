@@ -25,4 +25,3 @@ def cli(session, **options):
         auth.to_file()
 
     click.echo(auth.activation_bytes)
-

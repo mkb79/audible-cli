@@ -285,8 +285,10 @@ async def main(config, auth, **params):
                     colalign=("center", "left", "center"))
                 echo(table)
     
-                if no_confirm or click.confirm("Proceed with this audiobook(s)",
-                        default=True):
+                if no_confirm or click.confirm(
+                        "Proceed with this audiobook(s)",
+                        default=True
+                ):
                     jobs.extend([i[0].asin for i in full_match or match])
     
             else:
@@ -366,7 +368,7 @@ async def main(config, auth, **params):
         # wait until the consumer has processed all items
         await queue.join()
 
-        # the consumer is still awaiting for an item, cancel it
+        # the consumer is still awaiting an item, cancel it
         for consumer in consumers:
             consumer.cancel()
 
@@ -467,7 +469,8 @@ async def main(config, auth, **params):
     type=click.INT,
     default=10,
     show_default=True,
-    help="Increase the timeout time if you got any TimeoutErrors. Set to 0 to disable timeout."
+    help="Increase the timeout time if you got any TimeoutErrors. "
+         "Set to 0 to disable timeout."
 )
 @pass_session
 def cli(session, **params):
@@ -481,4 +484,3 @@ def cli(session, **params):
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
-

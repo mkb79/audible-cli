@@ -6,4 +6,3 @@ __author__ = "mkb79"
 __author_email__ = "mkb79@hackitall.de"
 __license__ = "AGPL"
 __status__ = "Development"
-

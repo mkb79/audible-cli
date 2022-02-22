@@ -202,7 +202,7 @@ class Session:
                     "Please enter the password (or enter to exit)",
                     hide_input=True,
                     default="")
-                if password == "":
+                if len(password) == 0:
                     ctx = click.get_current_context()
                     ctx.abort()
 
@@ -233,4 +233,3 @@ def add_param_to_session(ctx: click.Context, param, value):
     session = ctx.ensure_object(Session)
     session.params[param.name] = value
     return value
-

@@ -37,8 +37,12 @@ async def _list_wishlist(auth, **params):
 
     for item in wishlist:
         asin = item.asin
-        authors = ", ".join(sorted(a["name"] for a in item.authors) if item.authors else "")
-        series = ", ".join(sorted(s["title"] for s in item.series) if item.series else "")
+        authors = ", ".join(
+            sorted(a["name"] for a in item.authors) if item.authors else ""
+        )
+        series = ", ".join(
+            sorted(s["title"] for s in item.series) if item.series else ""
+        )
         title = item.title
         books.append((asin, authors, series, title))
 
@@ -202,4 +206,3 @@ def list_library(session, **params):
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
-

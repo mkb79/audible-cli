@@ -30,9 +30,9 @@ async def _get_library(auth, **params):
                 "product_extended_attrs, product_plan_details, product_plans, "
                 "rating, sample, sku, series, reviews, ws4v, origin, "
                 "relationships, review_attrs, categories, badge_types, "
-                "category_ladders, claim_code_url, is_downloaded, is_finished, "
-                "is_returnable, origin_asin, pdf_url, percent_complete, "
-                "provided_review"
+                "category_ladders, claim_code_url, is_downloaded, "
+                "is_finished, is_returnable, origin_asin, pdf_url, "
+                "percent_complete, provided_review"
             )
         )
     return library
@@ -45,8 +45,12 @@ async def _list_library(auth, **params):
 
     for item in library:
         asin = item.asin
-        authors = ", ".join(sorted(a["name"] for a in item.authors) if item.authors else "")
-        series = ", ".join(sorted(s["title"] for s in item.series) if item.series else "")
+        authors = ", ".join(
+            sorted(a["name"] for a in item.authors) if item.authors else ""
+        )
+        series = ", ".join(
+            sorted(s["title"] for s in item.series) if item.series else ""
+        )
         title = item.title
         books.append((asin, authors, series, title))
 
@@ -205,4 +209,3 @@ def list_library(session, **params):
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
-

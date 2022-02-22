@@ -107,7 +107,7 @@ class LibraryItem(BaseItem):
                     bitrate = int(bitrate)
                     if sample_rate > best[1] or bitrate > best[2]:
                         best = (
-                            codec["name"],
+                            codec["name"].upper(),
                             sample_rate,
                             bitrate,
                             codec["enhanced_codec"]
@@ -120,7 +120,7 @@ class LibraryItem(BaseItem):
         if verify is not None:
             secho(f"{verify} codec was not found, using {best[0]} instead")
 
-        return best[0].upper(), best[3]
+        return best[0], best[3]
 
     @property
     def _is_downloadable(self):
@@ -308,7 +308,7 @@ class Wishlist(BaseList):
         async def fetch_wishlist(params):
             entire_lib = False
             if "page" not in params and "num_results" not in params:
-                entire_lib = False
+                entire_lib = True
                 params["page"] = 0
                 num_results = 50
                 params["num_results"] = num_results
@@ -327,4 +327,3 @@ class Wishlist(BaseList):
         resp = await fetch_wishlist(request_params)
 
         return cls(resp, api_client=api_client)
-

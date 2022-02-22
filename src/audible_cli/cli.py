@@ -54,4 +54,3 @@ def main(*args, **kwargs):
         sys.exit(cli(*args, **kwargs))
     except KeyboardInterrupt:
         sys.exit("\nERROR: Interrupted by user")
-

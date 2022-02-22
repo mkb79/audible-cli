@@ -41,7 +41,7 @@ def from_folder(plugin_dir: Union[str, pathlib.Path]):
                 mod = import_module(mod_name)
                 name = mod_name[4:] if mod.cli.name == "cli" else mod.cli.name
                 group.add_command(mod.cli, name=name)
-            except Exception:
+            except Exception:  # noqa
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
                 # other than explain the error.
@@ -75,7 +75,7 @@ def from_entry_point(entry_point_group: str):
         for entry_point in entry_point_group or ():
             try:
                 group.add_command(entry_point.load())
-            except Exception:
+            except Exception:  # noqa
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
                 # other than explain the error.
@@ -128,4 +128,3 @@ class BrokenCommand(click.Command):
 
     def parse_args(self, ctx, args):
         return args
-
