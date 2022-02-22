@@ -298,3 +298,4 @@ def cli(session, **options):
 
     decrypt_aaxc(jobs["aaxc"], session)
     decrypt_aax(jobs["aax"], session)
+
