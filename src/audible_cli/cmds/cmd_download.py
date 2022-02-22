@@ -121,7 +121,7 @@ async def download_pdf(
 
 
 async def download_chapters(
-        api_client, output_dir, base_filename, item, quality, overwrite_existing
+        output_dir, base_filename, item, quality, overwrite_existing
 ):
     if not output_dir.is_dir():
         raise Exception("Output dir doesn't exists")
@@ -136,7 +136,7 @@ async def download_chapters(
         return True
 
     try:
-        metadata = await item.get_content_metadata(quality, api_client)
+        metadata = await item.get_content_metadata(quality)
     except NotFoundError:
         secho(
             f"Can't get chapters for {item.full_title}. Skip item.",
@@ -163,10 +163,10 @@ async def download_aax(
 
 
 async def download_aaxc(
-        api_client, client, output_dir, base_filename, item,
+        client, output_dir, base_filename, item,
         quality, overwrite_existing
 ):
-    url, codec, lr = await item.get_aaxc_url(quality, api_client)
+    url, codec, lr = await item.get_aaxc_url(quality)
 
     filepath = pathlib.Path(
         output_dir) / f"{base_filename}-{codec}.aaxc"
@@ -238,111 +238,130 @@ async def main(config, auth, **params):
                         config.app_config.get("filename_mode") or \
                         "ascii"
 
-    # fetch the user library
-    async with audible.AsyncClient(auth, timeout=timeout) as client:
-        library = await Library.get_from_api(
-            client,
-            response_groups=("product_desc, pdf_url, media, product_attrs, "
-                             "relationships"),
-            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500")
-
-    jobs = []
-
-    if get_all:
-        asins = []
-        titles = []
-        for i in library:
-            jobs.append(i.asin)
-
-    for asin in asins:
-        if library.has_asin(asin):
-            jobs.append(asin)
-        else:
-            if not ignore_errors:
-                ctx = click.get_current_context()
-                ctx.fail(f"Asin {asin} not found in library.")
-            secho(f"Skip asin {asin}: Not found in library", fg="red", err=True)
-
-    for title in titles:
-        match = library.search_item_by_title(title)
-        full_match = [i for i in match if i[1] == 100]
-
-        if full_match or match:
-            echo(f"\nFound the following matches for '{title}'")
-            table_data = [[i[1], i[0].full_title, i[0].asin]
-                          for i in full_match or match]
-            head = ["% match", "title", "asin"]
-            table = tabulate(
-                table_data, head, tablefmt="pretty",
-                colalign=("center", "left", "center"))
-            echo(table)
-
-            if no_confirm or click.confirm("Proceed with this audiobook(s)",
-                    default=True):
-                jobs.extend([i[0].asin for i in full_match or match])
-
-        else:
-            secho(f"Skip title {title}: Not found in library", fg="red", err=True)
-
-    queue = asyncio.Queue()
-
     headers = {
         "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
     }
     client = httpx.AsyncClient(auth=auth, timeout=timeout, headers=headers)
     api_client = audible.AsyncClient(auth, timeout=timeout)
+
     async with client, api_client:
+        # fetch the user library
+        library = await Library.get_from_api(
+            api_client,
+            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500")
+
+        # collect jobs
+        jobs = []
+
+        if get_all:
+            asins = []
+            titles = []
+            for i in library:
+                jobs.append(i.asin)
+
+        for asin in asins:
+            if library.has_asin(asin):
+                jobs.append(asin)
+            else:
+                if not ignore_errors:
+                    ctx = click.get_current_context()
+                    ctx.fail(f"Asin {asin} not found in library.")
+                secho(
+                    f"Skip asin {asin}: Not found in library",
+                    fg="red", err=True
+                )
+
+        for title in titles:
+            match = library.search_item_by_title(title)
+            full_match = [i for i in match if i[1] == 100]
+    
+            if full_match or match:
+                echo(f"\nFound the following matches for '{title}'")
+                table_data = [[i[1], i[0].full_title, i[0].asin]
+                              for i in full_match or match]
+                head = ["% match", "title", "asin"]
+                table = tabulate(
+                    table_data, head, tablefmt="pretty",
+                    colalign=("center", "left", "center"))
+                echo(table)
+    
+                if no_confirm or click.confirm("Proceed with this audiobook(s)",
+                        default=True):
+                    jobs.extend([i[0].asin for i in full_match or match])
+    
+            else:
+                secho(
+                    f"Skip title {title}: Not found in library",
+                    fg="red", err=True
+                )
+    
+        queue = asyncio.Queue()
+
         for job in jobs:
             item = library.get_item_by_asin(job)
             base_filename = create_base_filename(item=item, mode=filename_mode)
             if get_cover:
                 queue.put_nowait(
-                    download_cover(client=client,
-                                   output_dir=output_dir,
-                                   base_filename=base_filename,
-                                   item=item,
-                                   res=cover_size,
-                                   overwrite_existing=overwrite_existing))
+                    download_cover(
+                        client=client,
+                        output_dir=output_dir,
+                        base_filename=base_filename,
+                        item=item,
+                        res=cover_size,
+                        overwrite_existing=overwrite_existing
+                    )
+                )
 
             if get_pdf:
                 queue.put_nowait(
-                    download_pdf(client=client,
-                                 output_dir=output_dir,
-                                 base_filename=base_filename,
-                                 item=item,
-                                 overwrite_existing=overwrite_existing))
+                    download_pdf(
+                        client=client,
+                        output_dir=output_dir,
+                        base_filename=base_filename,
+                        item=item,
+                        overwrite_existing=overwrite_existing
+                    )
+                )
 
             if get_chapters:
                 queue.put_nowait(
-                    download_chapters(api_client=api_client,
-                                      output_dir=output_dir,
-                                      base_filename=base_filename,
-                                      item=item,
-                                      quality=quality,
-                                      overwrite_existing=overwrite_existing))
+                    download_chapters(
+                        output_dir=output_dir,
+                        base_filename=base_filename,
+                        item=item,
+                        quality=quality,
+                        overwrite_existing=overwrite_existing
+                    )
+                )
 
             if get_aax:
                 queue.put_nowait(
-                    download_aax(client=client,
-                                 output_dir=output_dir,
-                                 base_filename=base_filename,
-                                 item=item,
-                                 quality=quality,
-                                 overwrite_existing=overwrite_existing))
+                    download_aax(
+                        client=client,
+                        output_dir=output_dir,
+                        base_filename=base_filename,
+                        item=item,
+                        quality=quality,
+                        overwrite_existing=overwrite_existing
+                    )
+                )
 
             if get_aaxc:
                 queue.put_nowait(
-                    download_aaxc(api_client=api_client,
-                                  client=client,
-                                  output_dir=output_dir,
-                                  base_filename=base_filename,
-                                  item=item,
-                                  quality=quality,
-                                  overwrite_existing=overwrite_existing))
+                    download_aaxc(
+                        client=client,
+                        output_dir=output_dir,
+                        base_filename=base_filename,
+                        item=item,
+                        quality=quality,
+                        overwrite_existing=overwrite_existing
+                    )
+                )
 
         # schedule the consumer
-        consumers = [asyncio.ensure_future(consume(queue)) for _ in
-                     range(sim_jobs)]
+        consumers = [
+            asyncio.ensure_future(consume(queue)) for _ in range(sim_jobs)
+        ]
 
         # wait until the consumer has processed all items
         await queue.join()

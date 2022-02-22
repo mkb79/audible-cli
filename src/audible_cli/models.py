@@ -1,12 +1,10 @@
 import string
 import unicodedata
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import audible
 import httpx
-from audible import Authenticator
 from audible.aescipher import decrypt_voucher_from_licenserequest
-from audible.localization import Locale
 from click import secho
 
 from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
@@ -17,24 +15,12 @@ class BaseItem:
     def __init__(
             self,
             data: dict,
-            locale: Optional[Union[Locale, str]] = None,
-            country_code: Optional[str] = None,
-            auth: Optional[Authenticator] = None
+            api_client: audible.AsyncClient,
+            response_groups: Optional[List] = None
     ) -> None:
-
-        if locale is None and country_code is None and auth is None:
-            raise ValueError("No locale, country_code or auth provided.")
-        if locale is not None and country_code is not None:
-            raise ValueError(
-                "Locale and country_code provided. Expected only one of them."
-            )
-
-        if country_code is not None and isinstance(country_code, str):
-            locale = Locale(country_code)
-
         self._data = self._prepare_data(data)
-        self._locale = locale or auth.locale
-        self._auth = auth
+        self._client = api_client
+        self._response_groups = response_groups
 
     def __iter__(self):
         return iter(self._data)
@@ -89,7 +75,7 @@ class BaseItem:
 
     def get_pdf_url(self):
         if self.pdf_url is not None:
-            domain = self._locale.domain
+            domain = self._client.auth.locale.domain
             return f"https://www.audible.{domain}/companion-file/{self.asin}"
 
 
@@ -160,7 +146,7 @@ class LibraryItem(BaseItem):
             )
             return
 
-        domain = self._locale.domain
+        domain = self._client.auth.locale.domain
         url = f"https://www.audible.{domain}/library/download"
         params = {
             "asin": self.asin,
@@ -168,11 +154,7 @@ class LibraryItem(BaseItem):
         }
         return httpx.URL(url, params=params), codec_name
 
-    async def get_aaxc_url(
-            self,
-            quality: str = "high",
-            api_client: Optional[audible.AsyncClient] = None
-    ):
+    async def get_aaxc_url(self, quality: str = "high"):
         assert quality in ("best", "high", "normal",)
 
         body = {
@@ -184,34 +166,21 @@ class LibraryItem(BaseItem):
             )
         }
 
-        if api_client is None:
-            assert self._auth is not None
-            cc = self._locale.country_code
-            async with audible.AsyncClient(
-                    auth=self._auth, country_code=cc
-            ) as api_client:
-                lr = await api_client.post(
-                    f"content/{self.asin}/licenserequest", body=body
-                )
-        else:
-            lr = await api_client.post(
-                f"content/{self.asin}/licenserequest", body=body
-            )
+        lr = await self._client.post(
+            f"content/{self.asin}/licenserequest",
+            body=body
+        )
 
         content_metadata = lr["content_license"]["content_metadata"]
         url = httpx.URL(content_metadata["content_url"]["offline_url"])
         codec = content_metadata["content_reference"]["content_format"]
 
-        voucher = decrypt_voucher_from_licenserequest(api_client.auth, lr)
+        voucher = decrypt_voucher_from_licenserequest(self._client.auth, lr)
         lr["content_license"]["license_response"] = voucher
 
         return url, codec, lr
 
-    async def get_content_metadata(
-            self,
-            quality: str = "high",
-            api_client: Optional[audible.AsyncClient] = None
-    ):
+    async def get_content_metadata(self, quality: str = "high"):
         assert quality in ("best", "high", "normal",)
 
         url = f"content/{self.asin}/metadata"
@@ -222,15 +191,7 @@ class LibraryItem(BaseItem):
             "drm_type": "Adrm"
         }
 
-        if api_client is None:
-            assert self._auth is not None
-            cc = self._locale.country_code
-            async with audible.AsyncClient(
-                    auth=self._auth, country_code=cc
-            ) as api_client:
-                metadata = await api_client.get(url, params=params)
-        else:
-            metadata = await api_client.get(url, params=params)
+        metadata = await self._client.get(url, params=params)
 
         return metadata
 
@@ -243,20 +204,9 @@ class BaseList:
     def __init__(
             self,
             data: Union[dict, list],
-            locale: Optional[Locale] = None,
-            country_code: Optional[str] = None,
-            auth: Optional[Authenticator] = None
+            api_client: audible.AsyncClient
     ):
-
-        if locale is None and country_code is None and auth is None:
-            raise ValueError("No locale, country_code or auth provided.")
-        if locale is not None and country_code is not None:
-            raise ValueError("Locale and country_code provided. Expected only "
-                             "one of them.")
-
-        locale = Locale(country_code) if country_code else locale
-        self._locale = locale or auth.locale
-        self._auth = auth
+        self._client = api_client
         self._data = self._prepare_data(data)
 
     def __iter__(self):
@@ -288,7 +238,7 @@ class Library(BaseList):
         if isinstance(data, dict):
             data = data.get("items", data)
         data = [
-            LibraryItem(i, locale=self._locale, auth=self._auth) for i in data
+            LibraryItem(data=i, api_client=self._client) for i in data
         ]
         return data
 
@@ -299,11 +249,21 @@ class Library(BaseList):
     async def get_from_api(
             cls,
             api_client: audible.AsyncClient,
-            locale: Optional[Locale] = None,
-            country_code: Optional[str] = None,
-            close_session: bool = False,
             **request_params
     ):
+
+        if "response_groups" not in request_params:
+            request_params["response_groups"] = (
+                "contributors, customer_rights, media, price, product_attrs, "
+                "product_desc, product_extended_attrs, product_plan_details, "
+                "product_plans, rating, sample, sku, series, reviews, ws4v, "
+                "origin, relationships, review_attrs, categories, "
+                "badge_types, category_ladders, claim_code_url, in_wishlist, "
+                "is_archived, is_downloaded, is_finished, is_playable, "
+                "is_removable, is_returnable, is_visible, listening_status, "
+                "order_details, origin_asin, pdf_url, percent_complete, "
+                "periodicals, provided_review, product_details"
+            )
 
         async def fetch_library(params):
             entire_lib = False
@@ -324,22 +284,9 @@ class Library(BaseList):
                 params["page"] += 1
             return library
 
-        if locale is not None and country_code is not None:
-            raise ValueError(
-                "Locale and country_code provided. Expected only one of them."
-            )
+        resp = await fetch_library(request_params)
 
-        locale = Locale(country_code) if country_code else locale
-        if locale:
-            api_client.locale = locale
-
-        if close_session:
-            async with api_client:
-                resp = await fetch_library(request_params)
-        else:
-            resp = await fetch_library(request_params)
-
-        return cls(resp, auth=api_client.auth)
+        return cls(resp, api_client=api_client)
 
 
 class Wishlist(BaseList):
@@ -347,7 +294,7 @@ class Wishlist(BaseList):
         if isinstance(data, dict):
             data = data.get("products", data)
         data = [
-            WishlistItem(i, locale=self._locale, auth=self._auth) for i in data
+            WishlistItem(data=i, api_client=self._client) for i in data
         ]
         return data
 
@@ -355,9 +302,6 @@ class Wishlist(BaseList):
     async def get_from_api(
             cls,
             api_client: audible.AsyncClient,
-            locale: Optional[Locale] = None,
-            country_code: Optional[str] = None,
-            close_session: bool = False,
             **request_params
     ):
 
@@ -380,20 +324,7 @@ class Wishlist(BaseList):
                 params["page"] += 1
             return wishlist
 
-        if locale is not None and country_code is not None:
-            raise ValueError(
-                "Locale and country_code provided. Expected only one of them."
-            )
+        resp = await fetch_wishlist(request_params)
 
-        locale = Locale(country_code) if country_code else locale
-        if locale:
-            api_client.locale = locale
-
-        if close_session:
-            async with api_client:
-                resp = await fetch_wishlist(request_params)
-        else:
-            resp = await fetch_wishlist(request_params)
-
-        return cls(resp, auth=api_client.auth)
+        return cls(resp, api_client=api_client)
 
