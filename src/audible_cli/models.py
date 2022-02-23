@@ -245,6 +245,7 @@ class Library(BaseList):
         response_groups = None
         if isinstance(data, dict):
             response_groups = data.get("response_groups")
+            response_groups = response_groups.replace(" ", "").split(",")
             data = data.get("items", data)
         data = [
             LibraryItem(
@@ -307,6 +308,7 @@ class Wishlist(BaseList):
         response_groups = None
         if isinstance(data, dict):
             response_groups = data.get("response_groups")
+            response_groups = response_groups.replace(" ", "").split(",")
             data = data.get("products", data)
         data = [
             WishlistItem(
