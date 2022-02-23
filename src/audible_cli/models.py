@@ -124,6 +124,13 @@ class LibraryItem(BaseItem):
 
     @property
     def _is_downloadable(self):
+        # customer_rights must be in response_groups
+        if self.customer_rights is not None:
+            if not self.customer_rights["is_consumable_offline"]:
+                return False
+
+        # customer_rights, media, product_attrs, listening_status, origin_asin 
+        # or percent_complete must be in response_groups
         if self.content_delivery_type in ("Periodical", ):
             return False
 
@@ -235,10 +242,16 @@ class BaseList:
 
 class Library(BaseList):
     def _prepare_data(self, data: Union[dict, list]) -> list:
+        response_groups = None
         if isinstance(data, dict):
+            response_groups = data.get("response_groups")
             data = data.get("items", data)
         data = [
-            LibraryItem(data=i, api_client=self._client) for i in data
+            LibraryItem(
+                data=i,
+                api_client=self._client,
+                response_groups=response_groups
+            ) for i in data
         ]
         return data
 
@@ -291,10 +304,16 @@ class Library(BaseList):
 
 class Wishlist(BaseList):
     def _prepare_data(self, data: Union[dict, list]) -> list:
+        response_groups = None
         if isinstance(data, dict):
+            response_groups = data.get("response_groups")
             data = data.get("products", data)
         data = [
-            WishlistItem(data=i, api_client=self._client) for i in data
+            WishlistItem(
+                data=i,
+                api_client=self._client,
+                response_groups=response_groups
+            ) for i in data
         ]
         return data
 
