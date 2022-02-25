@@ -122,6 +122,27 @@ class LibraryItem(BaseItem):
 
         return best[0], best[3]
 
+    async def get_child_items(self, **request_params) -> "Library":
+        """Get child elements of MultiPartBooks and Podcasts
+        
+        With these all parts of a MultiPartBook or all episodes of a Podcasts
+        can be shown.
+        """
+
+        # Only items with content_delivery_type 
+        # MultiPartBook or Periodical have child elemts
+        if "response_groups" not in request_params and \
+                self._response_groups is not None:
+            response_groups = ", ".join(self._response_groups)
+            request_params["response_groups"] = response_groups
+
+        request_params["parent_asin"] = self.asin
+        items = await Library.get_from_api(
+            api_client=self._client,
+            **request_params
+        )
+        return items
+
     @property
     def _is_downloadable(self):
         # customer_rights must be in response_groups
