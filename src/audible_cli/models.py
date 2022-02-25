@@ -122,7 +122,7 @@ class LibraryItem(BaseItem):
 
         return best[0], best[3]
 
-    async def get_child_items(self, **request_params) -> "Library":
+    async def get_child_items(self, **request_params) -> Optional["Library"]:
         """Get child elements of MultiPartBooks and Podcasts
         
         With these all parts of a MultiPartBook or all episodes of a Podcasts
@@ -131,6 +131,9 @@ class LibraryItem(BaseItem):
 
         # Only items with content_delivery_type 
         # MultiPartBook or Periodical have child elemts
+        if self.has_children is not None and not self.has_children:
+            return
+
         if "response_groups" not in request_params and \
                 self._response_groups is not None:
             response_groups = ", ".join(self._response_groups)
