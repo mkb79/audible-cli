@@ -1,3 +1,4 @@
+import asyncio
 import string
 import unicodedata
 from typing import List, Optional, Union
@@ -42,6 +43,11 @@ class BaseItem:
         title: str = self.title
         if self.subtitle is not None:
             title = f"{title}: {self.subtitle}"
+
+        if self.publication_name and self.content_delivery_type and \
+                self.content_delivery_type == "SinglePartIssue":
+            title = f"{self.publication_name}: {title}"
+
         return title
 
     @property
@@ -325,6 +331,14 @@ class Library(BaseList):
         resp = await fetch_library(request_params)
 
         return cls(resp, api_client=api_client)
+
+    async def resolve_podcats(self):
+        podcast_items = await asyncio.gather(
+            *[i.get_child_items() for i in self if
+                i.content_delivery_type == "Periodical"]
+        )
+        for i in podcast_items:
+            self._data.extend(i._data)
 
 
 class Wishlist(BaseList):
