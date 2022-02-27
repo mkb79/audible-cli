@@ -228,6 +228,7 @@ async def main(config, auth, **params):
     overwrite_existing = params.get("overwrite")
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
+    resolve_podcats = params.get("resolve_podcasts")
     timeout = params.get("timeout")
     if timeout == 0:
         timeout = None
@@ -249,6 +250,8 @@ async def main(config, auth, **params):
         library = await Library.get_from_api(
             api_client,
             image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500")
+        if resolve_podcats:
+            await library.resolve_podcats()
 
         # collect jobs
         jobs = []
@@ -471,6 +474,11 @@ async def main(config, auth, **params):
     show_default=True,
     help="Increase the timeout time if you got any TimeoutErrors. "
          "Set to 0 to disable timeout."
+)
+@click.option(
+    "--resolve-podcasts",
+    is_flag=True,
+    help="Resolve podcast items and let you download them"
 )
 @pass_session
 def cli(session, **params):
