@@ -330,8 +330,8 @@ class Library(BaseList):
     async def resolve_podcats(self):
         podcasts = []
         for i in self:
-            if i.content_delivery_type in ("Periodical", "PodcastParent") \
-                    or i.content_type == "Podcast":
+            if (i.content_delivery_type in ("Periodical", "PodcastParent") \
+                    or i.content_type == "Podcast") and i.has_children:
                 podcasts.append(i)
 
         podcast_items = await asyncio.gather(
