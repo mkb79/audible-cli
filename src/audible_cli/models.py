@@ -24,7 +24,7 @@ class BaseItem:
         self._client = api_client
         self._parent = parent
         self._response_groups = response_groups
-        self._childrens: Optional[BaseList] = None
+        self._children: Optional[BaseList] = None
 
     def __iter__(self):
         return iter(self._data)
@@ -86,6 +86,12 @@ class BaseItem:
             domain = self._client.auth.locale.domain
             return f"https://www.audible.{domain}/companion-file/{self.asin}"
 
+    def is_parent_podcast(self):
+        if "content_delivery_type" in self and "content_type" in self:
+            if (self.content_delivery_type in ("Periodical", "PodcastParent")
+                    or self.content_type == "Podcast") and self.has_children:
+                return True
+
 
 class LibraryItem(BaseItem):
     def _prepare_data(self, data: dict) -> dict:
@@ -139,7 +145,7 @@ class LibraryItem(BaseItem):
 
         # Only items with content_delivery_type 
         # MultiPartBook or Periodical have child elemts
-        if self.has_children is not None and not self.has_children:
+        if not self.has_children:
             return
 
         if "response_groups" not in request_params and \
@@ -148,20 +154,19 @@ class LibraryItem(BaseItem):
             request_params["response_groups"] = response_groups
 
         request_params["parent_asin"] = self.asin
-        childrens = await Library.get_from_api(
+        children = await Library.get_from_api(
             api_client=self._client,
             **request_params
         )
 
-        for i in childrens:
-            i._parent = self
+        for child in children:
+            child._parent = self
 
-        self._childrens = childrens
+        self._children = children
 
-        return childrens
+        return children
 
-    @property
-    def _is_downloadable(self):
+    def is_downloadable(self):
         # customer_rights must be in response_groups
         if self.customer_rights is not None:
             if not self.customer_rights["is_consumable_offline"]:
@@ -171,7 +176,7 @@ class LibraryItem(BaseItem):
 
     async def get_aax_url(self, quality: str = "high"):
 
-        if not self._is_downloadable:
+        if not self.is_downloadable():
             secho(
                 f"{self.full_title} is not downloadable. Skip item.",
                 fg="red"
@@ -338,8 +343,7 @@ class Library(BaseList):
     async def resolve_podcats(self):
         podcasts = []
         for i in self:
-            if (i.content_delivery_type in ("Periodical", "PodcastParent") \
-                    or i.content_type == "Podcast") and i.has_children:
+            if i.is_parent_podcast():
                 podcasts.append(i)
 
         podcast_items = await asyncio.gather(
