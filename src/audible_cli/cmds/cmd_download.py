@@ -200,6 +200,82 @@ async def consume(queue):
         queue.task_done()
 
 
+def queue_job(
+        queue,
+        get_cover,
+        get_pdf,
+        get_chapters,
+        get_aax,
+        get_aaxc,
+        client,
+        output_dir,
+        filename_mode,
+        item,
+        cover_size,
+        quality,
+        overwrite_existing
+):
+    base_filename = create_base_filename(item=item, mode=filename_mode)
+
+    if get_cover:
+        queue.put_nowait(
+            download_cover(
+                client=client,
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
+                res=cover_size,
+                overwrite_existing=overwrite_existing
+            )
+        )
+
+    if get_pdf:
+        queue.put_nowait(
+            download_pdf(
+                client=client,
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
+                overwrite_existing=overwrite_existing
+            )
+        )
+
+    if get_chapters:
+        queue.put_nowait(
+            download_chapters(
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
+                quality=quality,
+                overwrite_existing=overwrite_existing
+            )
+        )
+
+    if get_aax:
+        queue.put_nowait(
+            download_aax(
+                client=client,
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
+                quality=quality,
+                overwrite_existing=overwrite_existing
+            )
+        )
+
+    if get_aaxc:
+        queue.put_nowait(
+            download_aaxc(
+                client=client,
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
+                quality=quality,
+                overwrite_existing=overwrite_existing
+            )
+        )
+
+
 async def main(config, auth, **params):
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
 
@@ -249,7 +325,9 @@ async def main(config, auth, **params):
         # fetch the user library
         library = await Library.get_from_api(
             api_client,
-            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500")
+            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500"
+        )
+
         if resolve_podcats:
             await library.resolve_podcats()
 
@@ -299,68 +377,37 @@ async def main(config, auth, **params):
                     f"Skip title {title}: Not found in library",
                     fg="red", err=True
                 )
-    
+
         queue = asyncio.Queue()
 
         for job in jobs:
             item = library.get_item_by_asin(job)
-            base_filename = create_base_filename(item=item, mode=filename_mode)
-            if get_cover:
-                queue.put_nowait(
-                    download_cover(
-                        client=client,
-                        output_dir=output_dir,
-                        base_filename=base_filename,
-                        item=item,
-                        res=cover_size,
-                        overwrite_existing=overwrite_existing
-                    )
-                )
+            items = [item]
 
-            if get_pdf:
-                queue.put_nowait(
-                    download_pdf(
-                        client=client,
-                        output_dir=output_dir,
-                        base_filename=base_filename,
-                        item=item,
-                        overwrite_existing=overwrite_existing
-                    )
-                )
+            if item.is_parent_podcast():
+                items.remove(item)
+                if item._children is None:
+                    await item.get_child_items()
 
-            if get_chapters:
-                queue.put_nowait(
-                    download_chapters(
-                        output_dir=output_dir,
-                        base_filename=base_filename,
-                        item=item,
-                        quality=quality,
-                        overwrite_existing=overwrite_existing
-                    )
-                )
+                for i in item._children:
+                    if i.asin not in jobs:
+                        items.append(i)
 
-            if get_aax:
-                queue.put_nowait(
-                    download_aax(
-                        client=client,
-                        output_dir=output_dir,
-                        base_filename=base_filename,
-                        item=item,
-                        quality=quality,
-                        overwrite_existing=overwrite_existing
-                    )
-                )
-
-            if get_aaxc:
-                queue.put_nowait(
-                    download_aaxc(
-                        client=client,
-                        output_dir=output_dir,
-                        base_filename=base_filename,
-                        item=item,
-                        quality=quality,
-                        overwrite_existing=overwrite_existing
-                    )
+            for item in items:
+                queue_job(
+                    queue=queue,
+                    get_cover=get_cover,
+                    get_pdf=get_pdf,
+                    get_chapters=get_chapters,
+                    get_aax=get_aax,
+                    get_aaxc=get_aaxc,
+                    client=client,
+                    output_dir=output_dir,
+                    filename_mode=filename_mode,
+                    item=item,
+                    cover_size=cover_size,
+                    quality=quality,
+                    overwrite_existing=overwrite_existing
                 )
 
         # schedule the consumer
@@ -478,7 +525,7 @@ async def main(config, auth, **params):
 @click.option(
     "--resolve-podcasts",
     is_flag=True,
-    help="Resolve podcast items and let you download them"
+    help="Resolve podcasts to download single episodes via asin or title"
 )
 @pass_session
 def cli(session, **params):
