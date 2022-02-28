@@ -6,9 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+## Added
+
+- add `wishlist` subcommand
+- add `--resolve-podcasts` flag to download subcommand
+- add `models.Library.resolve_podcasts` method to append all podcast episodes to given library.
+- add `models.LibraryItem.get_child_items` method to get all episodes of a podcast item or parts for a MultiPartBook.
+- `models.BaseItem` now holds a list of `response_groups` in the `_response_groups` attribute. 
+- add `--format` option to `library export` subcommand
+
 ### Changed
 
+- *Remove sync code where async code are available. All plugins should take care about this!!!*
 - Bump `audible` to v0.7.0
+- rebuild `models.LibraryItem.get_aax_url` to build the aax download url in another way 
+- `models.BaseItem.full_title` now contains publication name for podcast episodes
+- `models.LibraryItem` now checks the customer rights when calling `LibraryItem._is_downloadable`
+- `models.BaseItem` and `models.BaseList` now holds the `api_client` instead the `locale` and `auth`
 
 ## [0.0.9] - 2022-01-18
 
