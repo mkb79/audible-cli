@@ -24,6 +24,7 @@ class BaseItem:
         self._client = api_client
         self._parent = parent
         self._response_groups = response_groups
+        self._childrens: Optional[BaseList] = None
 
     def __iter__(self):
         return iter(self._data)
@@ -147,15 +148,17 @@ class LibraryItem(BaseItem):
             request_params["response_groups"] = response_groups
 
         request_params["parent_asin"] = self.asin
-        items = await Library.get_from_api(
+        childrens = await Library.get_from_api(
             api_client=self._client,
             **request_params
         )
 
-        for i in items:
+        for i in childrens:
             i._parent = self
 
-        return items
+        self._childrens = childrens
+
+        return childrens
 
     @property
     def _is_downloadable(self):
