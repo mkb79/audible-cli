@@ -17,10 +17,12 @@ class BaseItem:
             self,
             data: dict,
             api_client: audible.AsyncClient,
+            parent: Optional["BaseItem"] = None,
             response_groups: Optional[List] = None
     ) -> None:
         self._data = self._prepare_data(data)
         self._client = api_client
+        self._parent = parent
         self._response_groups = response_groups
 
     def __iter__(self):
@@ -44,9 +46,8 @@ class BaseItem:
         if self.subtitle is not None:
             title = f"{title}: {self.subtitle}"
 
-        if self.publication_name and self.content_delivery_type and \
-                self.content_delivery_type == "SinglePartIssue":
-            title = f"{self.publication_name}: {title}"
+        if self._parent is not None:
+            title = f"{self._parent.title}: {title}"
 
         return title
 
@@ -148,8 +149,13 @@ class LibraryItem(BaseItem):
         request_params["parent_asin"] = self.asin
         items = await Library.get_from_api(
             api_client=self._client,
+            parent=self,
             **request_params
         )
+
+        for i in items:
+            i._parent = self
+
         return items
 
     @property
