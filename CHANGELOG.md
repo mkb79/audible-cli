@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - add `wishlist` subcommand
-- add `--resolve-podcasts` flag to download subcommand
+- add `--resolve-podcasts` flag to download subcommand; let download a single podcast episode via the title or asin option
 - add `models.Library.resolve_podcasts` method to append all podcast episodes to given library.
 - add `models.LibraryItem.get_child_items` method to get all episodes of a podcast item or parts for a MultiPartBook.
 - `models.BaseItem` now holds a list of `response_groups` in the `_response_groups` attribute. 
@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- the `download` subcommand now download podcasts
 - *Remove sync code where async code are available. All plugins should take care about this!!!*
 - Bump `audible` to v0.7.0
 - rebuild `models.LibraryItem.get_aax_url` to build the aax download url in another way 
