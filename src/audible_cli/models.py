@@ -158,13 +158,8 @@ class LibraryItem(BaseItem):
         if self.customer_rights is not None:
             if not self.customer_rights["is_consumable_offline"]:
                 return False
-
-        # customer_rights, media, product_attrs, listening_status, origin_asin 
-        # or percent_complete must be in response_groups
-        if self.content_delivery_type in ("Periodical", ):
-            return False
-
-        return True
+            else:
+                return True
 
     async def get_aax_url(self, quality: str = "high"):
 
@@ -333,9 +328,14 @@ class Library(BaseList):
         return cls(resp, api_client=api_client)
 
     async def resolve_podcats(self):
+        podcasts = []
+        for i in self:
+            if i.content_delivery_type in ("Periodical", "PodcastParent") \
+                    or i.content_type == "Podcast":
+                podcasts.append(i)
+
         podcast_items = await asyncio.gather(
-            *[i.get_child_items() for i in self if
-                i.content_delivery_type == "Periodical"]
+            *[i.get_child_items() for i in podcasts]
         )
         for i in podcast_items:
             self._data.extend(i._data)
