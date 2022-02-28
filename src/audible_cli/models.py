@@ -149,7 +149,6 @@ class LibraryItem(BaseItem):
         request_params["parent_asin"] = self.asin
         items = await Library.get_from_api(
             api_client=self._client,
-            parent=self,
             **request_params
         )
 
