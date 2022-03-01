@@ -163,6 +163,17 @@ class LibraryItem(BaseItem):
             **request_params
         )
 
+        if self.is_parent_podcast():
+            if "episode_count" in self and \
+                    int(self.episode_count) != len(children):
+
+                if "response_groups" in request_params:
+                    request_params.pop("response_groups")
+                children = await Catalog.get_from_api(
+                    api_client=self._client,
+                    **request_params
+                )
+
         for child in children:
             child._parent = self
 
@@ -254,6 +265,9 @@ class BaseList:
         self._client = api_client
         self._data = self._prepare_data(data)
 
+    def __len__(self):
+        return len(self._data)
+
     def __iter__(self):
         return iter(self._data)
 
@@ -293,9 +307,6 @@ class Library(BaseList):
             ) for i in data
         ]
         return data
-
-    def __iter__(self):
-        return iter(self._data)
 
     @classmethod
     async def get_from_api(
@@ -337,6 +348,75 @@ class Library(BaseList):
             return library
 
         resp = await fetch_library(request_params)
+
+        return cls(resp, api_client=api_client)
+
+    async def resolve_podcats(self):
+        podcasts = []
+        for i in self:
+            if i.is_parent_podcast():
+                podcasts.append(i)
+
+        podcast_items = await asyncio.gather(
+            *[i.get_child_items() for i in podcasts]
+        )
+        for i in podcast_items:
+            self._data.extend(i._data)
+
+
+class Catalog(BaseList):
+    def _prepare_data(self, data: Union[dict, list]) -> list:
+        response_groups = None
+        if isinstance(data, dict):
+            response_groups = data.get("response_groups")
+            response_groups = response_groups.replace(" ", "").split(",")
+            data = data.get("products", data)
+        data = [
+            LibraryItem(
+                data=i,
+                api_client=self._client,
+                response_groups=response_groups
+            ) for i in data
+        ]
+        return data
+
+    @classmethod
+    async def get_from_api(
+            cls,
+            api_client: audible.AsyncClient,
+            **request_params
+    ):
+
+        if "response_groups" not in request_params:
+            request_params["response_groups"] = (
+                "contributors, customer_rights, media, price, product_attrs, "
+                "product_desc, product_extended_attrs, product_plan_details, "
+                "product_plans, rating, sample, sku, series, reviews, ws4v, "
+                "relationships, review_attrs, categories, category_ladders, "
+                "claim_code_url, in_wishlist, listening_status, periodicals, "
+                "provided_review, product_details"
+            )
+
+        async def fetch_catalog(params):
+            entire_lib = False
+            if "page" not in params and "num_results" not in params:
+                entire_lib = True
+                params["page"] = 0
+                num_results = 50
+                params["num_results"] = num_results
+
+            catalog = []
+            while True:
+                r = await api_client.get("catalog/products", params=params)
+                items = r["products"]
+                len_items = len(items)
+                catalog.extend(items)
+                if not entire_lib or len_items < num_results:
+                    break
+                params["page"] += 1
+            return catalog
+
+        resp = await fetch_catalog(request_params)
 
         return cls(resp, api_client=api_client)
 
