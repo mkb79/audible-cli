@@ -190,7 +190,7 @@ async def download_aaxc(
 
     dl = Downloader(
         url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax", "audio/mpeg"]
+        ["audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a"]
     )
     await dl.run(pb=True)
 
