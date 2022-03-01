@@ -105,7 +105,7 @@ class LibraryItem(BaseItem):
 
         # if available_codecs is None the item can't be downloaded as aax
         if self.available_codecs is None:
-            return
+            return None, None
 
         verify = None
         if quality != "best":
@@ -184,14 +184,12 @@ class LibraryItem(BaseItem):
             raise Exception(
                 f"{self.full_title} is not downloadable. Skip item."
             )
-            return
 
         codec, codec_name = self._get_codec(quality)
         if codec is None:
-            secho(
-                f"{self.full_title} is not downloadable in AAX format",
+            raise Exception(
+                f"{self.full_title} is not downloadable in AAX format"
             )
-            return
 
         domain = self._client.auth.locale.domain
         url = f"https://www.audible.{domain}/library/download"
