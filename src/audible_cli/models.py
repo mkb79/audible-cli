@@ -181,17 +181,15 @@ class LibraryItem(BaseItem):
     async def get_aax_url(self, quality: str = "high"):
 
         if not self.is_downloadable():
-            secho(
-                f"{self.full_title} is not downloadable. Skip item.",
-                fg="red"
+            raise Exception(
+                f"{self.full_title} is not downloadable. Skip item."
             )
             return
 
         codec, codec_name = self._get_codec(quality)
         if codec is None:
             secho(
-                f"{self.full_title} is not downloadable. No AAX codec found.",
-                fg="red"
+                f"{self.full_title} is not downloadable in AAX format",
             )
             return
 
