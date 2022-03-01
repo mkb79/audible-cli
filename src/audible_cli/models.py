@@ -103,6 +103,10 @@ class LibraryItem(BaseItem):
         """
         assert quality in ("best", "high", "normal",)
 
+        # if available_codecs is None the item can't be downloaded as aax
+        if self.available_codecs is None:
+            return
+
         verify = None
         if quality != "best":
             verify = CODEC_HIGH_QUALITY if quality == "high" else \
