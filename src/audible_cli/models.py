@@ -163,16 +163,15 @@ class LibraryItem(BaseItem):
             **request_params
         )
 
-        if self.is_parent_podcast():
-            if "episode_count" in self and \
-                    int(self.episode_count) != len(children):
+        if self.is_parent_podcast() and "episode_count" in self and \
+                int(self.episode_count) != len(children):
 
-                if "response_groups" in request_params:
-                    request_params.pop("response_groups")
-                children = await Catalog.get_from_api(
-                    api_client=self._client,
-                    **request_params
-                )
+            if "response_groups" in request_params:
+                request_params.pop("response_groups")
+            children = await Catalog.get_from_api(
+                api_client=self._client,
+                **request_params
+            )
 
         for child in children:
             child._parent = self
