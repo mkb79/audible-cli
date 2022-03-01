@@ -168,8 +168,13 @@ async def download_aaxc(
 ):
     url, codec, lr = await item.get_aaxc_url(quality)
 
+    if codec.lower() == "mpeg":
+        ext = "mp3"
+    else:
+        ext = "aaxc"
+
     filepath = pathlib.Path(
-        output_dir) / f"{base_filename}-{codec}.aaxc"
+        output_dir) / f"{base_filename}-{codec}.{ext}"
     lr_file = filepath.with_suffix(".voucher")
 
     if lr_file.is_file() and not overwrite_existing:
@@ -185,7 +190,7 @@ async def download_aaxc(
 
     dl = Downloader(
         url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax"]
+        ["audio/aax", "audio/vnd.audible.aax", "audio/mpeg"]
     )
     await dl.run(pb=True)
 
