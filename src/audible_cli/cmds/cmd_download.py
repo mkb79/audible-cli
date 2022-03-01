@@ -393,6 +393,11 @@ async def main(config, auth, **params):
                     if i.asin not in jobs:
                         items.append(i)
 
+                podcast_dir = create_base_filename(item, filename_mode)
+                output_dir = output_dir / podcast_dir
+                if not output_dir.is_dir():
+                    output_dir.mkdir(parents=True)
+
             for item in items:
                 queue_job(
                     queue=queue,
