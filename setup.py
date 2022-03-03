@@ -48,6 +48,7 @@ setup(
         "aiofiles",
         "audible==0.7.*",
         "click>=7",
+        "click-log",
         "colorama; platform_system=='Windows'",
         "httpx>=0.20.*",
         "Pillow",
