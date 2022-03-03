@@ -1,7 +1,7 @@
 __title__ = "audible-cli"
 __description__ = "Command line interface (cli) for the audible package."
 __url__ = "https://github.com/mkb79/audible-cli"
-__version__ = "0.1.0b3"
+__version__ = "0.1.0b4"
 __author__ = "mkb79"
 __author_email__ = "mkb79@hackitall.de"
 __license__ = "AGPL"

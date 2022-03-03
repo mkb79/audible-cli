@@ -1,3 +1,5 @@
+import logging
+
 import click
 from audible.activation_bytes import (
     extract_activation_bytes,
@@ -5,6 +7,9 @@ from audible.activation_bytes import (
 )
 
 from ..config import pass_session
+
+
+logger = logging.getLogger("audible_cli.cmds.cmd_activation_bytes")
 
 
 @click.command("activation-bytes")
@@ -17,11 +22,11 @@ def cli(session, **options):
     """Get activation bytes."""
     auth = session.auth
     if auth.activation_bytes is None or options.get("reload"):
-        click.echo("Fetching activation bytes from Audible server.", err=True)
+        logger.info("Fetching activation bytes from Audible server")
         ab = fetch_activation_sign_auth(auth)
         ab = extract_activation_bytes(ab)
         auth.activation_bytes = ab
-        click.echo("Save activation bytes to file.", err=True)
+        logger.info("Save activation bytes to file")
         auth.to_file()
 
     click.echo(auth.activation_bytes)

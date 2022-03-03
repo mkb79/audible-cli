@@ -1,3 +1,4 @@
+import logging
 import sys
 
 import audible
@@ -8,6 +9,9 @@ from tabulate import tabulate
 from ..config import Config, pass_session
 from ..constants import CONFIG_FILE, DEFAULT_AUTH_FILE_EXTENSION
 from ..utils import build_auth_file
+
+
+logger = logging.getLogger("audible_cli.cmds.cmd_quickstart")
 
 
 def tabulate_summary(d: dict) -> str:
@@ -144,8 +148,9 @@ def cli(session, ctx):
         m = f"Config file {config.filename} already exists. Quickstart will " \
             f"not overwrite existing files."
 
-        ctx.fail(m) if ctx else echo(m)
-        sys.exit()
+        
+        logger.error(m)
+        raise click.Abort()
 
     d = ask_user(config)
 

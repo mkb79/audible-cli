@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import string
 import unicodedata
 from typing import List, Optional, Union
@@ -6,10 +7,14 @@ from typing import List, Optional, Union
 import audible
 import httpx
 from audible.aescipher import decrypt_voucher_from_licenserequest
-from click import secho
+
 
 from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
+from .exceptions import AudibleCliException
 from .utils import LongestSubString
+
+
+logger = logging.getLogger("audible_cli.models")
 
 
 class BaseItem:
@@ -132,11 +137,11 @@ class LibraryItem(BaseItem):
                         )
 
                 except ValueError:
-                    secho(f"Unexpected codec name: {name}")
+                    logger.warning(f"Unexpected codec name: {name}")
                     continue
 
         if verify is not None:
-            secho(f"{verify} codec was not found, using {best[0]} instead")
+            logger.info(f"{verify} codec was not found, using {best[0]} instead")
 
         return best[0], best[3]
 
@@ -191,13 +196,13 @@ class LibraryItem(BaseItem):
     async def get_aax_url(self, quality: str = "high"):
 
         if not self.is_downloadable():
-            raise Exception(
+            raise AudibleCliException(
                 f"{self.full_title} is not downloadable. Skip item."
             )
 
         codec, codec_name = self._get_codec(quality)
         if codec is None:
-            raise Exception(
+            raise AudibleCliException(
                 f"{self.full_title} is not downloadable in AAX format"
             )
 

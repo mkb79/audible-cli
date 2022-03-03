@@ -1,3 +1,4 @@
+import logging
 import pathlib
 
 import click
@@ -7,6 +8,9 @@ from tabulate import tabulate
 
 from ..config import pass_session
 from ..utils import build_auth_file
+
+
+logger = logging.getLogger("audible_cli.cmds.cmd_manage")
 
 
 @click.group("manage")
@@ -88,7 +92,8 @@ def list_profiles(session):
 def add_profile(ctx, session, profile, country_code, auth_file, is_primary):
     """Adds a profile to config file"""
     if not (session.config.dirname / auth_file).exists():
-        ctx.fail("Auth file doesn't exists.")
+        logger.error("Auth file doesn't exists.")
+        raise click.Abort()
 
     session.config.add_profile(
         name=profile,
@@ -124,7 +129,8 @@ def remove_profile(session, profile):
 def check_if_auth_file_not_exists(session, ctx, param, value):
     value = session.config.dirname / value
     if pathlib.Path(value).exists():
-        ctx.fail("The file already exists.")
+        logger.error("The file already exists.")
+        raise click.Abort()
     return value
 
 
@@ -189,7 +195,8 @@ def add_auth_file(
 def check_if_auth_file_exists(session, ctx, param, value):
     value = session.config.dirname / value
     if not pathlib.Path(value).exists():
-        ctx.fail("The file doesn't exists.")
+        logger.error("The file doesn't exists.")
+        raise click.Abort()
     return value
 
 

@@ -1,13 +1,14 @@
+import logging
 import os
 import pathlib
-from typing import Any, Dict, Optional, Union
+from typing import Dict, Optional, Union
 
 import click
 import toml
 from audible import Authenticator
 from audible.exceptions import FileEncryptionError
-from click import echo, prompt
 
+from . import __version__
 from .constants import (
     CONFIG_DIR_ENV,
     CONFIG_FILE,
@@ -15,6 +16,10 @@ from .constants import (
     PLUGIN_DIR_ENV,
     PLUGIN_PATH
 )
+from .exceptions import AudibleCliException, ProfileAlreadyExists
+
+
+logger = logging.getLogger("audible_cli.config")
 
 
 class Config:
@@ -75,12 +80,7 @@ class Config:
     ) -> None:
 
         if self.has_profile(name) and abort_on_existing_profile:
-            message = f"Profile {name} already exists."
-            try:
-                ctx = click.get_current_context()
-                ctx.fail(message)
-            except RuntimeError as exc:
-                raise RuntimeError(message) from exc
+            raise ProfileAlreadyExists(name)
 
         profile_data = {
             "auth_file": str(auth_file),
@@ -107,12 +107,8 @@ class Config:
         try:
             self.data.update(toml.load(f))
         except FileNotFoundError as exc:
-            message = f"Config file {f} could not be found."
-            try:
-                ctx = click.get_current_context()
-                ctx.fail(message)
-            except RuntimeError:
-                raise FileNotFoundError(message) from exc
+            message = f"Config file {click.format_filename(f)} not found"
+            raise AudibleCliException(message)
 
         self._config_file = f
         self._is_read = True
@@ -137,6 +133,9 @@ class Session:
         self._params: Dict[str, Any] = {}
         self._app_dir = get_app_dir()
         self._plugin_dir = get_plugin_dir()
+        logger.debug(f"Audible-cli version: {__version__}")
+        logger.debug(f"App dir: {click.format_filename(self.app_dir)}")
+        logger.debug(f"Plugin dir: {click.format_filename(self.plugin_dir)}")
 
     @property
     def params(self):
@@ -155,9 +154,15 @@ class Session:
         if self._config is None:
             conf_file = self.app_dir / CONFIG_FILE
             self._config = Config()
+            logger.debug(
+                f"Load config from file: "
+                f"{click.format_filename(conf_file, shorten=True)}"
+            )
             self._config.read_config(conf_file)
 
             name = self.params.get("profile") or self.config.primary_profile
+            logger.debug(f"Selected profile: {name}")
+
             if name is None:
                 message = (
                     "No profile provided and primary profile not set "
@@ -195,16 +200,15 @@ class Session:
                     locale=country_code)
                 break
             except (FileEncryptionError, ValueError):
-                echo(
+                logger.info(
                     "Auth file is encrypted but no/wrong password is provided"
                 )
-                password = prompt(
+                password = click.prompt(
                     "Please enter the password (or enter to exit)",
                     hide_input=True,
                     default="")
                 if len(password) == 0:
-                    ctx = click.get_current_context()
-                    ctx.abort()
+                    raise click.Abort()
 
     @property
     def auth(self):

@@ -1,5 +1,6 @@
 import asyncio
 import io
+import logging
 import pathlib
 from difflib import SequenceMatcher
 from functools import partial, wraps
@@ -15,6 +16,9 @@ from audible.login import default_login_url_callback
 from click import echo, secho, prompt
 
 from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
+
+
+logger = logging.getLogger("audible_cli.utils")
 
 
 def prompt_captcha_callback(captcha_url: str) -> str:
@@ -181,7 +185,7 @@ class Downloader:
 
     def _progressbar(self, total: int):
         return tqdm.tqdm(
-            desc=str(self._file),
+            desc=click.format_filename(self._file, shorten=True),
             total=total,
             unit="B",
             unit_scale=True,
@@ -190,26 +194,20 @@ class Downloader:
 
     def _file_okay(self):
         if not self._file.parent.is_dir():
-            secho(
-                f"Folder {self._file.parent} doesn't exists! Skip download.",
-                fg="red",
-                err=True
+            logger.error(
+                f"Folder {self._file.parent} doesn't exists! Skip download"
             )
             return False
 
         if self._file.exists() and not self._file.is_file():
-            secho(
-                f"Object {self._file} exists but is no file. Skip download.",
-                fg="red",
-                err=True
+            logger.error(
+                f"Object {self._file} exists but is no file. Skip download"
             )
             return False
 
         if self._file.is_file() and not self._overwrite_existing:
-            secho(
-                f"File {self._file} already exists. Skip download.",
-                fg="blue",
-                err=True
+            logger.info(
+                f"File {self._file} already exists. Skip download"
             )
             return False
 
@@ -221,10 +219,8 @@ class Downloader:
                 msg = self._tmp_file.read_text()
             except:  # noqa
                 msg = "Unknown"
-            secho(
-                f"Error downloading {self._file}. Message: {msg}",
-                fg="red",
-                err=True
+            logger.error(
+                f"Error downloading {self._file}. Message: {msg}"
             )
             return
 
@@ -232,11 +228,9 @@ class Downloader:
             downloaded_size = self._tmp_file.stat().st_size
             length = int(length)
             if downloaded_size != length:
-                secho(
+                logger.error(
                     f"Error downloading {self._file}. File size missmatch. "
-                    f"Expected size: {length}; Downloaded: {downloaded_size}",
-                    fg="red",
-                    err=True
+                    f"Expected size: {length}; Downloaded: {downloaded_size}"
                 )
                 return
 
@@ -246,12 +240,10 @@ class Downloader:
                     msg = self._tmp_file.read_text()
                 except:  # noqa
                     msg = "Unknown"
-                secho(
+                logger.error(
                     f"Error downloading {self._file}. Wrong content type. "
                     f"Expected type(s): {self._expected_content_type}; "
-                    f"Got: {content_type}; Message: {msg}",
-                    fg="red",
-                    err=True
+                    f"Got: {content_type}; Message: {msg}"
                 )
                 return
 
@@ -263,7 +255,7 @@ class Downloader:
                 i += 1
             file.rename(file.with_suffix(f"{file.suffix}.old.{i}"))
         tmp_file.rename(file)
-        tqdm.tqdm.write(
+        logger.info(
             f"File {self._file} downloaded to {self._file.parent} "
             f"in {elapsed}."
         )

@@ -4,6 +4,7 @@ import asyncio.sslproto
 import json
 import pathlib
 import ssl
+import logging
 import sys
 import unicodedata
 
@@ -11,14 +12,16 @@ import aiofiles
 import audible
 import click
 import httpx
-import tqdm
-from audible.exceptions import NotFoundError
-from click import echo, secho
+from click import echo
 from tabulate import tabulate
 
 from ..config import pass_session
+from ..exceptions import DirectoryDoesNotExists, NotFoundError
 from ..models import Library
 from ..utils import Downloader
+
+
+logger = logging.getLogger("audible_cli.cmds.cmd_download")
 
 SSL_PROTOCOLS = (asyncio.sslproto.SSLProtocol,)
 
@@ -94,9 +97,9 @@ async def download_cover(
 
     url = item.get_cover_url(res)
     if url is None:
-        secho(
-            f"No COVER found for {item.full_title} with given resolution.",
-            fg="yellow", err=True)
+        logger.error(
+            f"No COVER found for {item.full_title} with given resolution"
+        )
         return
 
     dl = Downloader(url, filepath, client, overwrite_existing, "image/jpeg")
@@ -108,7 +111,7 @@ async def download_pdf(
 ):
     url = item.get_pdf_url()
     if url is None:
-        secho(f"No PDF found for {item.full_title}.", fg="yellow", err=True)
+        logger.info(f"No PDF found for {item.full_title}")
         return
 
     filename = base_filename + ".pdf"
@@ -124,29 +127,27 @@ async def download_chapters(
         output_dir, base_filename, item, quality, overwrite_existing
 ):
     if not output_dir.is_dir():
-        raise Exception("Output dir doesn't exists")
+        raise DirectoryDoesNotExists(output_dir)
 
     filename = base_filename + "-chapters.json"
     file = output_dir / filename
     if file.exists() and not overwrite_existing:
-        secho(
-            f"File {file} already exists. Skip saving chapters.",
-            fg="blue", err=True
+        logger.info(
+            f"File {file} already exists. Skip saving chapters"
         )
         return True
 
     try:
         metadata = await item.get_content_metadata(quality)
     except NotFoundError:
-        secho(
-            f"Can't get chapters for {item.full_title}. Skip item.",
-            fg="red", err=True
+        logger.error(
+            f"Can't get chapters for {item.full_title}. Skip item."
         )
         return
     metadata = json.dumps(metadata, indent=4)
     async with aiofiles.open(file, "w") as f:
         await f.write(metadata)
-    tqdm.tqdm.write(f"Chapter file saved to {file}.")
+    logger.info(f"Chapter file saved to {file}.")
 
 
 async def download_aax(
@@ -178,15 +179,14 @@ async def download_aaxc(
     lr_file = filepath.with_suffix(".voucher")
 
     if lr_file.is_file() and not overwrite_existing:
-        secho(
-            f"File {lr_file} already exists. Skip download.",
-            fg="blue", err=True
+        logger.info(
+            f"File {lr_file} already exists. Skip download."
         )
     else:
         lr = json.dumps(lr, indent=4)
         async with aiofiles.open(lr_file, "w") as f:
             await f.write(lr)
-        secho(f"Voucher file saved to {lr_file}.")
+        logger.info(f"Voucher file saved to {lr_file}.")
 
     dl = Downloader(
         url, filepath, client, overwrite_existing,
@@ -201,7 +201,7 @@ async def consume(queue):
         try:
             await item
         except Exception as e:
-            secho(f"Error in job: {e}", fg="red", err=True)
+            logger.error(e)
         queue.task_done()
 
 
@@ -289,8 +289,8 @@ async def main(config, auth, **params):
     asins = params.get("asin")
     titles = params.get("title")
     if get_all and (asins or titles):
-        ctx = click.get_current_context()
-        ctx.fail(f"Do not mix *asin* or *title* option with *all* option.")
+        logger.error(f"Do not mix *asin* or *title* option with *all* option.")
+        click.Abort()
 
     # what to download
     get_aax = params.get("aax")
@@ -299,8 +299,8 @@ async def main(config, auth, **params):
     get_cover = params.get("cover")
     get_pdf = params.get("pdf")
     if not any([get_aax, get_aaxc, get_chapters, get_cover, get_pdf]):
-        ctx = click.get_current_context()
-        ctx.fail(f"Please select an option what you want download.")
+        logger.error("Please select an option what you want download.")
+        click.Abort()
 
     # additional options
     sim_jobs = params.get("jobs")
@@ -350,11 +350,10 @@ async def main(config, auth, **params):
                 jobs.append(asin)
             else:
                 if not ignore_errors:
-                    ctx = click.get_current_context()
-                    ctx.fail(f"Asin {asin} not found in library.")
-                secho(
-                    f"Skip asin {asin}: Not found in library",
-                    fg="red", err=True
+                    logger.error(f"Asin {asin} not found in library.")
+                    click.Abort()
+                logger.error(
+                    f"Skip asin {asin}: Not found in library"
                 )
 
         for title in titles:
@@ -378,9 +377,8 @@ async def main(config, auth, **params):
                     jobs.extend([i[0].asin for i in full_match or match])
     
             else:
-                secho(
-                    f"Skip title {title}: Not found in library",
-                    fg="red", err=True
+                logger.error(
+                    f"Skip title {title}: Not found in library"
                 )
 
         queue = asyncio.Queue()
