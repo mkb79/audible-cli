@@ -8,15 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- add `wishlist` subcommand
-- add `--resolve-podcasts` flag to download subcommand; let download a single podcast episode via the title or asin option
-- add `models.Library.resolve_podcasts` method to append all podcast episodes to given library.
-- add `models.LibraryItem.get_child_items` method to get all episodes of a podcast item or parts for a MultiPartBook.
-- `models.BaseItem` now holds a list of `response_groups` in the `_response_groups` attribute. 
-- add `--format` option to `library export` subcommand
+- a counter of downloaded items for the download command
+- the `--verbosity/-v` option; default is INFO
+-`wishlist` subcommand
+- the `--resolve-podcasts` flag to download subcommand; let download a single podcast episode via the title or asin option
+- the`models.Library.resolve_podcasts` method to append all podcast episodes to given library.
+- the `models.LibraryItem.get_child_items` method to get all episodes of a podcast item or parts for a MultiPartBook.
+- the`models.BaseItem` now holds a list of `response_groups` in the `_response_groups` attribute. 
+- the`--format` option to `library export` subcommand
+- the `models.Catalog` class
 
 ### Changed
 
+- the `--aaxc` flag of the download command now try to check if a file exists before a `licenserequest` is make (issue #60)
+- the `--aaxc` flag of the download command now downloads mp3/m4a files if the `aaxc` format is not available and the `licenserequest` offers this formats
 - the `download` subcommand now download podcasts
 - *Remove sync code where async code are available. All plugins should take care about this!!!*
 - Bump `audible` to v0.7.0
@@ -24,6 +29,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `models.BaseItem.full_title` now contains publication name for podcast episodes
 - `models.LibraryItem` now checks the customer rights when calling `LibraryItem._is_downloadable`
 - `models.BaseItem` and `models.BaseList` now holds the `api_client` instead the `locale` and `auth`
+
+### Misc
+
+- bump click to v8
 
 ## [0.0.9] - 2022-01-18
 
