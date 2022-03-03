@@ -167,6 +167,20 @@ async def download_aaxc(
         client, output_dir, base_filename, item,
         quality, overwrite_existing
 ):
+    # https://github.com/mkb79/audible-cli/issues/60
+    if not overwrite_existing:
+        codec, _ = item._get_codec(quality)
+        if codec is not None:
+            filepath = pathlib.Path(
+            output_dir) / f"{base_filename}-{codec}.aaxc"
+            lr_file = filepath.with_suffix(".voucher")
+        
+            if filepath.is_file() and lr_file.is_file():
+                logger.info(
+                    f"File {filepath} already exists. Skip download."
+                )
+                return
+        
     url, codec, lr = await item.get_aaxc_url(quality)
 
     if codec.lower() == "mpeg":
