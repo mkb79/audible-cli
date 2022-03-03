@@ -3,7 +3,6 @@ import sys
 from pkg_resources import iter_entry_points
 
 import click
-import click_log
 
 from .cmds import build_in_cmds, cmd_quickstart
 from .config import (
@@ -12,11 +11,12 @@ from .config import (
 )
 from .constants import PLUGIN_ENTRY_POINT
 from .exceptions import AudibleCliException
+from ._logging import click_basic_config, click_verbosity_option
 from . import __version__, plugins
 
 
 logger = logging.getLogger("audible_cli")
-click_log.basic_config(logger)
+click_basic_config(logger)
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -40,7 +40,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
     help="The password for the profile auth file."
 )
 @click.version_option(__version__)
-@click_log.simple_verbosity_option(logger)
+@click_verbosity_option(logger)
 def cli():
     """Entrypoint for all other subcommands and groups."""
 
@@ -48,7 +48,7 @@ def cli():
 @click.command(context_settings=CONTEXT_SETTINGS)
 @click.pass_context
 @click.version_option(__version__)
-@click_log.simple_verbosity_option(logger)
+@click_verbosity_option(logger)
 def quickstart(ctx):
     """Entrypoint for the quickstart command"""
     try:
