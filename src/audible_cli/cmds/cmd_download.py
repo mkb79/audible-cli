@@ -73,6 +73,94 @@ def ignore_httpx_ssl_eror(loop):
     loop.set_exception_handler(ignore_ssl_error)
 
 
+class DownloadCounter:
+    def __init__(self):
+        self._aax: int = 0
+        self._aaxc: int = 0
+        self._chapter: int = 0
+        self._cover: int = 0
+        self._pdf: int = 0
+        self._voucher: int = 0
+        self._voucher_saved: int = 0
+
+    @property
+    def aax(self):
+        return self._aax
+
+    def count_aax(self):
+        self._aax += 1
+        logger.debug(f"Currently downloaded aax files: {self.aax}")
+
+    @property
+    def aaxc(self):
+        return self._aaxc
+
+    def count_aaxc(self):
+        self._aaxc += 1
+        logger.debug(f"Currently downloaded aaxc files: {self.aaxc}")
+
+    @property
+    def chapter(self):
+        return self._chapter
+
+    def count_chapter(self):
+        self._chapter += 1
+        logger.debug(f"Currently downloaded chapters: {self.chapter}")
+
+    @property
+    def cover(self):
+        return self._cover
+
+    def count_cover(self):
+        self._cover += 1
+        logger.debug(f"Currently downloaded covers: {self.cover}")
+
+    @property
+    def pdf(self):
+        return self._pdf
+
+    def count_pdf(self):
+        self._pdf += 1
+        logger.debug(f"Currently downloaded PDFs: {self.pdf}")
+
+    @property
+    def voucher(self):
+        return self._voucher
+
+    def count_voucher(self):
+        self._voucher += 1
+        logger.debug(f"Currently downloaded voucher files: {self.voucher}")
+
+    @property
+    def voucher_saved(self):
+        return self._voucher_saved
+
+    def count_voucher_saved(self):
+        self._voucher_saved += 1
+        logger.debug(f"Currently saved voucher files: {self.voucher_saved}")
+
+    def as_dict(self) -> dict:
+        counter = {
+            "aax": self.aax,
+            "aaxc": self.aaxc,
+            "chapter": self.chapter,
+            "cover": self.cover,
+            "pdf": self.pdf,
+            "voucher": self.voucher,
+            "voucher_saved": self.voucher_saved
+        }
+        return counter
+
+    def has_downloads(self):
+        for _, v in self.as_dict().items():
+            if v > 0:
+                return True
+
+        return False
+
+counter = DownloadCounter()
+
+
 def create_base_filename(item, mode):
     if "ascii" in mode:
         base_filename = item.full_title_slugify
@@ -103,7 +191,10 @@ async def download_cover(
         return
 
     dl = Downloader(url, filepath, client, overwrite_existing, "image/jpeg")
-    await dl.run(stream=False, pb=False)
+    downloaded = await dl.run(stream=False, pb=False)
+
+    if downloaded:
+        counter.count_cover()
 
 
 async def download_pdf(
@@ -120,7 +211,10 @@ async def download_pdf(
         url, filepath, client, overwrite_existing,
         ["application/octet-stream", "application/pdf"]
     )
-    await dl.run(stream=False, pb=False)
+    downloaded = await dl.run(stream=False, pb=False)
+
+    if downloaded:
+        counter.count_pdf()
 
 
 async def download_chapters(
@@ -148,6 +242,7 @@ async def download_chapters(
     async with aiofiles.open(file, "w") as f:
         await f.write(metadata)
     logger.info(f"Chapter file saved to {file}.")
+    counter.count_chapter()
 
 
 async def download_aax(
@@ -160,7 +255,10 @@ async def download_aax(
         url, filepath, client, overwrite_existing,
         ["audio/aax", "audio/vnd.audible.aax"]
     )
-    await dl.run(pb=True)
+    downloaded = await dl.run(pb=True)
+
+    if downloaded:
+        counter.count_aax()
 
 
 async def download_aaxc(
@@ -182,6 +280,7 @@ async def download_aaxc(
                 return
         
     url, codec, lr = await item.get_aaxc_url(quality)
+    counter.count_voucher()
 
     if codec.lower() == "mpeg":
         ext = "mp3"
@@ -201,12 +300,16 @@ async def download_aaxc(
         async with aiofiles.open(lr_file, "w") as f:
             await f.write(lr)
         logger.info(f"Voucher file saved to {lr_file}.")
+        counter.count_voucher_saved()
 
     dl = Downloader(
         url, filepath, client, overwrite_existing,
         ["audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a"]
     )
-    await dl.run(pb=True)
+    downloaded = await dl.run(pb=True)
+
+    if downloaded:
+        counter.count_aaxc()
 
 
 async def consume(queue):
@@ -561,3 +664,20 @@ def cli(session, **params):
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
+
+        if counter.has_downloads():
+            echo("The download ended with the following result:")
+            for k, v in counter.as_dict().items():
+                if v == 0:
+                    continue
+    
+                if k == "voucher_saved":
+                    k = "voucher"
+                elif k == "voucher":
+                    diff = v - counter.voucher_saved
+                    if diff > 0:
+                        echo("Unsaved voucher: {diff}")
+                    continue
+                echo(f"New {k} files: {v}")
+        else:
+            echo("No new files downloaded.")

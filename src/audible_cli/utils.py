@@ -292,7 +292,7 @@ class Downloader:
 
     async def run(self, stream: bool = True, pb: bool = True):
         if not self._file_okay():
-            return
+            return False
 
         try:
             return await self._stream_load(pb) if stream else \
