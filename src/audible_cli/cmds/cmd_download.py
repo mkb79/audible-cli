@@ -504,6 +504,7 @@ async def main(config, auth, **params):
         for job in jobs:
             item = library.get_item_by_asin(job)
             items = [item]
+            odir = pathlib.Path(output_dir)
 
             if not ignore_podcasts and item.is_parent_podcast():
                 items.remove(item)
@@ -515,9 +516,9 @@ async def main(config, auth, **params):
                         items.append(i)
 
                 podcast_dir = create_base_filename(item, filename_mode)
-                output_dir = output_dir / podcast_dir
-                if not output_dir.is_dir():
-                    output_dir.mkdir(parents=True)
+                odir = output_dir / podcast_dir
+                if not odir.is_dir():
+                    odir.mkdir(parents=True)
 
             for item in items:
                 queue_job(
@@ -528,7 +529,7 @@ async def main(config, auth, **params):
                     get_aax=get_aax,
                     get_aaxc=get_aaxc,
                     client=client,
-                    output_dir=output_dir,
+                    output_dir=odir,
                     filename_mode=filename_mode,
                     item=item,
                     cover_size=cover_size,
