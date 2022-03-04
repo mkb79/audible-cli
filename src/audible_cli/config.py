@@ -1,7 +1,7 @@
 import logging
 import os
 import pathlib
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import click
 import toml
@@ -106,7 +106,7 @@ class Config:
 
         try:
             self.data.update(toml.load(f))
-        except FileNotFoundError as exc:
+        except FileNotFoundError:
             message = f"Config file {click.format_filename(f)} not found"
             raise AudibleCliException(message)
 
