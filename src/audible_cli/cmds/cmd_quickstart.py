@@ -148,7 +148,6 @@ def cli(session, ctx):
         m = f"Config file {config.filename} already exists. Quickstart will " \
             f"not overwrite existing files."
 
-        
         logger.error(m)
         raise click.Abort()
 
