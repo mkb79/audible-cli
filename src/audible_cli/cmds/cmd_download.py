@@ -140,7 +140,7 @@ class DownloadCounter:
         logger.debug(f"Currently saved voucher files: {self.voucher_saved}")
 
     def as_dict(self) -> dict:
-        counter = {
+        return {
             "aax": self.aax,
             "aaxc": self.aaxc,
             "chapter": self.chapter,
@@ -149,7 +149,6 @@ class DownloadCounter:
             "voucher": self.voucher,
             "voucher_saved": self.voucher_saved
         }
-        return counter
 
     def has_downloads(self):
         for _, v in self.as_dict().items():
@@ -157,6 +156,7 @@ class DownloadCounter:
                 return True
 
         return False
+
 
 counter = DownloadCounter()
 
@@ -270,7 +270,7 @@ async def download_aaxc(
         codec, _ = item._get_codec(quality)
         if codec is not None:
             filepath = pathlib.Path(
-            output_dir) / f"{base_filename}-{codec}.aaxc"
+                output_dir) / f"{base_filename}-{codec}.aaxc"
             lr_file = filepath.with_suffix(".voucher")
         
             if filepath.is_file() and lr_file.is_file():
