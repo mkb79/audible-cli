@@ -427,6 +427,7 @@ async def main(config, auth, **params):
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
     resolve_podcats = params.get("resolve_podcasts")
+    ignore_podcasts = params.get("ignore_podcasts")
     timeout = params.get("timeout")
     if timeout == 0:
         timeout = None
@@ -504,7 +505,7 @@ async def main(config, auth, **params):
             item = library.get_item_by_asin(job)
             items = [item]
 
-            if item.is_parent_podcast():
+            if not ignore_podcasts and item.is_parent_podcast():
                 items.remove(item)
                 if item._children is None:
                     await item.get_child_items()
@@ -650,7 +651,12 @@ async def main(config, auth, **params):
 @click.option(
     "--resolve-podcasts",
     is_flag=True,
-    help="Resolve podcasts to download single episodes via asin or title"
+    help="Resolve podcasts to download a single episode via asin or title"
+)
+@click.option(
+    "--ignore-podcasts",
+    is_flag=True,
+    help="Ignore a podcast if it have episodes"
 )
 @pass_session
 def cli(session, **params):
