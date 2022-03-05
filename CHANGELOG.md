@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - a counter of downloaded items for the download command
 - the `--verbosity/-v` option; default is INFO
--`wishlist` subcommand
+- `wishlist` subcommand
 - the `--resolve-podcasts` flag to download subcommand; all episodes of a podcast will be fetched at startup, so a single episode can be searched via his title or asin
 - the `--ignore-podcasts` flag to download subcommand; if a podcast contains multiple episodes, the podcast will be ignored
 - the`models.Library.resolve_podcasts` method to append all podcast episodes to given library.
