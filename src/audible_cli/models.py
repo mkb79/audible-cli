@@ -351,7 +351,6 @@ class Library(BaseList):
             resp = await cls.from_api(api_client, params=request_params)
             items = resp._data
             len_items = len(items)
-            print(len_items)
             library.extend(items)
             if len_items < bunch_size:
                 break
