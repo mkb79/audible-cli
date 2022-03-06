@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - a counter of downloaded items for the download command
 - the `--verbosity/-v` option; default is INFO
+- the `--bunch-size` option to the download, library export and library list subcommand; this is only needed on slow internet connections
 - `wishlist` subcommand
 - the `--resolve-podcasts` flag to download subcommand; all episodes of a podcast will be fetched at startup, so a single episode can be searched via his title or asin
 - the `--ignore-podcasts` flag to download subcommand; if a podcast contains multiple episodes, the podcast will be ignored
@@ -18,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - the`models.BaseItem` now holds a list of `response_groups` in the `_response_groups` attribute. 
 - the`--format` option to `library export` subcommand
 - the `models.Catalog` class
+- the `models.Library.from_api_full_sync` method to fetch the full library
 
 ### Changed
 
@@ -30,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `models.BaseItem.full_title` now contains publication name for podcast episodes
 - `models.LibraryItem` now checks the customer rights when calling `LibraryItem._is_downloadable`
 - `models.BaseItem` and `models.BaseList` now holds the `api_client` instead the `locale` and `auth`
+- rename `models.Wishlist.get_from_api` to `models.Wishlist.from_api`
+- rename `models.Library.get_from_api` to `models.Library.from_api`; this method does not fetch the full library for now
 
 ### Misc
 
