@@ -163,7 +163,7 @@ class LibraryItem(BaseItem):
             request_params["response_groups"] = response_groups
 
         request_params["parent_asin"] = self.asin
-        children = await Library.get_from_api(
+        children = await Library.from_api_full_sync(
             api_client=self._client,
             **request_params
         )
@@ -174,7 +174,7 @@ class LibraryItem(BaseItem):
 
                 if "response_groups" in request_params:
                     request_params.pop("response_groups")
-                children = await Catalog.get_from_api(
+                children = await Catalog.from_api(
                     api_client=self._client,
                     **request_params
                 )
@@ -302,7 +302,8 @@ class Library(BaseList):
         response_groups = None
         if isinstance(data, dict):
             response_groups = data.get("response_groups")
-            response_groups = response_groups.replace(" ", "").split(",")
+            if isinstance(response_groups, str):
+                response_groups = response_groups.replace(" ", "").split(",")
             data = data.get("items", data)
         data = [
             LibraryItem(
@@ -314,12 +315,11 @@ class Library(BaseList):
         return data
 
     @classmethod
-    async def get_from_api(
+    async def from_api(
             cls,
             api_client: audible.AsyncClient,
             **request_params
     ):
-
         if "response_groups" not in request_params:
             request_params["response_groups"] = (
                 "contributors, customer_rights, media, price, product_attrs, "
@@ -333,28 +333,32 @@ class Library(BaseList):
                 "periodicals, provided_review, product_details"
             )
 
-        async def fetch_library(params):
-            entire_lib = False
-            if "page" not in params and "num_results" not in params:
-                entire_lib = True
-                params["page"] = 1
-                num_results = 1000
-                params["num_results"] = num_results
-
-            library = []
-            while True:
-                r = await api_client.get("library", params=params)
-                items = r["items"]
-                len_items = len(items)
-                library.extend(items)
-                if not entire_lib or len_items < num_results:
-                    break
-                params["page"] += 1
-            return library
-
-        resp = await fetch_library(request_params)
-
+        resp = await api_client.get("library", **request_params)
         return cls(resp, api_client=api_client)
+
+    @classmethod
+    async def from_api_full_sync(
+            cls,
+            api_client: audible.AsyncClient,
+            bunch_size: int = 1000,
+            **request_params
+    ) -> "Library":
+        request_params["page"] = 1
+        request_params["num_results"] = bunch_size
+
+        library = []
+        while True:
+            resp = await cls.from_api(api_client, params=request_params)
+            items = resp._data
+            len_items = len(items)
+            print(len_items)
+            library.extend(items)
+            if len_items < bunch_size:
+                break
+            request_params["page"] += 1
+
+        resp._data = library
+        return resp
 
     async def resolve_podcats(self):
         podcasts = []
@@ -386,7 +390,7 @@ class Catalog(BaseList):
         return data
 
     @classmethod
-    async def get_from_api(
+    async def from_api(
             cls,
             api_client: audible.AsyncClient,
             **request_params
@@ -412,7 +416,7 @@ class Catalog(BaseList):
 
             catalog = []
             while True:
-                r = await api_client.get("catalog/products", params=params)
+                r = await api_client.get("catalog/products", **params)
                 items = r["products"]
                 len_items = len(items)
                 catalog.extend(items)
@@ -455,7 +459,7 @@ class Wishlist(BaseList):
         return data
 
     @classmethod
-    async def get_from_api(
+    async def from_api(
             cls,
             api_client: audible.AsyncClient,
             **request_params
@@ -471,7 +475,7 @@ class Wishlist(BaseList):
 
             wishlist = []
             while True:
-                r = await api_client.get("wishlist", params=params)
+                r = await api_client.get("wishlist", **params)
                 items = r["products"]
                 len_items = len(items)
                 wishlist.extend(items)

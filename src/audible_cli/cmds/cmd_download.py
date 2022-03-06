@@ -428,6 +428,7 @@ async def main(config, auth, **params):
     no_confirm = params.get("no_confirm")
     resolve_podcats = params.get("resolve_podcasts")
     ignore_podcasts = params.get("ignore_podcasts")
+    bunch_size = params.get("bunch_size")
     timeout = params.get("timeout")
     if timeout == 0:
         timeout = None
@@ -446,9 +447,10 @@ async def main(config, auth, **params):
 
     async with client, api_client:
         # fetch the user library
-        library = await Library.get_from_api(
+        library = await Library.from_api_full_sync(
             api_client,
-            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500"
+            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500",
+            bunch_size=bunch_size
         )
 
         if resolve_podcats:
@@ -658,6 +660,15 @@ async def main(config, auth, **params):
     "--ignore-podcasts",
     is_flag=True,
     help="Ignore a podcast if it have episodes"
+)
+@click.option(
+    "--bunch-size",
+    type=click.IntRange(10, 1000),
+    default=1000,
+    show_default=True,
+    help="How many library items should be requested per request. A lower "
+         "size results in more requests to get the full library. A higher "
+         "size can result in a TimeOutError on low internet connections."
 )
 @pass_session
 def cli(session, **params):

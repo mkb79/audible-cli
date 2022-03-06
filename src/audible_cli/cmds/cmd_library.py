@@ -22,8 +22,10 @@ async def _get_library(auth, **params):
     if timeout == 0:
         timeout = None
 
+    bunch_size = params.get("bunch_size")
+
     async with audible.AsyncClient(auth, timeout=timeout) as client:
-        library = await Library.get_from_api(
+        library = await Library.from_api_full_sync(
             client,
             response_groups=(
                 "contributors, media, price, product_attrs, product_desc, "
@@ -33,7 +35,8 @@ async def _get_library(auth, **params):
                 "category_ladders, claim_code_url, is_downloaded, "
                 "is_finished, is_returnable, origin_asin, pdf_url, "
                 "percent_complete, provided_review"
-            )
+            ),
+            bunch_size=bunch_size
         )
     return library
 
@@ -64,7 +67,7 @@ async def _list_library(auth, **params):
         echo(": ".join(fields))
 
 
-def _prepare_library_for_export(library: dict):
+def _prepare_library_for_export(library: Library):
     keys_with_raw_values = (
         "asin", "title", "subtitle", "runtime_length_min", "is_finished",
         "percent_complete", "release_date"
@@ -178,6 +181,15 @@ async def _export_library(auth, **params):
     show_default=True,
     help="Output format"
 )
+@click.option(
+    "--bunch-size",
+    type=click.IntRange(10, 1000),
+    default=1000,
+    show_default=True,
+    help="How many library items should be requested per request. A lower "
+         "size results in more requests to get the full library. A higher "
+         "size can result in a TimeOutError on low internet connections."
+)
 @pass_session
 def export_library(session, **params):
     """export library"""
@@ -199,6 +211,15 @@ def export_library(session, **params):
         "Increase the timeout time if you got any TimeoutErrors. "
         "Set to 0 to disable timeout."
     )
+)
+@click.option(
+    "--bunch-size",
+    type=click.IntRange(10, 1000),
+    default=1000,
+    show_default=True,
+    help="How many library items should be requested per request. A lower "
+         "size results in more requests to get the full library. A higher "
+         "size can result in a TimeOutError on low internet connections."
 )
 @pass_session
 def list_library(session, **params):
