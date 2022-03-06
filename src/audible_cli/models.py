@@ -119,7 +119,7 @@ class LibraryItem(BaseItem):
 
         best = (None, 0, 0, None)
         for codec in self.available_codecs:
-            if verify is not None and verify == codec["name"]:
+            if verify is not None and verify == codec["name"].upper():
                 return verify, codec["enhanced_codec"]
 
             if codec["name"].startswith("aax_"):

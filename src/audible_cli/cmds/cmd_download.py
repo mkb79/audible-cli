@@ -694,7 +694,7 @@ def cli(session, **params):
                 elif k == "voucher":
                     diff = v - counter.voucher_saved
                     if diff > 0:
-                        echo("Unsaved voucher: {diff}")
+                        echo(f"Unsaved voucher: {diff}")
                     continue
                 echo(f"New {k} files: {v}")
         else:
