@@ -265,6 +265,8 @@ async def download_aaxc(
         client, output_dir, base_filename, item,
         quality, overwrite_existing
 ):
+    lr, url, codec = None, None, None
+
     # https://github.com/mkb79/audible-cli/issues/60
     if not overwrite_existing:
         codec, _ = item._get_codec(quality)
@@ -273,14 +275,32 @@ async def download_aaxc(
                 output_dir) / f"{base_filename}-{codec}.aaxc"
             lr_file = filepath.with_suffix(".voucher")
         
-            if filepath.is_file() and lr_file.is_file():
-                logger.info(
-                    f"File {filepath} already exists. Skip download."
-                )
-                return
-        
-    url, codec, lr = await item.get_aaxc_url(quality)
-    counter.count_voucher()
+            if lr_file.is_file():
+                if filepath.is_file():
+                    logger.info(
+                        f"File {lr_file} already exists. Skip download."
+                    )
+                    logger.info(
+                        f"File {filepath} already exists. Skip download."
+                    )
+                    return
+                else:
+                    logger.info(
+                        f"Loading data from voucher file {lr_file}."
+                    )
+                    async with aiofiles.open(lr_file, "r") as f:
+                        lr = await f.read()
+                    lr = json.loads(lr)
+                    content_metadata = lr["content_license"][
+                        "content_metadata"]
+                    url = httpx.URL(
+                        content_metadata["content_url"]["offline_url"])
+                    codec = content_metadata["content_reference"][
+                        "content_format"]
+
+    if url is None or codec is None or lr is None:
+        url, codec, lr = await item.get_aaxc_url(quality)
+        counter.count_voucher()
 
     if codec.lower() == "mpeg":
         ext = "mp3"
