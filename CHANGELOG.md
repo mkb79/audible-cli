@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- the `--aaxc` flag of the download command now try to check if a file exists before a `licenserequest` is make (issue #60)
+- the `--aaxc` flag of the download command now try to check if a voucher file exists before a `licenserequest` is make (issue #60)
 - the `--aaxc` flag of the download command now downloads mp3/m4a files if the `aaxc` format is not available and the `licenserequest` offers this formats
 - the `download` subcommand now download podcasts
 - *Remove sync code where async code are available. All plugins should take care about this!!!*
