@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- add the `api` command to make requests to the AudibleAPI
 - a counter of downloaded items for the download command
 - the `--verbosity/-v` option; default is INFO
 - the `--bunch-size` option to the download, library export and library list subcommand; this is only needed on slow internet connections
@@ -38,6 +39,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Misc
 
 - bump click to v8
+
+### Bugfix
+
+- removing an error using the `--output` option of the `library export` command
+- fixing some other bugs
 
 ## [0.0.9] - 2022-01-18
 
