@@ -159,7 +159,7 @@ async def _export_library(auth, **params):
 @cli.command("export")
 @click.option(
     "--output", "-o",
-    type=click.Path(),
+    type=click.Path(path_type=pathlib.Path),
     default=pathlib.Path().cwd() / r"library.{format}",
     show_default=True,
     help="output file"
