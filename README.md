@@ -217,6 +217,7 @@ This enables you to "replace" build-in commands very easy.
 
 ## List of known add-ons for `audible-cli`
 
+- [audible-cli-flask](https://github.com/mkb79/audible-cli-flask)
 - [audible-series](https://pypi.org/project/audible-series/)
 
 If you want to add information about your add-on please open a PR or a new issue!
