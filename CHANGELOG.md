@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
--
+### Added
+
+- the `update-check` command now checks if an update for `audible-cli` is available.
 
 ## [0.1.0] - 2022-03-11
 

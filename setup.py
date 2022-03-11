@@ -50,6 +50,7 @@ setup(
         "click>=8",
         "colorama; platform_system=='Windows'",
         "httpx==0.20.*",
+        "packaging",
         "Pillow",
         "tabulate",
         "toml",
