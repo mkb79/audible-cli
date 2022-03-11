@@ -80,3 +80,4 @@ def cli(session, input):
         fn = app_dir / pathlib.Path(k).with_suffix(".json")
         auth = make_auth_file(fn, v)
         auth.to_file(fn)
+

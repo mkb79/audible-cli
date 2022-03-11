@@ -2,19 +2,24 @@ import click
 
 from . import (
     cmd_activation_bytes,
+    cmd_api,
     cmd_download,
     cmd_library,
     cmd_manage,
-    cmd_quickstart
+    cmd_quickstart,
+    cmd_wishlist
 )
 
 cli_cmds = [
     cmd_activation_bytes.cli,
+    cmd_api.cli,
     cmd_download.cli,
     cmd_library.cli,
     cmd_manage.cli,
-    cmd_quickstart.cli
+    cmd_quickstart.cli,
+    cmd_wishlist.cli
 ]
+
 
 def build_in_cmds():
     """
@@ -27,8 +32,10 @@ def build_in_cmds():
     """
     def decorator(group):
         if not isinstance(group, click.Group):
-            raise TypeError("Plugins can only be attached to an instance of "
-                            "click.Group()")
+            raise TypeError(
+                "Plugins can only be attached to an instance of "
+                "click.Group()"
+            )
 
         for cmd in cli_cmds:
             group.add_command(cmd)

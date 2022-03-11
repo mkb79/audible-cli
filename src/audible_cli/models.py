@@ -1,37 +1,35 @@
+import asyncio
+import logging
 import string
 import unicodedata
-from typing import Dict, Optional, Union
+from typing import List, Optional, Union
 
 import audible
 import httpx
-from audible import Authenticator
 from audible.aescipher import decrypt_voucher_from_licenserequest
-from audible.localization import Locale
-from click import secho
+
 
 from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
+from .exceptions import AudibleCliException
 from .utils import LongestSubString
 
 
-class LibraryItem:
-    def __init__(self,
-                 data: dict,
-                 locale: Optional[Locale] = None,
-                 country_code: Optional[str] = None,
-                 auth: Optional[Authenticator] = None):
+logger = logging.getLogger("audible_cli.models")
 
-        if locale is None and country_code is None and auth is None:
-            raise ValueError("No locale, country_code or auth provided.")
-        if locale is not None and country_code is not None:
-            raise ValueError("Locale and country_code provided. Expected only "
-                             "one of them.")
 
-        if country_code is not None:
-            locale = Locale(country_code)
-
-        self._data = data.get("item", data)
-        self._locale = locale or auth.locale
-        self._auth = auth
+class BaseItem:
+    def __init__(
+            self,
+            data: dict,
+            api_client: audible.AsyncClient,
+            parent: Optional["BaseItem"] = None,
+            response_groups: Optional[List] = None
+    ) -> None:
+        self._data = self._prepare_data(data)
+        self._client = api_client
+        self._parent = parent
+        self._response_groups = response_groups
+        self._children: Optional[BaseList] = None
 
     def __iter__(self):
         return iter(self._data)
@@ -45,11 +43,18 @@ class LibraryItem:
         except KeyError:
             return None
 
+    def _prepare_data(self, data: dict) -> dict:
+        return data
+
     @property
     def full_title(self):
         title: str = self.title
         if self.subtitle is not None:
             title = f"{title}: {self.subtitle}"
+
+        if self._parent is not None:
+            title = f"{self._parent.title}: {title}"
+
         return title
 
     @property
@@ -78,36 +83,24 @@ class LibraryItem:
     def get_cover_url(self, res: Union[str, int] = 500):
         images = self.product_images
         res = str(res)
-        if images is None or res not in images:
-            return
-        return images[res]
+        if images is not None and res in images:
+            return images[res]
 
     def get_pdf_url(self):
         if self.pdf_url is not None:
-            domain = self._locale.domain
+            domain = self._client.auth.locale.domain
             return f"https://www.audible.{domain}/companion-file/{self.asin}"
 
-    def _build_aax_request_url(self, codec: str):
-        url = ("https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
-               "FSDownloadContent")
-        params = {
-            "type": "AUDI",
-            "currentTransportMethod": "WIFI",
-            "key": self.asin,
-            "codec": codec
-        }
-        return httpx.URL(url, params=params)
+    def is_parent_podcast(self):
+        if "content_delivery_type" in self and "content_type" in self:
+            if (self.content_delivery_type in ("Periodical", "PodcastParent")
+                    or self.content_type == "Podcast") and self.has_children:
+                return True
 
-    def _extract_link_from_response(self, r: httpx.Response):
-        # prepare link
-        # see https://github.com/mkb79/Audible/issues/3#issuecomment-518099852
-        try:
-            link = r.headers["Location"]
-            domain = self._locale.domain
-            return link.replace("cds.audible.com", f"cds.audible.{domain}")
-        except Exception as e:
-            secho(f"Error: {e} occured. Can't get download link. "
-                  f"Skip asin {self.asin}.")
+
+class LibraryItem(BaseItem):
+    def _prepare_data(self, data: dict) -> dict:
+        return data.get("item", data)
 
     def _get_codec(self, quality: str):
         """If quality is not ``best``, ensures the given quality is present in
@@ -115,15 +108,19 @@ class LibraryItem:
         """
         assert quality in ("best", "high", "normal",)
 
+        # if available_codecs is None the item can't be downloaded as aax
+        if self.available_codecs is None:
+            return None, None
+
         verify = None
         if quality != "best":
             verify = CODEC_HIGH_QUALITY if quality == "high" else \
                 CODEC_NORMAL_QUALITY
 
-        best = (None, 0, 0)
+        best = (None, 0, 0, None)
         for codec in self.available_codecs:
-            if verify is not None and verify == codec["enhanced_codec"]:
-                return verify
+            if verify is not None and verify == codec["name"].upper():
+                return verify, codec["enhanced_codec"]
 
             if codec["name"].startswith("aax_"):
                 name = codec["name"]
@@ -133,148 +130,120 @@ class LibraryItem:
                     bitrate = int(bitrate)
                     if sample_rate > best[1] or bitrate > best[2]:
                         best = (
-                            codec["enhanced_codec"],
+                            codec["name"].upper(),
                             sample_rate,
-                            bitrate
+                            bitrate,
+                            codec["enhanced_codec"]
                         )
 
                 except ValueError:
-                    secho(f"Unexpected codec name: {name}")
+                    logger.warning(f"Unexpected codec name: {name}")
                     continue
 
         if verify is not None:
-            secho(f"{verify} codec was not found, using {best[0]} instead")
+            logger.info(f"{verify} codec was not found, using {best[0]} instead")
 
-        return best[0]
+        return best[0], best[3]
 
-    @property
-    def _is_downloadable(self):
-        if self.content_delivery_type in ("Periodical",):
-            return False
+    async def get_child_items(self, **request_params) -> Optional["Library"]:
+        """Get child elements of MultiPartBooks and Podcasts
+        
+        With these all parts of a MultiPartBook or all episodes of a Podcasts
+        can be shown.
+        """
 
-        return True
-
-    def get_aax_url(self,
-                    quality: str = "high",
-                    client: Optional[httpx.Client] = None):
-
-        if not self._is_downloadable:
-            secho(f"{self.full_title} is not downloadable. Skip item.",
-                  fg="red")
+        # Only items with content_delivery_type 
+        # MultiPartBook or Periodical have child elemts
+        if not self.has_children:
             return
 
-        codec = self._get_codec(quality)
+        if "response_groups" not in request_params and \
+                self._response_groups is not None:
+            response_groups = ", ".join(self._response_groups)
+            request_params["response_groups"] = response_groups
+
+        request_params["parent_asin"] = self.asin
+        children = await Library.from_api_full_sync(
+            api_client=self._client,
+            **request_params
+        )
+
+        if self.is_parent_podcast() and "episode_count" in self and \
+                self.episode_count is not None:
+            if int(self.episode_count) != len(children):
+
+                if "response_groups" in request_params:
+                    request_params.pop("response_groups")
+                children = await Catalog.from_api(
+                    api_client=self._client,
+                    **request_params
+                )
+
+        for child in children:
+            child._parent = self
+
+        self._children = children
+
+        return children
+
+    def is_downloadable(self):
+        # customer_rights must be in response_groups
+        if self.customer_rights is not None:
+            if not self.customer_rights["is_consumable_offline"]:
+                return False
+            else:
+                return True
+
+    async def get_aax_url(self, quality: str = "high"):
+
+        if not self.is_downloadable():
+            raise AudibleCliException(
+                f"{self.full_title} is not downloadable. Skip item."
+            )
+
+        codec, codec_name = self._get_codec(quality)
         if codec is None:
-            secho(f"{self.full_title} is not downloadable. No AAX codec found.",
-                  fg="red")
-            return
-        url = self._build_aax_request_url(codec)
-        if client is None:
-            assert self._auth is not None
-            with httpx.Client(auth=self._auth) as client:
-                resp = client.head(url=url, follow_redirects=False)
-        else:
-            resp = client.head(url=url, follow_redirects=False)
+            raise AudibleCliException(
+                f"{self.full_title} is not downloadable in AAX format"
+            )
 
-        return self._extract_link_from_response(resp), codec
+        domain = self._client.auth.locale.domain
+        url = f"https://www.audible.{domain}/library/download"
+        params = {
+            "asin": self.asin,
+            "codec": codec
+        }
+        return httpx.URL(url, params=params), codec_name
 
-    async def aget_aax_url(self,
-                           quality: str = "high",
-                           client: Optional[httpx.AsyncClient] = None):
-
-        if not self._is_downloadable:
-            secho(f"{self.full_title} is not downloadable. Skip item.",
-                  fg="red")
-            return
-
-        codec = self._get_codec(quality)
-        if codec is None:
-            secho(f"{self.full_title} is not downloadable. No AAX codec found.",
-                  fg="red")
-            return
-        url = self._build_aax_request_url(codec)
-        if client is None:
-            assert self._auth is not None
-            async with httpx.AsyncClient(auth=self._auth) as client:
-                resp = await client.head(url=url, follow_redirects=False)
-        else:
-            resp = await client.head(url=url, follow_redirects=False)
-
-        return self._extract_link_from_response(resp), codec
-
-    @staticmethod
-    def _build_aaxc_request_body(quality: str):
+    async def get_aaxc_url(self, quality: str = "high"):
         assert quality in ("best", "high", "normal",)
-        return {
+
+        body = {
             "supported_drm_types": ["Mpeg", "Adrm"],
             "quality": "Extreme" if quality in ("best", "high") else "Normal",
             "consumption_type": "Download",
-            "response_groups": ("last_position_heard, pdf_url, "
-                                "content_reference, chapter_info")
+            "response_groups": (
+                "last_position_heard, pdf_url, content_reference, chapter_info"
+            )
         }
 
-    @staticmethod
-    def _extract_url_from_aaxc_response(r: Dict):
-        return r["content_license"]["content_metadata"]["content_url"][
-            "offline_url"]
+        lr = await self._client.post(
+            f"content/{self.asin}/licenserequest",
+            body=body
+        )
 
-    @staticmethod
-    def _extract_codec_from_aaxc_response(r: Dict):
-        return r["content_license"]["content_metadata"]["content_reference"][
-            "content_format"]
+        content_metadata = lr["content_license"]["content_metadata"]
+        url = httpx.URL(content_metadata["content_url"]["offline_url"])
+        codec = content_metadata["content_reference"]["content_format"]
 
-    @staticmethod
-    def _decrypt_voucher_from_aaxc_response(r: Dict, auth: Authenticator):
-        voucher = decrypt_voucher_from_licenserequest(auth, r)
-        r["content_license"]["license_response"] = voucher
-        return r
+        voucher = decrypt_voucher_from_licenserequest(self._client.auth, lr)
+        lr["content_license"]["license_response"] = voucher
 
-    def get_aaxc_url(self,
-                     quality: str = "high",
-                     api_client: Optional[audible.Client] = None):
+        return url, codec, lr
 
-        body = self._build_aaxc_request_body(quality)
-        if api_client is None:
-            assert self._auth is not None
-            cc = self._locale.country_code
-            with audible.Client(auth=self._auth,
-                                country_code=cc) as api_client:
-                lr = api_client.post(
-                    f"content/{self.asin}/licenserequest", body=body)
-        else:
-            lr = api_client.post(f"content/{self.asin}/licenserequest",
-                                 body=body)
-
-        url = self._extract_url_from_aaxc_response(lr)
-        codec = self._extract_codec_from_aaxc_response(lr)
-        dlr = self._decrypt_voucher_from_aaxc_response(lr, api_client.auth)
-
-        return url, codec, dlr
-
-    async def aget_aaxc_url(self,
-                            quality: str = "high",
-                            api_client: Optional[audible.AsyncClient] = None):
-
-        body = self._build_aaxc_request_body(quality)
-        if api_client is None:
-            assert self._auth is not None
-            cc = self._locale.country_code
-            async with audible.AsyncClient(auth=self._auth,
-                                           country_code=cc) as api_client:
-                lr = await api_client.post(
-                    f"content/{self.asin}/licenserequest", body=body)
-        else:
-            lr = await api_client.post(f"content/{self.asin}/licenserequest",
-                                       body=body)
-
-        url = self._extract_url_from_aaxc_response(lr)
-        codec = self._extract_codec_from_aaxc_response(lr)
-        dlr = self._decrypt_voucher_from_aaxc_response(lr, api_client.auth)
-
-        return url, codec, dlr
-
-    def _build_metadata_request_url(self, quality: str):
+    async def get_content_metadata(self, quality: str = "high"):
         assert quality in ("best", "high", "normal",)
+
         url = f"content/{self.asin}/metadata"
         params = {
             "response_groups": "last_position_heard, content_reference, "
@@ -282,154 +251,33 @@ class LibraryItem:
             "quality": "Extreme" if quality in ("best", "high") else "Normal",
             "drm_type": "Adrm"
         }
-        return url, params
 
-    def get_content_metadata(self,
-                             quality: str = "high",
-                             api_client: Optional[audible.Client] = None):
-
-        url, params = self._build_metadata_request_url(quality)
-        if api_client is None:
-            assert self._auth is not None
-            cc = self._locale.country_code
-            with audible.Client(auth=self._auth,
-                                country_code=cc) as api_client:
-                metadata = api_client.get(url, params=params)
-        else:
-            metadata = api_client.get(url, params=params)
-
-        return metadata
-
-    async def aget_content_metadata(self,
-                                    quality: str = "high",
-                                    api_client: Optional[
-                                        audible.AsyncClient] = None):
-
-        url, params = self._build_metadata_request_url(quality)
-        if api_client is None:
-            assert self._auth is not None
-            cc = self._locale.country_code
-            async with audible.AsyncClient(auth=self._auth,
-                                           country_code=cc) as api_client:
-                metadata = await api_client.get(url, params=params)
-        else:
-            metadata = await api_client.get(url, params=params)
+        metadata = await self._client.get(url, params=params)
 
         return metadata
 
 
-class Library:
-    def __init__(self,
-                 data: Union[dict, list],
-                 locale: Optional[Locale] = None,
-                 country_code: Optional[str] = None,
-                 auth: Optional[Authenticator] = None):
+class WishlistItem(BaseItem):
+    pass
 
-        if locale is None and country_code is None and auth is None:
-            raise ValueError("No locale, country_code or auth provided.")
-        if locale is not None and country_code is not None:
-            raise ValueError("Locale and country_code provided. Expected only "
-                             "one of them.")
 
-        locale = Locale(country_code) if country_code else locale
-        self._locale = locale or auth.locale
-        self._auth = auth
+class BaseList:
+    def __init__(
+            self,
+            data: Union[dict, list],
+            api_client: audible.AsyncClient
+    ):
+        self._client = api_client
+        self._data = self._prepare_data(data)
 
-        if isinstance(data, dict):
-            data = data.get("items", data)
-        self._data = [LibraryItem(i, locale=self._locale, auth=self._auth)
-                      for i in data]
+    def __len__(self):
+        return len(self._data)
 
     def __iter__(self):
         return iter(self._data)
 
-    @classmethod
-    def get_from_api(cls,
-                     api_client: audible.Client,
-                     locale: Optional[Locale] = None,
-                     country_code: Optional[str] = None,
-                     close_session: bool = False,
-                     **request_params):
-
-        def fetch_library(params):
-            entire_lib = False
-            if "page" not in params and "num_results" not in params:
-                entire_lib = True
-                params["page"] = 1
-                num_results = 1000
-                params["num_results"] = num_results
-
-            library = []
-            while True:
-                r = api_client.get(
-                    "library", params=params)
-                items = r["items"]
-                len_items = len(items)
-                library.extend(items)
-                if not entire_lib or len_items < num_results:
-                    break
-                params["page"] += 1
-            return library
-
-        if locale is not None and country_code is not None:
-            raise ValueError("Locale and country_code provided. Expected only "
-                             "one of them.")
-
-        locale = Locale(country_code) if country_code else locale
-        if locale:
-            api_client.locale = locale
-
-        if close_session:
-            with api_client:
-                resp = fetch_library(request_params)
-        else:
-            resp = fetch_library(request_params)
-
-        return cls(resp, auth=api_client.auth)
-
-    @classmethod
-    async def aget_from_api(cls,
-                            api_client: audible.AsyncClient,
-                            locale: Optional[Locale] = None,
-                            country_code: Optional[str] = None,
-                            close_session: bool = False,
-                            **request_params):
-
-        async def fetch_library(params):
-            entire_lib = False
-            if "page" not in params and "num_results" not in params:
-                entire_lib = True
-                params["page"] = 1
-                num_results = 1000
-                params["num_results"] = num_results
-
-            library = []
-            while True:
-                r = await api_client.get(
-                    "library", params=params)
-                items = r["items"]
-                len_items = len(items)
-                library.extend(items)
-                if not entire_lib or len_items < num_results:
-                    break
-                params["page"] += 1
-            return library
-
-        if locale is not None and country_code is not None:
-            raise ValueError("Locale and country_code provided. Expected only "
-                             "one of them.")
-
-        locale = Locale(country_code) if country_code else locale
-        if locale:
-            api_client.locale = locale
-
-        if close_session:
-            async with api_client:
-                resp = await fetch_library(request_params)
-        else:
-            resp = await fetch_library(request_params)
-
-        return cls(resp, auth=api_client.auth)
+    def _prepare_data(self, data: Union[dict, list]) -> Union[dict, list]:
+        return data
 
     def get_item_by_asin(self, asin):
         try:
@@ -437,7 +285,7 @@ class Library:
         except StopIteration:
             return None
 
-    def asin_in_library(self, asin):
+    def has_asin(self, asin):
         return True if self.get_item_by_asin(asin) else False
 
     def search_item_by_title(self, search_title, p=80):
@@ -447,3 +295,194 @@ class Library:
             match.append([i, accuracy]) if accuracy >= p else ""
 
         return match
+
+
+class Library(BaseList):
+    def _prepare_data(self, data: Union[dict, list]) -> list:
+        response_groups = None
+        if isinstance(data, dict):
+            response_groups = data.get("response_groups")
+            if isinstance(response_groups, str):
+                response_groups = response_groups.replace(" ", "").split(",")
+            data = data.get("items", data)
+        data = [
+            LibraryItem(
+                data=i,
+                api_client=self._client,
+                response_groups=response_groups
+            ) for i in data
+        ]
+        return data
+
+    @classmethod
+    async def from_api(
+            cls,
+            api_client: audible.AsyncClient,
+            **request_params
+    ):
+        if "response_groups" not in request_params:
+            request_params["response_groups"] = (
+                "contributors, customer_rights, media, price, product_attrs, "
+                "product_desc, product_extended_attrs, product_plan_details, "
+                "product_plans, rating, sample, sku, series, reviews, ws4v, "
+                "origin, relationships, review_attrs, categories, "
+                "badge_types, category_ladders, claim_code_url, in_wishlist, "
+                "is_archived, is_downloaded, is_finished, is_playable, "
+                "is_removable, is_returnable, is_visible, listening_status, "
+                "order_details, origin_asin, pdf_url, percent_complete, "
+                "periodicals, provided_review, product_details"
+            )
+
+        resp = await api_client.get("library", **request_params)
+        return cls(resp, api_client=api_client)
+
+    @classmethod
+    async def from_api_full_sync(
+            cls,
+            api_client: audible.AsyncClient,
+            bunch_size: int = 1000,
+            **request_params
+    ) -> "Library":
+        request_params["page"] = 1
+        request_params["num_results"] = bunch_size
+
+        library = []
+        while True:
+            resp = await cls.from_api(api_client, params=request_params)
+            items = resp._data
+            len_items = len(items)
+            library.extend(items)
+            if len_items < bunch_size:
+                break
+            request_params["page"] += 1
+
+        resp._data = library
+        return resp
+
+    async def resolve_podcats(self):
+        podcasts = []
+        for i in self:
+            if i.is_parent_podcast():
+                podcasts.append(i)
+
+        podcast_items = await asyncio.gather(
+            *[i.get_child_items() for i in podcasts]
+        )
+        for i in podcast_items:
+            self._data.extend(i._data)
+
+
+class Catalog(BaseList):
+    def _prepare_data(self, data: Union[dict, list]) -> list:
+        response_groups = None
+        if isinstance(data, dict):
+            response_groups = data.get("response_groups")
+            response_groups = response_groups.replace(" ", "").split(",")
+            data = data.get("products", data)
+        data = [
+            LibraryItem(
+                data=i,
+                api_client=self._client,
+                response_groups=response_groups
+            ) for i in data
+        ]
+        return data
+
+    @classmethod
+    async def from_api(
+            cls,
+            api_client: audible.AsyncClient,
+            **request_params
+    ):
+
+        if "response_groups" not in request_params:
+            request_params["response_groups"] = (
+                "contributors, customer_rights, media, price, product_attrs, "
+                "product_desc, product_extended_attrs, product_plan_details, "
+                "product_plans, rating, sample, sku, series, reviews, ws4v, "
+                "relationships, review_attrs, categories, category_ladders, "
+                "claim_code_url, in_wishlist, listening_status, periodicals, "
+                "provided_review, product_details"
+            )
+
+        async def fetch_catalog(params):
+            entire_lib = False
+            if "page" not in params and "num_results" not in params:
+                entire_lib = True
+                params["page"] = 0
+                num_results = 50
+                params["num_results"] = num_results
+
+            catalog = []
+            while True:
+                r = await api_client.get("catalog/products", **params)
+                items = r["products"]
+                len_items = len(items)
+                catalog.extend(items)
+                if not entire_lib or len_items < num_results:
+                    break
+                params["page"] += 1
+            return catalog
+
+        resp = await fetch_catalog(request_params)
+
+        return cls(resp, api_client=api_client)
+
+    async def resolve_podcats(self):
+        podcasts = []
+        for i in self:
+            if i.is_parent_podcast():
+                podcasts.append(i)
+
+        podcast_items = await asyncio.gather(
+            *[i.get_child_items() for i in podcasts]
+        )
+        for i in podcast_items:
+            self._data.extend(i._data)
+
+
+class Wishlist(BaseList):
+    def _prepare_data(self, data: Union[dict, list]) -> list:
+        response_groups = None
+        if isinstance(data, dict):
+            response_groups = data.get("response_groups")
+            response_groups = response_groups.replace(" ", "").split(",")
+            data = data.get("products", data)
+        data = [
+            WishlistItem(
+                data=i,
+                api_client=self._client,
+                response_groups=response_groups
+            ) for i in data
+        ]
+        return data
+
+    @classmethod
+    async def from_api(
+            cls,
+            api_client: audible.AsyncClient,
+            **request_params
+    ):
+
+        async def fetch_wishlist(params):
+            entire_lib = False
+            if "page" not in params and "num_results" not in params:
+                entire_lib = True
+                params["page"] = 0
+                num_results = 50
+                params["num_results"] = num_results
+
+            wishlist = []
+            while True:
+                r = await api_client.get("wishlist", **params)
+                items = r["products"]
+                len_items = len(items)
+                wishlist.extend(items)
+                if not entire_lib or len_items < num_results:
+                    break
+                params["page"] += 1
+            return wishlist
+
+        resp = await fetch_wishlist(request_params)
+
+        return cls(resp, api_client=api_client)

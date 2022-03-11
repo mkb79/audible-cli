@@ -1,3 +1,4 @@
+import logging
 import sys
 
 import audible
@@ -10,7 +11,10 @@ from ..constants import CONFIG_FILE, DEFAULT_AUTH_FILE_EXTENSION
 from ..utils import build_auth_file
 
 
-def tabulate_summary(d: dict) -> None:
+logger = logging.getLogger("audible_cli.cmds.cmd_quickstart")
+
+
+def tabulate_summary(d: dict) -> str:
     head = ["Option", "Value"]
     data = [
         ["profile_name", d.get("profile_name")],
@@ -92,8 +96,10 @@ an authentication to the audible server is necessary to register a new device.
 
         echo()
         d["auth_file"] = prompt(
-            "Please enter a new name for the auth file (or just Enter to exit)",
-            default="")
+            "Please enter a new name for the auth file "
+            "(or just Enter to exit)",
+            default=""
+        )
         if not d["auth_file"]:
             sys.exit(1)
 
@@ -122,8 +128,10 @@ an authentication to the audible server is necessary to register a new device.
 
     if not d["external_login"]:
         d["audible_username"] = prompt("Please enter your amazon username")
-        d["audible_password"] = prompt("Please enter your amazon password",
-                                       hide_input=True, confirmation_prompt=True)
+        d["audible_password"] = prompt(
+            "Please enter your amazon password",
+            hide_input=True, confirmation_prompt=True
+        )
 
     return d
 
@@ -140,8 +148,8 @@ def cli(session, ctx):
         m = f"Config file {config.filename} already exists. Quickstart will " \
             f"not overwrite existing files."
 
-        ctx.fail(m) if ctx else echo(m)
-        sys.exit()
+        logger.error(m)
+        raise click.Abort()
 
     d = ask_user(config)
 

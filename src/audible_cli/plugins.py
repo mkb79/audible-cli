@@ -7,18 +7,19 @@ import pathlib
 import sys
 import traceback
 from importlib import import_module
+from typing import Union
 
 import click
 
 
-def from_folder(plugin_dir):
+def from_folder(plugin_dir: Union[str, pathlib.Path]):
     """
     A decorator to register external CLI commands to an instance of
     `click.Group()`.
 
     Parameters
     ----------
-    plugin_dir : type
+    plugin_dir : str
         Desc.
 
     Returns
@@ -40,7 +41,7 @@ def from_folder(plugin_dir):
                 mod = import_module(mod_name)
                 name = mod_name[4:] if mod.cli.name == "cli" else mod.cli.name
                 group.add_command(mod.cli, name=name)
-            except Exception:
+            except Exception:  # noqa
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
                 # other than explain the error.
@@ -74,7 +75,7 @@ def from_entry_point(entry_point_group: str):
         for entry_point in entry_point_group or ():
             try:
                 group.add_command(entry_point.load())
-            except Exception:
+            except Exception:  # noqa
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
                 # other than explain the error.
@@ -89,7 +90,7 @@ class BrokenCommand(click.Command):
     """
     Rather than completely crash the CLI when a broken plugin is loaded, this
     class provides a modified help message informing the user that the plugin
-    is broken and they should contact the owner. If the user executes the
+    is broken, and they should contact the owner. If the user executes the
     plugin or specifies `--help` a traceback is reported showing the exception
     the plugin loader encountered.
     """
