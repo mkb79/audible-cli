@@ -7,7 +7,6 @@ from . import (
     cmd_library,
     cmd_manage,
     cmd_quickstart,
-    cmd_update_check,
     cmd_wishlist
 )
 
@@ -18,7 +17,6 @@ cli_cmds = [
     cmd_library.cli,
     cmd_manage.cli,
     cmd_quickstart.cli,
-    cmd_update_check.cli,
     cmd_wishlist.cli
 ]
 
