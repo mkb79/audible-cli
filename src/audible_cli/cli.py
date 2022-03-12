@@ -3,6 +3,8 @@ import sys
 from pkg_resources import iter_entry_points
 
 import click
+import httpx
+from packaging.version import parse
 
 from .cmds import build_in_cmds, cmd_quickstart
 from .config import (
@@ -19,6 +21,49 @@ logger = logging.getLogger("audible_cli")
 click_basic_config(logger)
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+
+
+def version_option(**kwargs):
+    def callback(ctx, param, value):
+        if not value or ctx.resilient_parsing:
+            return
+
+        message = f"audible-cli, version {__version__}"
+        click.echo(message, color=ctx.color, nl=False)
+
+        url = "https://api.github.com/repos/mkb79/audible-cli/releases/latest"
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        logger.debug(f"Requesting Github API for latest release information")
+        try:
+            response = httpx.get(url, headers=headers, follow_redirects=True)
+            response.raise_for_status()
+        except Exception as e:
+            logger.error(e)
+            click.Abort()
+
+        content = response.json()
+
+        current_version = parse(__version__)
+        latest_version = parse(content["tag_name"])
+
+        html_url = content["html_url"]
+        if latest_version > current_version:
+            click.echo(
+                f" (update available)\nVisit {html_url} "
+                f"for information about the new release.",
+                color=ctx.color
+            )
+        else:
+            click.echo(" (up-to-date)", color=ctx.color)
+
+        ctx.exit()
+
+    kwargs.setdefault("is_flag", True)
+    kwargs.setdefault("expose_value", False)
+    kwargs.setdefault("is_eager", True)
+    kwargs.setdefault("help", "Show the version and exit.")
+    kwargs["callback"] = callback
+    return click.option("--version", **kwargs)
 
 
 @plugins.from_folder(get_plugin_dir())
@@ -39,7 +84,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
     expose_value=False,
     help="The password for the profile auth file."
 )
-@click.version_option(__version__)
+@version_option()
 @click_verbosity_option(logger)
 def cli():
     """Entrypoint for all other subcommands and groups."""
@@ -47,7 +92,7 @@ def cli():
 
 @click.command(context_settings=CONTEXT_SETTINGS)
 @click.pass_context
-@click.version_option(__version__)
+@version_option()
 @click_verbosity_option(logger)
 def quickstart(ctx):
     """Entrypoint for the quickstart command"""
