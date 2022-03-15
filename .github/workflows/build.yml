@@ -60,6 +60,14 @@ jobs:
                 zip -r9 audible_mac audible
             OUT_FILE_NAME: audible_mac.zip
             ASSET_MIME: application/zip
+          - os: macos-latest
+            TARGET: macos
+            CMD_BUILD: >
+                pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                cd dist/ &&
+                zip -r9 audible_mac_dir audible
+            OUT_FILE_NAME: audible_mac_dir.zip
+            ASSET_MIME: application/zip 
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
