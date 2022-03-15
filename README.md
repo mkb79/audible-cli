@@ -43,8 +43,25 @@ pip install .
 ## Standalone executables
 
 If you don't want to install `Python` and `audible-cli` on your machine, you can
-find standalone exe files on the [releases](https://github.com/mkb79/audible-cli/releases) 
+find standalone exe files below or on the [releases](https://github.com/mkb79/audible-cli/releases) 
 page. At this moment only Windows and linux are supported.
+
+### Links
+
+1. Linux
+    - [debian 11](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_debian_11.zip):ö
+    - [ubuntu latest](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_ubuntu_latest.zip)
+    - [ubuntu 18.04](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_ubuntu_18_04.zip)
+
+2. [macOS latest](https://github.com/mkb79/audible-cli/releases/download/latest/audible_mac.zip)
+
+3. Windows
+    - [Windows single file](https://github.com/mkb79/audible-cli/releases/download/latest/audible_win.zip)
+    - [Windows directory](https://github.com/mkb79/audible-cli/releases/download/latest/audible_win_dir.zip)
+
+On every execution, the binary code must be extracted. On Windows machines this can result in a long start time. If you use `audible-cli` often, I would prefer the `directory` package for Windows!
+
+### Creating executables on your own
 
 You can create them yourself this way
 
@@ -56,6 +73,8 @@ pip install .[pyi]
 pyinstall audible.spec
 
 ```
+
+### Hints
 
 There are some limitations when using plugins. The binarys maybe does not contain
 all the dependencies from your plugin script. 
