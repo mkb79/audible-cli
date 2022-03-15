@@ -418,7 +418,11 @@ def queue_job(
         )
 
 
-async def main(config, auth, **params):
+async def main(session, **params):
+    auth = session.auth
+    config = session.config
+    profile = session.selected_profile
+
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
 
     # which item(s) to download
@@ -455,8 +459,7 @@ async def main(config, auth, **params):
 
     filename_mode = params.get("filename_mode")
     if filename_mode == "config":
-        filename_mode = config.profile_config.get("filename_mode") or \
-                        config.app_config.get("filename_mode") or \
+        filename_mode = config.get_profile_option(profile, "filename_mode") or \
                         "ascii"
 
     headers = {
@@ -695,10 +698,8 @@ def cli(session, **params):
     """download audiobook(s) from library"""
     loop = asyncio.get_event_loop()
     ignore_httpx_ssl_eror(loop)
-    auth = session.auth
-    config = session.config
     try:
-        loop.run_until_complete(main(config, auth, **params))
+        loop.run_until_complete(main(session, **params))
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
