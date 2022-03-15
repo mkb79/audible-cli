@@ -49,7 +49,7 @@ page. At this moment only Windows and linux are supported.
 ### Links
 
 1. Linux
-    - [debian 11](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_debian_11.zip):ö
+    - [debian 11](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_debian_11.zip)
     - [ubuntu latest](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_ubuntu_latest.zip)
     - [ubuntu 18.04](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_ubuntu_18_04.zip)
 
