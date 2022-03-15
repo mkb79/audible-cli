@@ -44,7 +44,7 @@ pip install .
 
 If you don't want to install `Python` and `audible-cli` on your machine, you can
 find standalone exe files below or on the [releases](https://github.com/mkb79/audible-cli/releases) 
-page. At this moment only Windows and linux are supported.
+page. At this moment Windows, Linux and MacOS are supported.
 
 ### Links
 
