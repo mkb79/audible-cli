@@ -24,7 +24,21 @@ logger = logging.getLogger("audible_cli.config")
 
 
 class ConfigFile:
-    """The config file data"""
+    """Presents an audible-cli configuration file
+
+    Instantiate a :class:`~audible_cli.config.ConfigFile` will load the file 
+    content by default. To create a new config file, the ``file_exists`` 
+    argument must be set to ``False``.
+    
+    Audible-cli configuration files are written in the toml markup language. 
+    It has a main section named `APP` and sections for each profile named 
+    `profile.<profile_name>`. 
+    
+    Args:
+        filename: The file path to the config file
+        file_exists: If ``True``, the file must exists and the file content 
+            is loaded.
+    """
 
     def __init__(
             self,
@@ -50,24 +64,38 @@ class ConfigFile:
 
     @property
     def filename(self) -> pathlib.Path:
+        """Returns the path to the config file"""
         return self._config_file
 
     @property
     def dirname(self) -> pathlib.Path:
+        """Returns the path to the config file directory"""
         return self.filename.parent
 
     @property
     def data(self) -> Dict[str, Union[str, Dict]]:
+        """Returns the configuration data"""
         return self._config_data
 
     @property
     def app_config(self) -> Dict[str, str]:
+        """Returns the configuration data for the APP section"""
         return self.data["APP"]
 
     def has_profile(self, name: str) -> bool:
+        """Check if a profile with these name are in the configuration data
+        
+        Args:
+            name: The name of the profile
+        """
         return name in self.data["profile"]
 
     def get_profile(self, name: str) -> Dict[str, str]:
+        """Returns the configuration data for these profile name
+        
+        Args:
+            name: The name of the profile
+        """
         if not self.has_profile(name):
             raise AudibleCliException(f"Profile {name} does not exists")
         return self.data["profile"][name]
@@ -84,6 +112,17 @@ class ConfigFile:
             option: str,
             default: Optional[str] = None
     ) -> str:
+        """Returns the value for an option for the given profile.
+        
+        Looks first, if an option is in the ``profile`` section. If not, it 
+        searchs for the option in the ``APP`` section. If not found, it 
+        returns the ``default``.
+        
+        Args:
+            profile: The name of the profile
+            option: The name of the option to search for
+            default: The default value to return, if the option is not found
+        """
         profile = self.get_profile(profile)
         if option in profile:
             return profile[option]
@@ -100,6 +139,17 @@ class ConfigFile:
             write_config: bool = True,
             **additional_options
     ) -> None:
+        """Adds a new profile to the config
+        
+        Args:
+            name: The name of the profile
+            auth_file: The name of the auth_file
+            country_code: The country code of the marketplace to use with 
+                this profile
+            is_primary: If ``True``, this profile is set as primary in the 
+                ``APP`` section
+            write_config: If ``True``, save the config to file
+        """
 
         if self.has_profile(name):
             raise ProfileAlreadyExists(name)
@@ -118,6 +168,18 @@ class ConfigFile:
             self.write_config()
 
     def delete_profile(self, name: str, write_config: bool = True) -> None:
+        """Deletes a profile from config
+        
+        Args:
+            name: The name of the profile
+            write_config: If ``True``, save the config to file
+
+        Note:    
+            Does not delete the auth file.
+        """
+        if not self.has_profile(name):
+            raise AudibleCliException(f"Profile {name} does not exists")
+
         del self.data["profile"][name]
         if write_config:
             self.write_config()
@@ -126,6 +188,12 @@ class ConfigFile:
             self,
             filename: Optional[Union[str, pathlib.Path]] = None
     ) -> None:
+        """Write the config data to file
+        
+        Args:
+            filename: If not ``None`` the config is written to these file path 
+                instead of ``self.filename``
+        """
         f = pathlib.Path(filename or self.filename).resolve()
 
         if not f.parent.is_dir():
