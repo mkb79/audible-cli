@@ -56,6 +56,10 @@ class ConfigFile:
                     f"does not exists"
                 )
             file_data = toml.load(filename)
+            logger.debug(
+                f"Config loaded from "
+                f"{click.format_filename(filename, shorten=True)}"
+            )
 
         config_data.update(file_data)
 
@@ -164,6 +168,8 @@ class ConfigFile:
         if is_primary:
             self.data["APP"]["primary_profile"] = name
 
+        logger.info(f"Profile {name} added to config")
+
         if write_config:
             self.write_config()
 
@@ -181,6 +187,9 @@ class ConfigFile:
             raise AudibleCliException(f"Profile {name} does not exists")
 
         del self.data["profile"][name]
+
+        logger.info(f"Profile {name} removed from config")
+
         if write_config:
             self.write_config()
 
@@ -201,45 +210,60 @@ class ConfigFile:
 
         toml.dump(self.data, f.open("w"))
 
+        click_f = click.format_filename(f, shorten=True)
+        logger.info(f"Config written to {click_f}")
+
 
 class Session:
-    """Holds the settings for the current session."""
+    """Holds the settings for the current session"""
     def __init__(self) -> None:
-        self._auth: Optional[Authenticator] = None
+        self._auths: Dict[str, Authenticator] = {}
         self._config: Optional[CONFIG_FILE] = None
         self._params: Dict[str, Any] = {}
-        self._app_dir = get_app_dir()
-        self._plugin_dir = get_plugin_dir()
+        self._app_dir: pathlib.Path = get_app_dir()
+        self._plugin_dir: pathlib.Path = get_plugin_dir()
+
         logger.debug(f"Audible-cli version: {__version__}")
         logger.debug(f"App dir: {click.format_filename(self.app_dir)}")
         logger.debug(f"Plugin dir: {click.format_filename(self.plugin_dir)}")
 
     @property
     def params(self):
+        """Returns the parameter of the session
+        
+        Parameter are usually added using the ``add_param_to_session`` 
+        callback on a click option. This way an option from a parent command 
+        can be accessed from his subcommands.
+        """
         return self._params
 
     @property
     def app_dir(self):
+        """Returns the path of the app dir"""
         return self._app_dir
 
     @property
     def plugin_dir(self):
+        """Returns the path of the plugin dir"""
         return self._plugin_dir
 
     @property
     def config(self):
+        """Returns the ConfigFile for this session"""
         if self._config is None:
             conf_file = self.app_dir / CONFIG_FILE
-            logger.debug(
-                f"Load config from file: "
-                f"{click.format_filename(conf_file, shorten=True)}"
-            )
             self._config = ConfigFile(conf_file)
 
         return self._config
 
     @property
     def selected_profile(self):
+        """Returns the selected config profile name for this session
+        
+        The `profile` to use must be set using the ``add_param_to_session`` 
+        callback of a click option. Otherwise the primary profile from the 
+        config is used.
+        """
         profile = self.params.get("profile") or self.config.primary_profile
         if profile is None:
             message = (
@@ -254,6 +278,16 @@ class Session:
             profile: str,
             password: Optional[str] = None
     ) -> audible.Authenticator:
+        """Returns an Authenticator for a profile
+        
+        If an Authenticator for this profile is already loaded, it will 
+        return the Authenticator without reloading it. This way an session can 
+        hold multiple Authenticators for different profiles. Commands can use 
+        this to make API requests for more than one profile.
+        """
+        if profile in self._auths:
+            return self._auths[profile]
+
         auth_file = self.config.get_profile_option(profile, "auth_file")
         country_code = self.config.get_profile_option(profile, "country_code")
         password = password or self.params.get("password")
@@ -270,19 +304,23 @@ class Session:
                     "Auth file is encrypted but no/wrong password is provided"
                 )
                 password = click.prompt(
-                    "Please enter the password (or enter to exit)",
+                    "Please enter the auth-file password (or enter to exit)",
                     hide_input=True,
                     default="")
                 if len(password) == 0:
                     raise click.Abort()
 
+        click_f = click.format_filename(auth_file, shorten=True)
+        logger.debug(f"Auth file {click_f} loaded.")
+
+        self._auths[profile] = auth
         return auth
 
     @property
     def auth(self):
-        if self._auth is None:
-            profile = self.selected_profile
-
+        """Returns the Authenticator for the selected profile"""
+        profile = self.selected_profile
+        if profile not in self._auths:
             logger.debug(f"Selected profile: {profile}")
 
             if not self.config.has_profile(profile):
@@ -290,7 +328,7 @@ class Session:
                 raise AudibleCliException(message)
 
             self._auth = self.get_auth_for_profile(profile)
-        return self._auth
+        return self._auths[profile]
 
 
 pass_session = click.make_pass_decorator(Session, ensure=True)
@@ -309,7 +347,10 @@ def get_plugin_dir() -> pathlib.Path:
 
 
 def add_param_to_session(ctx: click.Context, param, value):
-    """Add a parameter to :class:`Session` `param` attribute"""
+    """Add a parameter to :class:`Session` `param` attribute
+    
+    This is usually used as a callback for a click option
+    """
     session = ctx.ensure_object(Session)
     session.params[param.name] = value
     return value
