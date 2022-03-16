@@ -6,7 +6,6 @@ import pathlib
 import ssl
 import logging
 import sys
-import unicodedata
 
 import aiofiles
 import audible
@@ -159,22 +158,6 @@ class DownloadCounter:
 
 
 counter = DownloadCounter()
-
-
-def create_base_filename(item, mode):
-    if "ascii" in mode:
-        base_filename = item.full_title_slugify
-
-    elif "unicode" in mode:
-        base_filename = unicodedata.normalize("NFKD", item.full_title)
-
-    else:
-        base_filename = item.asin
-
-    if "asin" in mode:
-        base_filename = item.asin + "_" + base_filename
-
-    return base_filename
 
 
 async def download_cover(
@@ -357,7 +340,7 @@ def queue_job(
         quality,
         overwrite_existing
 ):
-    base_filename = create_base_filename(item=item, mode=filename_mode)
+    base_filename = item.create_base_filename(filename_mode)
 
     if get_cover:
         queue.put_nowait(
@@ -540,7 +523,7 @@ async def main(session, **params):
                     if i.asin not in jobs:
                         items.append(i)
 
-                podcast_dir = create_base_filename(item, filename_mode)
+                podcast_dir = item.create_base_filename(filename_mode)
                 odir = output_dir / podcast_dir
                 if not odir.is_dir():
                     odir.mkdir(parents=True)
