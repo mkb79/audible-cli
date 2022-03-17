@@ -284,6 +284,10 @@ class Session:
         return the Authenticator without reloading it. This way an session can 
         hold multiple Authenticators for different profiles. Commands can use 
         this to make API requests for more than one profile.
+        
+        Args:
+            profile: The name of the profile
+            password: The password of the auth file
         """
         if profile in self._auths:
             return self._auths[profile]
