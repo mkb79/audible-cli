@@ -448,10 +448,11 @@ async def main(session, **params):
     headers = {
         "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
     }
-    client = httpx.AsyncClient(auth=auth, timeout=timeout, headers=headers)
     api_client = audible.AsyncClient(auth, timeout=timeout)
+    api_client.session.headers.update(headers)
+    client = api_client.session
 
-    async with client, api_client:
+    async with api_client:
         # fetch the user library
         library = await Library.from_api_full_sync(
             api_client,
