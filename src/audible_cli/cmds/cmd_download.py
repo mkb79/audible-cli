@@ -248,7 +248,8 @@ async def download_chapters(
 async def download_aax(
         client, output_dir, base_filename, item, quality, overwrite_existing
 ):
-    url, codec = await item.get_aax_url(quality)
+    # url, codec = await item.get_aax_url(quality)
+    url, codec = await item.get_aax_url_old(quality)
     filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
     dl = Downloader(
