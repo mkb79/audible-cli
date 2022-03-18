@@ -253,7 +253,7 @@ async def download_aax(
     filepath = output_dir / filename
     dl = Downloader(
         url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax"]
+        ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
     )
     downloaded = await dl.run(pb=True)
 
@@ -323,8 +323,14 @@ async def download_aaxc(
         counter.count_voucher_saved()
 
     dl = Downloader(
-        url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a"]
+        url,
+        filepath,
+        client,
+        overwrite_existing,
+        [
+            "audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a",
+            "audio/audible"
+        ]
     )
     downloaded = await dl.run(pb=True)
 
