@@ -8,7 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- the `update-check` command now checks if an update for `audible-cli` is available.
+- the `--version` option now checks if an update for `audible-cli` is available.
+
+### Bugfix
+
+- fix a bug where counting an item if the download fails
+- fix an issue where some items could not be downloaded do tue wrong content type
+- fix an issue where an aax downloaded failed with a `codec doesn't support full file assembly` message
 
 ## [0.1.0] - 2022-03-11
 
