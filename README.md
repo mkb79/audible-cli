@@ -70,8 +70,12 @@ You can create them yourself this way
 git clone https://github.com/mkb79/audible-cli.git
 cd audible-cli
 pip install .[pyi]
-pyinstall audible.spec
 
+# onefile output
+pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint
+
+# onedir output
+pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint
 ```
 
 ### Hints
