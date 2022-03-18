@@ -487,14 +487,18 @@ async def main(session, **params):
             match = library.search_item_by_title(title)
             full_match = [i for i in match if i[1] == 100]
     
-            if full_match or match:
+            if match:
                 echo(f"\nFound the following matches for '{title}'")
-                table_data = [[i[1], i[0].full_title, i[0].asin]
-                              for i in full_match or match]
-                head = ["% match", "title", "asin"]
+
+                table_data = []
+                for count, i in enumerate(full_match or match, start=1):
+                    table_data.append(
+                        [count, i[1], i[0].full_title, i[0].asin]
+                    )
+                head = ["#", "% match", "title", "asin"]
                 table = tabulate(
                     table_data, head, tablefmt="pretty",
-                    colalign=("center", "left", "center"))
+                    colalign=("center", "center", "left", "center"))
                 echo(table)
     
                 if no_confirm or click.confirm(
@@ -509,7 +513,6 @@ async def main(session, **params):
                 )
 
         queue = asyncio.Queue()
-
         for job in jobs:
             item = library.get_item_by_asin(job)
             items = [item]
