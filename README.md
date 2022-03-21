@@ -162,10 +162,44 @@ runs on the interactive mode, so you have to answer multiple questions to finish
 
 ## Commands
 
-Call `audible -h` to let you show all main subcommands. At this time, there 
-are the `activation-bytes`, `download`, `library` and `manage` subcommands. 
-The `manage` command has multiple subcommands. So take a look with the 
-`audible manage -h` and `audible manage <subcommand> -h`. 
+Call `audible -h` to show the help and a list of all available subcommands. You can show the help for each subcommand like so: `audible <subcommand> -h`. If a subcommand has another subcommands, you csn do it the same way.
+
+At this time, there the following buildin subcommands: 
+
+- `activation-bytes`
+- `api`
+- `download`
+- `library`
+    - `export`
+    - `list`
+- `manage`
+    - `auth-file`
+        - `add`
+        - `remove`
+    - `config`
+        - `edit`
+    - `profile`
+        - `add`
+        - `list`
+        - `remove`
+- `quickstart`
+- `wishlist`
+    - `export`
+    - `list`
+
+## Verbosity option
+
+There are 6 different verbosity levels:
+
+- debug
+- info
+- warning
+- error
+- critical
+
+By default the verbosity level is set to `info`. You can provide another level like so: `audible -v <level> <subcommand> ...`.
+
+If you use the `download` sudcommand with the `--all` flag there will be a huge output. Best practise is to set the verbosity level to `error` with `audible -v error download --all ...`
 
 ## Plugins
 
