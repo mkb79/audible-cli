@@ -231,12 +231,13 @@ async def download_chapters(
 async def download_aax(
         client, output_dir, base_filename, item, quality, overwrite_existing
 ):
-    url, codec = await item.get_aax_url(quality)
+    # url, codec = await item.get_aax_url(quality)
+    url, codec = await item.get_aax_url_old(quality)
     filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
     dl = Downloader(
         url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax"]
+        ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
     )
     downloaded = await dl.run(pb=True)
 
@@ -306,8 +307,14 @@ async def download_aaxc(
         counter.count_voucher_saved()
 
     dl = Downloader(
-        url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a"]
+        url,
+        filepath,
+        client,
+        overwrite_existing,
+        [
+            "audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a",
+            "audio/audible"
+        ]
     )
     downloaded = await dl.run(pb=True)
 

@@ -215,6 +215,42 @@ class LibraryItem(BaseItem):
             else:
                 return True
 
+    async def get_aax_url_old(self, quality: str = "high"):
+        if not self.is_downloadable():
+            raise AudibleCliException(
+                f"{self.full_title} is not downloadable. Skip item."
+            )
+
+        codec, codec_name = self._get_codec(quality)
+        if codec is None:
+            raise AudibleCliException(
+                f"{self.full_title} is not downloadable in AAX format"
+            )
+        
+        url = (
+            "https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
+            "FSDownloadContent"
+        )
+        params = {
+           "type": "AUDI",
+           "currentTransportMethod": "WIFI",
+           "key": self.asin,
+           "codec": codec_name
+        }
+        r = await self._client.session.head(url, params=params)
+
+        try:
+            link = r.headers["location"]
+            api_url = self._client._api_url
+            domain = str(api_url)[20:]
+            link = link.replace("cds.audible.com", f"cds.audible.{domain}")
+        except Exception as e:
+            raise AudibleCliException(
+                f"Can not get download url for asin {self.asin} with message {e}"
+            )
+
+        return httpx.URL(link), codec_name
+
     async def get_aax_url(self, quality: str = "high"):
 
         if not self.is_downloadable():

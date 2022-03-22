@@ -44,20 +44,22 @@ pip install .
 
 If you don't want to install `Python` and `audible-cli` on your machine, you can
 find standalone exe files below or on the [releases](https://github.com/mkb79/audible-cli/releases) 
-page. At this moment only Windows and linux are supported.
+page. At this moment Windows, Linux and MacOS are supported.
 
 ### Links
 
 1. Linux
-    - [debian 11](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_debian_11.zip)
-    - [ubuntu latest](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_ubuntu_latest.zip)
-    - [ubuntu 18.04](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_ubuntu_18_04.zip)
+    - [debian 11 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_debian_11.zip)
+    - [ubuntu latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_latest.zip)
+    - [ubuntu 18.04 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_18_04.zip)
 
-2. [macOS latest](https://github.com/mkb79/audible-cli/releases/download/latest/audible_mac.zip)
+2. macOS
+    - [macOS latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac.zip)
+    - [macOS latest onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac_dir.zip)
 
 3. Windows
-    - [Windows single file](https://github.com/mkb79/audible-cli/releases/download/latest/audible_win.zip)
-    - [Windows directory](https://github.com/mkb79/audible-cli/releases/download/latest/audible_win_dir.zip)
+    - [Windows onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win.zip)
+    - [Windows onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win_dir.zip)
 
 On every execution, the binary code must be extracted. On Windows machines this can result in a long start time. If you use `audible-cli` often, I would prefer the `directory` package for Windows!
 
@@ -70,8 +72,12 @@ You can create them yourself this way
 git clone https://github.com/mkb79/audible-cli.git
 cd audible-cli
 pip install .[pyi]
-pyinstall audible.spec
 
+# onefile output
+pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint
+
+# onedir output
+pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint
 ```
 
 ### Hints
@@ -158,10 +164,44 @@ runs on the interactive mode, so you have to answer multiple questions to finish
 
 ## Commands
 
-Call `audible -h` to let you show all main subcommands. At this time, there 
-are the `activation-bytes`, `download`, `library` and `manage` subcommands. 
-The `manage` command has multiple subcommands. So take a look with the 
-`audible manage -h` and `audible manage <subcommand> -h`. 
+Call `audible -h` to show the help and a list of all available subcommands. You can show the help for each subcommand like so: `audible <subcommand> -h`. If a subcommand has another subcommands, you csn do it the same way.
+
+At this time, there the following buildin subcommands: 
+
+- `activation-bytes`
+- `api`
+- `download`
+- `library`
+    - `export`
+    - `list`
+- `manage`
+    - `auth-file`
+        - `add`
+        - `remove`
+    - `config`
+        - `edit`
+    - `profile`
+        - `add`
+        - `list`
+        - `remove`
+- `quickstart`
+- `wishlist`
+    - `export`
+    - `list`
+
+## Verbosity option
+
+There are 6 different verbosity levels:
+
+- debug
+- info
+- warning
+- error
+- critical
+
+By default the verbosity level is set to `info`. You can provide another level like so: `audible -v <level> <subcommand> ...`.
+
+If you use the `download` sudcommand with the `--all` flag there will be a huge output. Best practise is to set the verbosity level to `error` with `audible -v error download --all ...`
 
 ## Plugins
 

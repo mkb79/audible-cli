@@ -222,7 +222,7 @@ class Downloader:
             logger.error(
                 f"Error downloading {self._file}. Message: {msg}"
             )
-            return
+            return False
 
         if length is not None:
             downloaded_size = self._tmp_file.stat().st_size
@@ -232,7 +232,7 @@ class Downloader:
                     f"Error downloading {self._file}. File size missmatch. "
                     f"Expected size: {length}; Downloaded: {downloaded_size}"
                 )
-                return
+                return False
 
         if self._expected_content_type is not None:
             if content_type not in self._expected_content_type:
@@ -245,7 +245,7 @@ class Downloader:
                     f"Expected type(s): {self._expected_content_type}; "
                     f"Got: {content_type}; Message: {msg}"
                 )
-                return
+                return False
 
         file = self._file
         tmp_file = self._tmp_file
@@ -259,6 +259,7 @@ class Downloader:
             f"File {self._file} downloaded to {self._file.parent} "
             f"in {elapsed}."
         )
+        return True
 
     def _remove_tmp_file(self):
         self._tmp_file.unlink() if self._tmp_file.exists() else None
@@ -278,8 +279,9 @@ class Downloader:
                         await f.write(chunk)
                         progressbar.update(len(chunk))
 
-            self._postpare(r.elapsed, r.status_code, length, content_type)
-            return True
+            return self._postpare(
+                r.elapsed, r.status_code, length, content_type
+            )
 
     async def _load(self):
         r = await self._client.get(self._url, follow_redirects=True)
@@ -287,8 +289,7 @@ class Downloader:
         content_type = r.headers.get("Content-Type")
         async with aiofiles.open(self._tmp_file, mode="wb") as f:
             await f.write(r.content)
-        self._postpare(r.elapsed, r.status_code, length, content_type)
-        return True
+        return self._postpare(r.elapsed, r.status_code, length, content_type)
 
     async def run(self, stream: bool = True, pb: bool = True):
         if not self._file_okay():
