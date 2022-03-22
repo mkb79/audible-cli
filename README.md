@@ -49,15 +49,17 @@ page. At this moment Windows, Linux and MacOS are supported.
 ### Links
 
 1. Linux
-    - [debian 11](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_debian_11.zip)
-    - [ubuntu latest](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_ubuntu_latest.zip)
-    - [ubuntu 18.04](https://github.com/mkb79/audible-cli/releases/download/latest/audible_linux_ubuntu_18_04.zip)
+    - [debian 11 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_debian_11.zip)
+    - [ubuntu latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_latest.zip)
+    - [ubuntu 18.04 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_18_04.zip)
 
-2. [macOS latest](https://github.com/mkb79/audible-cli/releases/download/latest/audible_mac.zip)
+2. macOS
+    - [macOS latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac.zip)
+    - [macOS latest onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac_dir.zip)
 
 3. Windows
-    - [Windows single file](https://github.com/mkb79/audible-cli/releases/download/latest/audible_win.zip)
-    - [Windows directory](https://github.com/mkb79/audible-cli/releases/download/latest/audible_win_dir.zip)
+    - [Windows onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win.zip)
+    - [Windows onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win_dir.zip)
 
 On every execution, the binary code must be extracted. On Windows machines this can result in a long start time. If you use `audible-cli` often, I would prefer the `directory` package for Windows!
 
