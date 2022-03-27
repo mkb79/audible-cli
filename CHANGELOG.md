@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 -
 
+## [0.1.2] - 2022-03-27
+
+### Bugfix
+
+- bump Audible to v0.7.1 to fix a bug when register a new device with pre-Amazon account
+
 ## [0.1.1] - 2022-03-20
 
 ### Added
