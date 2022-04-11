@@ -49,7 +49,7 @@ setup(
         "audible==0.8.0",
         "click>=8",
         "colorama; platform_system=='Windows'",
-        "httpx>=0.20.*,<=0.22.*",
+        "httpx>=0.20.0,<0.23.0",
         "packaging",
         "Pillow",
         "tabulate",
