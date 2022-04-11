@@ -46,7 +46,7 @@ setup(
     ],
     install_requires=[
         "aiofiles",
-        "audible==0.7.2",
+        "audible==0.8.0",
         "click>=8",
         "colorama; platform_system=='Windows'",
         "httpx>=0.20.*,<=0.22.*",
