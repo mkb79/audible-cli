@@ -8,13 +8,17 @@ import logging
 import sys
 
 import aiofiles
-import audible
 import click
 import httpx
 from click import echo
 from tabulate import tabulate
 
-from ..config import pass_session
+from ..decorators import (
+    bunch_size_option,
+    run_async,
+    timeout_option,
+    pass_session
+)
 from ..exceptions import DirectoryDoesNotExists, NotFoundError
 from ..models import Library
 from ..utils import Downloader
@@ -408,11 +412,132 @@ def queue_job(
         )
 
 
-async def main(session, **params):
-    auth = session.auth
-    config = session.config
-    profile = session.selected_profile
+def display_counter():
+    if counter.has_downloads():
+        echo("The download ended with the following result:")
+        for k, v in counter.as_dict().items():
+            if v == 0:
+                continue
 
+            if k == "voucher_saved":
+                k = "voucher"
+            elif k == "voucher":
+                diff = v - counter.voucher_saved
+                if diff > 0:
+                    echo(f"Unsaved voucher: {diff}")
+                continue
+            echo(f"New {k} files: {v}")
+    else:
+        echo("No new files downloaded.")
+
+
+@click.command("download")
+@click.option(
+    "--output-dir", "-o",
+    type=click.Path(exists=True, dir_okay=True),
+    default=pathlib.Path().cwd(),
+    help="output dir, uses current working dir as default"
+)
+@click.option(
+    "--all",
+    is_flag=True,
+    help="download all library items, overrides --asin and --title options"
+)
+@click.option(
+    "--asin", "-a",
+    multiple=True,
+    help="asin of the audiobook"
+)
+@click.option(
+    "--title", "-t",
+    multiple=True,
+    help="tile of the audiobook (partial search)"
+)
+@click.option(
+    "--aax",
+    is_flag=True,
+    help="Download book in aax format"
+)
+@click.option(
+    "--aaxc",
+    is_flag=True,
+    help="Download book in aaxc format incl. voucher file"
+)
+@click.option(
+    "--quality", "-q",
+    default="best",
+    show_default=True,
+    type=click.Choice(["best", "high", "normal"]),
+    help="download quality"
+)
+@click.option(
+    "--pdf",
+    is_flag=True,
+    help="downloads the pdf in addition to the audiobook"
+)
+@click.option(
+    "--cover",
+    is_flag=True,
+    help="downloads the cover in addition to the audiobook"
+)
+@click.option(
+    "--cover-size",
+    type=click.Choice(["252", "315", "360", "408", "500", "558", "570", "882",
+                       "900", "1215"]),
+    default="500",
+    help="the cover pixel size"
+)
+@click.option(
+    "--chapter",
+    is_flag=True,
+    help="saves chapter metadata as JSON file"
+)
+@click.option(
+    "--no-confirm", "-y",
+    is_flag=True,
+    help="start without confirm"
+)
+@click.option(
+    "--overwrite",
+    is_flag=True,
+    help="rename existing files"
+)
+@click.option(
+    "--ignore-errors",
+    is_flag=True,
+    help="ignore errors and continue with the rest"
+)
+@click.option(
+    "--jobs", "-j",
+    type=int,
+    default=3,
+    show_default=True,
+    help="number of simultaneous downloads"
+)
+@click.option(
+    "--filename-mode", "-f",
+    type=click.Choice(
+        ["config", "ascii", "asin_ascii", "unicode", "asin_unicode"]
+    ),
+    default="config",
+    help="Filename mode to use. [default: config]"
+)
+@timeout_option()
+@click.option(
+    "--resolve-podcasts",
+    is_flag=True,
+    help="Resolve podcasts to download a single episode via asin or title"
+)
+@click.option(
+    "--ignore-podcasts",
+    is_flag=True,
+    help="Ignore a podcast if it have episodes"
+)
+@bunch_size_option()
+@pass_session
+@run_async(display_counter)
+async def cli(session, **params):
+    """download audiobook(s) from library"""
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
 
     # which item(s) to download
@@ -442,21 +567,17 @@ async def main(session, **params):
     no_confirm = params.get("no_confirm")
     resolve_podcats = params.get("resolve_podcasts")
     ignore_podcasts = params.get("ignore_podcasts")
-    bunch_size = params.get("bunch_size")
-    timeout = params.get("timeout")
-    if timeout == 0:
-        timeout = None
+    bunch_size = session.params.get("bunch_size")
 
     filename_mode = params.get("filename_mode")
     if filename_mode == "config":
-        filename_mode = config.get_profile_option(profile, "filename_mode") or \
-                        "ascii"
+        filename_mode = session.config.get_profile_option(
+            session.selected_profile, "filename_mode") or "ascii"
 
     headers = {
         "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
     }
-    api_client = audible.AsyncClient(auth, timeout=timeout)
-    api_client.session.headers.update(headers)
+    api_client = session.get_client(headers=headers)
     client = api_client.session
 
     async with api_client:
@@ -567,150 +688,3 @@ async def main(session, **params):
         # the consumer is still awaiting an item, cancel it
         for consumer in consumers:
             consumer.cancel()
-
-
-@click.command("download")
-@click.option(
-    "--output-dir", "-o",
-    type=click.Path(exists=True, dir_okay=True),
-    default=pathlib.Path().cwd(),
-    help="output dir, uses current working dir as default"
-)
-@click.option(
-    "--all",
-    is_flag=True,
-    help="download all library items, overrides --asin and --title options"
-)
-@click.option(
-    "--asin", "-a",
-    multiple=True,
-    help="asin of the audiobook"
-)
-@click.option(
-    "--title", "-t",
-    multiple=True,
-    help="tile of the audiobook (partial search)"
-)
-@click.option(
-    "--aax",
-    is_flag=True,
-    help="Download book in aax format"
-)
-@click.option(
-    "--aaxc",
-    is_flag=True,
-    help="Download book in aaxc format incl. voucher file"
-)
-@click.option(
-    "--quality", "-q",
-    default="best",
-    show_default=True,
-    type=click.Choice(["best", "high", "normal"]),
-    help="download quality"
-)
-@click.option(
-    "--pdf",
-    is_flag=True,
-    help="downloads the pdf in addition to the audiobook"
-)
-@click.option(
-    "--cover",
-    is_flag=True,
-    help="downloads the cover in addition to the audiobook"
-)
-@click.option(
-    "--cover-size",
-    type=click.Choice(["252", "315", "360", "408", "500", "558", "570", "882",
-                       "900", "1215"]),
-    default="500",
-    help="the cover pixel size"
-)
-@click.option(
-    "--chapter",
-    is_flag=True,
-    help="saves chapter metadata as JSON file"
-)
-@click.option(
-    "--no-confirm", "-y",
-    is_flag=True,
-    help="start without confirm"
-)
-@click.option(
-    "--overwrite",
-    is_flag=True,
-    help="rename existing files"
-)
-@click.option(
-    "--ignore-errors",
-    is_flag=True,
-    help="ignore errors and continue with the rest"
-)
-@click.option(
-    "--jobs", "-j",
-    type=int,
-    default=3,
-    show_default=True,
-    help="number of simultaneous downloads"
-)
-@click.option(
-    "--filename-mode", "-f",
-    type=click.Choice(
-        ["config", "ascii", "asin_ascii", "unicode", "asin_unicode"]
-    ),
-    default="config",
-    help="Filename mode to use. [default: config]"
-)
-@click.option(
-    "--timeout",
-    type=click.INT,
-    default=10,
-    show_default=True,
-    help="Increase the timeout time if you got any TimeoutErrors. "
-         "Set to 0 to disable timeout."
-)
-@click.option(
-    "--resolve-podcasts",
-    is_flag=True,
-    help="Resolve podcasts to download a single episode via asin or title"
-)
-@click.option(
-    "--ignore-podcasts",
-    is_flag=True,
-    help="Ignore a podcast if it have episodes"
-)
-@click.option(
-    "--bunch-size",
-    type=click.IntRange(10, 1000),
-    default=1000,
-    show_default=True,
-    help="How many library items should be requested per request. A lower "
-         "size results in more requests to get the full library. A higher "
-         "size can result in a TimeOutError on low internet connections."
-)
-@pass_session
-def cli(session, **params):
-    """download audiobook(s) from library"""
-    loop = asyncio.get_event_loop()
-    ignore_httpx_ssl_eror(loop)
-    try:
-        loop.run_until_complete(main(session, **params))
-    finally:
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        loop.close()
-
-        if counter.has_downloads():
-            echo("The download ended with the following result:")
-            for k, v in counter.as_dict().items():
-                if v == 0:
-                    continue
-    
-                if k == "voucher_saved":
-                    k = "voucher"
-                elif k == "voucher":
-                    diff = v - counter.voucher_saved
-                    if diff > 0:
-                        echo(f"Unsaved voucher: {diff}")
-                    continue
-                echo(f"New {k} files: {v}")
-        else:
-            echo("No new files downloaded.")

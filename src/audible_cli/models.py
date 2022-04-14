@@ -412,6 +412,7 @@ class Library(BaseList):
             if len_items < bunch_size:
                 break
             request_params["page"] += 1
+            print(request_params["page"])
 
         resp._data = library
         return resp

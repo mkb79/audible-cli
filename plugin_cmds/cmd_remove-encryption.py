@@ -14,7 +14,7 @@ import subprocess
 from shutil import which
 
 import click
-from audible_cli.config import pass_session
+from audible_cli.decoratos import pass_session
 from click import echo, secho
 
 
@@ -170,7 +170,7 @@ class FFMeta:
         self._ffmeta_parsed["CHAPTER"] = new_chapters
 
 
-def decrypt_aax(files, session):
+def decrypt_aax(files, activation_bytes):
     for file in files:
         outfile = file.with_suffix(".m4b")
         metafile = file.with_suffix(".meta")
@@ -181,10 +181,8 @@ def decrypt_aax(files, session):
             secho(f"file {outfile} already exists Skip.", fg="blue")
             continue
     
-        ab = session.auth.activation_bytes
-    
         cmd = ["ffmpeg",
-               "-activation_bytes", ab,
+               "-activation_bytes", activation_bytes,
                "-i", str(file),
                "-f", "ffmetadata",
                str(metafile)]
@@ -196,7 +194,7 @@ def decrypt_aax(files, session):
         click.echo("Replaced all titles.")
     
         cmd = ["ffmpeg",
-               "-activation_bytes", ab,
+               "-activation_bytes", activation_bytes,
                "-i", str(file),
                "-i", str(metafile_new),
                "-map_metadata", "0",
@@ -208,7 +206,7 @@ def decrypt_aax(files, session):
         metafile_new.unlink()
 
 
-def decrypt_aaxc(files, session):
+def decrypt_aaxc(files):
     for file in files:
         metafile = file.with_suffix(".meta")
         metafile_new = file.with_suffix(".new.meta")
@@ -296,6 +294,6 @@ def cli(session, **options):
             else:
                 secho(f"file suffix {file.suffix} not supported", fg="red")
 
-    decrypt_aaxc(jobs["aaxc"], session)
-    decrypt_aax(jobs["aax"], session)
+    decrypt_aaxc(jobs["aaxc"])
+    decrypt_aax(jobs["aax"], session.auth.activation_bytes)
 

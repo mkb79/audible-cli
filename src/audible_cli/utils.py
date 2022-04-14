@@ -1,4 +1,5 @@
 import asyncio
+import csv
 import io
 import logging
 import pathlib
@@ -300,3 +301,17 @@ class Downloader:
                 await self._load()
         finally:
             self._remove_tmp_file()
+
+
+def export_to_csv(
+    file: pathlib.Path,
+    data: list,
+    headers: Union[list, tuple],
+    dialect: str
+):
+    with file.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=headers, dialect=dialect)
+        writer.writeheader()
+
+        for i in data:
+            writer.writerow(i)

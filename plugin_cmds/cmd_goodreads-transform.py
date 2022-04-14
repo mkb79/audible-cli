@@ -1,13 +1,16 @@
-import asyncio
-import csv
 import logging
 import pathlib
 from datetime import datetime, timezone
 
-import audible
 import click
-from audible_cli.config import pass_session
+from audible_cli.decorators import (
+    bunch_size_option,
+    run_async,
+    timeout_option,
+    pass_session
+)
 from audible_cli.models import Library
+from audible_cli.utils import export_to_csv
 from isbntools.app import isbn_from_words
 
 
@@ -22,64 +25,37 @@ logger = logging.getLogger("audible_cli.cmds.cmd_goodreads-transform")
     show_default=True,
     help="output file"
 )
-@click.option(
-    "--timeout", "-t",
-    type=click.INT,
-    default=10,
-    show_default=True,
-    help=(
-        "Increase the timeout time if you got any TimeoutErrors. "
-        "Set to 0 to disable timeout."
-    )
-)
-@click.option(
-    "--bunch-size",
-    type=click.IntRange(10, 1000),
-    default=1000,
-    show_default=True,
-    help="How many library items should be requested per request. A lower "
-         "size results in more requests to get the full library. A higher "
-         "size can result in a TimeOutError on low internet connections."
-)
+@timeout_option()
+@bunch_size_option()
 @pass_session
-def cli(session, **params):
+@run_async()
+async def cli(session, **params):
     """YOUR COMMAND DESCRIPTION"""
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(_goodreads_transform(session.auth, **params))
-    finally:
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        loop.close()
-
-
-async def _goodreads_transform(auth, **params):
     output = params.get("output")
 
     logger.debug("fetching library")
-    library = await _get_library(auth, **params)
+    library = await _get_library(session)
 
     logger.debug("prepare library")
     library = _prepare_library_for_export(library)
 
     logger.debug("write data rows to file")
-    with output.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["isbn", "Date Added", "Date Read", "Title"])
 
-        for row in library:
-            writer.writerow(row)
+    headers = ("isbn", "Date Added", "Date Read", "Title")
+    export_to_csv(
+        file=output,
+        data=library,
+        headers=headers,
+        dialect="excel"
+    )
 
     logger.info(f"File saved to {output}")
 
 
-async def _get_library(auth, **params):
-    timeout = params.get("timeout")
-    if timeout == 0:
-        timeout = None
+async def _get_library(session):
+    bunch_size = session.params.get("bunch_size")
 
-    bunch_size = params.get("bunch_size")
-
-    async with audible.AsyncClient(auth, timeout=timeout) as client:
+    async with session.get_client() as client:
         # added product_detail to response_groups to obtain isbn
         library = await Library.from_api_full_sync(
             client,

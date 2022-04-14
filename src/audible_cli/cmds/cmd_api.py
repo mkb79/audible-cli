@@ -6,7 +6,7 @@ import sys
 import click
 from audible import Client
 
-from ..config import pass_session
+from ..decorators import pass_session
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_api")

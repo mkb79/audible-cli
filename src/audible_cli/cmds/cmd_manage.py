@@ -6,7 +6,7 @@ from audible import Authenticator
 from click import echo, secho
 from tabulate import tabulate
 
-from ..config import pass_session
+from ..decorators import pass_session
 from ..utils import build_auth_file
 
 

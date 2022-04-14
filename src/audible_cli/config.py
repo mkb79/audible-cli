@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Union
 import audible
 import click
 import toml
-from audible import Authenticator
+from audible import AsyncClient, Authenticator
 from audible.exceptions import FileEncryptionError
 
 from . import __version__
@@ -292,9 +292,12 @@ class Session:
         if profile in self._auths:
             return self._auths[profile]
 
+        if not self.config.has_profile(profile):
+            message = "Provided profile not found in config."
+            raise AudibleCliException(message)
+
         auth_file = self.config.get_profile_option(profile, "auth_file")
         country_code = self.config.get_profile_option(profile, "country_code")
-        password = password or self.params.get("password")
 
         while True:
             try:
@@ -315,7 +318,7 @@ class Session:
                     raise click.Abort()
 
         click_f = click.format_filename(auth_file, shorten=True)
-        logger.debug(f"Auth file {click_f} loaded.")
+        logger.debug(f"Auth file {click_f} for profile {profile} loaded.")
 
         self._auths[profile] = auth
         return auth
@@ -324,18 +327,23 @@ class Session:
     def auth(self):
         """Returns the Authenticator for the selected profile"""
         profile = self.selected_profile
-        if profile not in self._auths:
-            logger.debug(f"Selected profile: {profile}")
+        password = self.params.get("password")
+        return self.get_auth_for_profile(profile, password)
 
-            if not self.config.has_profile(profile):
-                message = "Provided profile not found in config."
-                raise AudibleCliException(message)
+    def get_client_for_profile(
+            self,
+            profile: str,
+            password: Optional[str] = None,
+            **kwargs
+        ) -> AsyncClient:
+        auth = self.get_auth_for_profile(profile, password)
+        kwargs.setdefault("timeout", self.params.get("timeout"))
+        return AsyncClient(auth=auth, **kwargs)        
 
-            self._auth = self.get_auth_for_profile(profile)
-        return self._auths[profile]
-
-
-pass_session = click.make_pass_decorator(Session, ensure=True)
+    def get_client(self, **kwargs) -> AsyncClient:
+        profile = self.selected_profile
+        password = self.params.get("password")
+        return self.get_client_for_profile(profile, password, **kwargs)
 
 
 def get_app_dir() -> pathlib.Path:
@@ -348,13 +356,3 @@ def get_app_dir() -> pathlib.Path:
 def get_plugin_dir() -> pathlib.Path:
     plugin_dir = os.getenv(PLUGIN_DIR_ENV) or (get_app_dir() / PLUGIN_PATH)
     return pathlib.Path(plugin_dir).resolve()
-
-
-def add_param_to_session(ctx: click.Context, param, value):
-    """Add a parameter to :class:`Session` `param` attribute
-    
-    This is usually used as a callback for a click option
-    """
-    session = ctx.ensure_object(Session)
-    session.params[param.name] = value
-    return value

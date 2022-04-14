@@ -1,15 +1,18 @@
-import asyncio
 import csv
 import json
 import pathlib
-from typing import Union
 
-import audible
 import click
 from click import echo
 
-from ..config import pass_session
+from ..decorators import (
+    bunch_size_option,
+    run_async,
+    timeout_option,
+    pass_session
+)
 from ..models import Library
+from ..utils import export_to_csv
 
 
 @click.group("library")
@@ -17,14 +20,10 @@ def cli():
     """interact with library"""
 
 
-async def _get_library(auth, **params):
-    timeout = params.get("timeout")
-    if timeout == 0:
-        timeout = None
+async def _get_library(session):
+    bunch_size = session.params.get("bunch_size")
 
-    bunch_size = params.get("bunch_size")
-
-    async with audible.AsyncClient(auth, timeout=timeout) as client:
+    async with session.get_client() as client:
         library = await Library.from_api_full_sync(
             client,
             response_groups=(
@@ -39,32 +38,6 @@ async def _get_library(auth, **params):
             bunch_size=bunch_size
         )
     return library
-
-
-async def _list_library(auth, **params):
-    library = await _get_library(auth, **params)
-
-    books = []
-
-    for item in library:
-        asin = item.asin
-        authors = ", ".join(
-            sorted(a["name"] for a in item.authors) if item.authors else ""
-        )
-        series = ", ".join(
-            sorted(s["title"] for s in item.series) if item.series else ""
-        )
-        title = item.title
-        books.append((asin, authors, series, title))
-
-    for asin, authors, series, title in sorted(books):
-        fields = [asin]
-        if authors:
-            fields.append(authors)
-        if series:
-            fields.append(series)
-        fields.append(title)
-        echo(": ".join(fields))
 
 
 def _prepare_library_for_export(library: Library):
@@ -112,28 +85,34 @@ def _prepare_library_for_export(library: Library):
     return prepared_library
 
 
-def _export_to_csv(
-        file: pathlib.Path,
-        data: list,
-        headers: Union[list, tuple],
-        dialect: str
-):
-    with file.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=headers, dialect=dialect)
-        writer.writeheader()
-
-        for i in data:
-            writer.writerow(i)
-
-
-async def _export_library(auth, **params):
+@cli.command("export")
+@click.option(
+    "--output", "-o",
+    type=click.Path(path_type=pathlib.Path),
+    default=pathlib.Path().cwd() / r"library.{format}",
+    show_default=True,
+    help="output file"
+)
+@timeout_option()
+@click.option(
+    "--format", "-f",
+    type=click.Choice(["tsv", "csv", "json"]),
+    default="tsv",
+    show_default=True,
+    help="Output format"
+)
+@bunch_size_option()
+@pass_session
+@run_async()
+async def export_library(session, **params):
+    """export library"""
     output_format = params.get("format")
     output_filename: pathlib.Path = params.get("output")
     if output_filename.suffix == r".{format}":
         suffix = "." + output_format
         output_filename = output_filename.with_suffix(suffix)
 
-    library = await _get_library(auth, **params)
+    library = await _get_library(session)
 
     prepared_library = _prepare_library_for_export(library)
 
@@ -149,84 +128,40 @@ async def _export_library(auth, **params):
             dialect = "excel"
         else:
             dialect = "excel-tab"
-        _export_to_csv(output_filename, prepared_library, headers, dialect)
+        export_to_csv(output_filename, prepared_library, headers, dialect)
 
     if output_format == "json":
         data = json.dumps(prepared_library, indent=4)
         output_filename.write_text(data)
 
 
-@cli.command("export")
-@click.option(
-    "--output", "-o",
-    type=click.Path(path_type=pathlib.Path),
-    default=pathlib.Path().cwd() / r"library.{format}",
-    show_default=True,
-    help="output file"
-)
-@click.option(
-    "--timeout", "-t",
-    type=click.INT,
-    default=10,
-    show_default=True,
-    help=(
-        "Increase the timeout time if you got any TimeoutErrors. "
-        "Set to 0 to disable timeout."
-    )
-)
-@click.option(
-    "--format", "-f",
-    type=click.Choice(["tsv", "csv", "json"]),
-    default="tsv",
-    show_default=True,
-    help="Output format"
-)
-@click.option(
-    "--bunch-size",
-    type=click.IntRange(10, 1000),
-    default=1000,
-    show_default=True,
-    help="How many library items should be requested per request. A lower "
-         "size results in more requests to get the full library. A higher "
-         "size can result in a TimeOutError on low internet connections."
-)
-@pass_session
-def export_library(session, **params):
-    """export library"""
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(_export_library(session.auth, **params))
-    finally:
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        loop.close()
-
-
 @cli.command("list")
-@click.option(
-    "--timeout", "-t",
-    type=click.INT,
-    default=10,
-    show_default=True,
-    help=(
-        "Increase the timeout time if you got any TimeoutErrors. "
-        "Set to 0 to disable timeout."
-    )
-)
-@click.option(
-    "--bunch-size",
-    type=click.IntRange(10, 1000),
-    default=1000,
-    show_default=True,
-    help="How many library items should be requested per request. A lower "
-         "size results in more requests to get the full library. A higher "
-         "size can result in a TimeOutError on low internet connections."
-)
+@timeout_option()
+@bunch_size_option()
 @pass_session
-def list_library(session, **params):
+@run_async()
+async def list_library(session):
     """list titles in library"""
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(_list_library(session.auth, **params))
-    finally:
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        loop.close()
+    library = await _get_library(session)
+
+    books = []
+
+    for item in library:
+        asin = item.asin
+        authors = ", ".join(
+            sorted(a["name"] for a in item.authors) if item.authors else ""
+        )
+        series = ", ".join(
+            sorted(s["title"] for s in item.series) if item.series else ""
+        )
+        title = item.title
+        books.append((asin, authors, series, title))
+
+    for asin, authors, series, title in sorted(books):
+        fields = [asin]
+        if authors:
+            fields.append(authors)
+        if series:
+            fields.append(series)
+        fields.append(title)
+        echo(": ".join(fields))

@@ -7,8 +7,9 @@ from click import echo, secho, prompt
 from tabulate import tabulate
 
 from .. import __version__
-from ..config import ConfigFile, pass_session
+from ..config import ConfigFile
 from ..constants import CONFIG_FILE, DEFAULT_AUTH_FILE_EXTENSION
+from ..decorators import pass_session
 from ..utils import build_auth_file
 
 
