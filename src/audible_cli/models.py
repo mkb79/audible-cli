@@ -338,7 +338,7 @@ class BaseList:
 
     def get_item_by_asin(self, asin):
         try:
-            return next(i for i in self._data if asin in i.asin)
+            return next(i for i in self._data if asin == i.asin)
         except StopIteration:
             return None
 
