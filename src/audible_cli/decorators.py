@@ -16,19 +16,23 @@ logger = logging.getLogger("audible_cli.options")
 pass_session = click.make_pass_decorator(Session, ensure=True)
 
 
-def run_async(finally_func=None):
-    def coro(func):
-        @wraps(func)
+def run_async(func=None, *, finally_func=None):
+    def coro(f):
+        @wraps(f)
         def wrapper(*args, **kwargs):
             loop = asyncio.get_event_loop()
             try:
-                return loop.run_until_complete(func(*args, ** kwargs))
+                return loop.run_until_complete(f(*args, ** kwargs))
             finally:
                 loop.run_until_complete(loop.shutdown_asyncgens())
                 loop.close()
                 if finally_func is not None:
                     finally_func()
         return wrapper
+
+    if callable(func):
+        return coro(func)
+
     return coro
 
 
@@ -42,7 +46,7 @@ def add_param_to_session(ctx: click.Context, param, value):
     return value
 
 
-def version_option(**kwargs):
+def version_option(func=None, **kwargs):
     def callback(ctx, param, value):
         if not value or ctx.resilient_parsing:
             return
@@ -82,24 +86,42 @@ def version_option(**kwargs):
     kwargs.setdefault("is_eager", True)
     kwargs.setdefault("help", "Show the version and exit.")
     kwargs["callback"] = callback
-    return click.option("--version", **kwargs)
+
+    option = click.option("--version", **kwargs)
+
+    if callable(func):
+        return option(func)
+
+    return option
 
 
-def profile_option(**kwargs):
+def profile_option(func=None, **kwargs):
     kwargs.setdefault("callback", add_param_to_session)
     kwargs.setdefault("expose_value", False)
     kwargs.setdefault("help", "The profile to use instead primary profile (case sensitive!).")
-    return click.option("--profile", "-P", **kwargs)
+
+    option = click.option("--profile", "-P", **kwargs)
+
+    if callable(func):
+        return option(func)
+
+    return option
 
 
-def password_option(**kwargs):
+def password_option(func=None, **kwargs):
     kwargs.setdefault("callback", add_param_to_session)
     kwargs.setdefault("expose_value", False)
     kwargs.setdefault("help", "The password for the profile auth file.")
-    return click.option("--password", "-p", **kwargs)
+
+    option = click.option("--password", "-p", **kwargs)
+
+    if callable(func):
+        return option(func)
+
+    return option
 
 
-def verbosity_option(logger=None, **kwargs):
+def verbosity_option(func=None, *, logger=None, **kwargs):
     """A decorator that adds a `--verbosity, -v` option to the decorated
     command.
     Keyword arguments are passed to
@@ -126,10 +148,15 @@ def verbosity_option(logger=None, **kwargs):
 
     logger = _normalize_logger(logger)
 
-    return click.option("--verbosity", "-v", **kwargs)
+    option = click.option("--verbosity", "-v", **kwargs)
+
+    if callable(func):
+        return option(func)
+
+    return option
 
 
-def timeout_option(**kwargs):
+def timeout_option(func=None, **kwargs):
     def callback(ctx: click.Context, param, value):
         if value is 0:
             value = None
@@ -146,10 +173,16 @@ def timeout_option(**kwargs):
     )
     kwargs.setdefault("callback", callback)
     kwargs.setdefault("expose_value", False)
-    return click.option("--timeout", **kwargs)
+
+    option = click.option("--timeout", **kwargs)
+
+    if callable(func):
+        return option(func)
+
+    return option
 
 
-def bunch_size_option(**kwargs):
+def bunch_size_option(func=None, **kwargs):
     kwargs.setdefault("type", click.IntRange(10, 1000))
     kwargs.setdefault("default", 1000)
     kwargs.setdefault("show_default", True)
@@ -161,4 +194,10 @@ def bunch_size_option(**kwargs):
     )
     kwargs.setdefault("callback", add_param_to_session)
     kwargs.setdefault("expose_value", False)
-    return click.option("--bunch-size", **kwargs)
+
+    option = click.option("--bunch-size", **kwargs)
+
+    if callable(func):
+        return option(func)
+
+    return option

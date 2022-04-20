@@ -93,7 +93,7 @@ def _prepare_library_for_export(library: Library):
     show_default=True,
     help="output file"
 )
-@timeout_option()
+@timeout_option
 @click.option(
     "--format", "-f",
     type=click.Choice(["tsv", "csv", "json"]),
@@ -101,9 +101,9 @@ def _prepare_library_for_export(library: Library):
     show_default=True,
     help="Output format"
 )
-@bunch_size_option()
+@bunch_size_option
 @pass_session
-@run_async()
+@run_async
 async def export_library(session, **params):
     """export library"""
     output_format = params.get("format")
@@ -136,10 +136,10 @@ async def export_library(session, **params):
 
 
 @cli.command("list")
-@timeout_option()
-@bunch_size_option()
+@timeout_option
+@bunch_size_option
 @pass_session
-@run_async()
+@run_async
 async def list_library(session):
     """list titles in library"""
     library = await _get_library(session)

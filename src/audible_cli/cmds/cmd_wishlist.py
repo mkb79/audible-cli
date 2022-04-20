@@ -82,7 +82,7 @@ def cli():
     show_default=True,
     help="output file"
 )
-@timeout_option()
+@timeout_option
 @click.option(
     "--format", "-f",
     type=click.Choice(["tsv", "csv", "json"]),
@@ -91,7 +91,7 @@ def cli():
     help="Output format"
 )
 @pass_session
-@run_async()
+@run_async
 async def export_library(session, **params):
     """export wishlist"""
     output_format = params.get("format")
@@ -124,9 +124,9 @@ async def export_library(session, **params):
 
 
 @cli.command("list")
-@timeout_option()
+@timeout_option
 @pass_session
-@run_async()
+@run_async
 async def list_library(session, **params):
     """list titles in wishlist"""
     wishlist = await _get_wishlist(session, **params)

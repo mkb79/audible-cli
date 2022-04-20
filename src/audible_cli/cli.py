@@ -26,20 +26,20 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 @plugins.from_folder(get_plugin_dir())
 @plugins.from_entry_point(iter_entry_points(PLUGIN_ENTRY_POINT))
-@build_in_cmds()
+@build_in_cmds
 @click.group(context_settings=CONTEXT_SETTINGS)
-@profile_option()
-@password_option()
-@version_option()
-@verbosity_option(logger)
+@profile_option
+@password_option
+@version_option
+@verbosity_option(logger=logger)
 def cli():
     """Entrypoint for all other subcommands and groups."""
 
 
 @click.command(context_settings=CONTEXT_SETTINGS)
 @click.pass_context
-@version_option()
-@verbosity_option(logger)
+@version_option
+@verbosity_option(logger=logger)
 def quickstart(ctx):
     """Entrypoint for the quickstart command"""
     try:

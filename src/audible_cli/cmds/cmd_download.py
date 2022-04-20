@@ -522,7 +522,7 @@ def display_counter():
     default="config",
     help="Filename mode to use. [default: config]"
 )
-@timeout_option()
+@timeout_option
 @click.option(
     "--resolve-podcasts",
     is_flag=True,
@@ -533,9 +533,9 @@ def display_counter():
     is_flag=True,
     help="Ignore a podcast if it have episodes"
 )
-@bunch_size_option()
+@bunch_size_option
 @pass_session
-@run_async(display_counter)
+@run_async(finally_func=display_counter)
 async def cli(session, **params):
     """download audiobook(s) from library"""
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
