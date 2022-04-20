@@ -13,6 +13,7 @@ import httpx
 import tqdm
 from PIL import Image
 from audible import Authenticator
+from audible.client import raise_for_status
 from audible.login import default_login_url_callback
 from click import echo, secho, prompt
 
@@ -59,6 +60,11 @@ def prompt_external_callback(url: str) -> str:
         pass
 
     return default_login_url_callback(url)
+
+
+def full_response_callback(resp: httpx.Response):
+    raise_for_status(resp)
+    return resp
 
 
 def build_auth_file(
