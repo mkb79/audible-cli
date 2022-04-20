@@ -337,7 +337,7 @@ class Session:
             **kwargs
         ) -> AsyncClient:
         auth = self.get_auth_for_profile(profile, password)
-        kwargs.setdefault("timeout", self.params.get("timeout"))
+        kwargs.setdefault("timeout", self.params.get("timeout", 5))
         return AsyncClient(auth=auth, **kwargs)        
 
     def get_client(self, **kwargs) -> AsyncClient:
