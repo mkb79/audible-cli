@@ -1,5 +1,7 @@
+import asyncio
 import csv
 import json
+import logging
 import pathlib
 
 import click
@@ -10,7 +12,10 @@ from ..models import Wishlist
 from ..utils import export_to_csv
 
 
-async def _get_wishlist(session, **params):
+logger = logging.getLogger("audible_cli.cmds.cmd_wishlist")
+
+
+async def _get_wishlist(session):
     async with session.get_client() as client:
         wishlist = await Wishlist.from_api(
             client,
@@ -92,7 +97,7 @@ def cli():
 )
 @pass_session
 @run_async
-async def export_library(session, **params):
+async def export_wishlist(session, **params):
     """export wishlist"""
     output_format = params.get("format")
     output_filename: pathlib.Path = params.get("output")
@@ -100,7 +105,7 @@ async def export_library(session, **params):
         suffix = "." + output_format
         output_filename = output_filename.with_suffix(suffix)
 
-    wishlist = await _get_wishlist(session, **params)
+    wishlist = await _get_wishlist(session)
 
     prepared_wishlist = _prepare_wishlist_for_export(wishlist)
 
@@ -127,9 +132,9 @@ async def export_library(session, **params):
 @timeout_option
 @pass_session
 @run_async
-async def list_library(session, **params):
+async def list_wishlist(session, **params):
     """list titles in wishlist"""
-    wishlist = await _get_wishlist(session, **params)
+    wishlist = await _get_wishlist(session)
 
     books = []
 
@@ -152,3 +157,62 @@ async def list_library(session, **params):
             fields.append(series)
         fields.append(title)
         echo(": ".join(fields))
+
+
+@cli.command("add")
+@click.option(
+    "--asin", "-a",
+    multiple=True,
+    help="asin of the audiobook"
+)
+@timeout_option
+@pass_session
+@run_async
+async def add_wishlist(session, asin):
+    """add asin(s) to wishlist"""
+
+    async def add_asin(asin):
+        body = {"asin": asin}
+        r = await client.post("wishlist", body=body)
+        return r
+
+    async with session.get_client() as client:
+        jobs = [add_asin(a) for a in asin]
+        await asyncio.gather(*jobs)
+
+    wishlist = await _get_wishlist(session)
+    for a in asin:
+        if not wishlist.has_asin(a):
+            logger.error(f"{a} was not added to wishlist")
+        else:
+            item = wishlist.get_item_by_asin(a)
+            logger.info(f"{a} ({item.full_title}) added to wishlist")
+
+@cli.command("remove")
+@click.option(
+    "--asin", "-a",
+    multiple=True,
+    help="asin of the audiobook"
+)
+@timeout_option
+@pass_session
+@run_async
+async def remove_wishlist(session, asin):
+    """remove asin(s) from wishlist"""
+
+    async def remove_asin(rasin):
+        r = await client.delete(f"wishlist/{rasin}")
+        item = wishlist.get_item_by_asin(rasin)
+        logger.info(f"{rasin} ({item.full_title}) removed from wishlist")
+        return r
+
+    jobs = []
+    wishlist = await _get_wishlist(session)
+    for a in asin:
+        if not wishlist.has_asin(a):
+            logger.error(f"{a} not in wishlist")
+        else:
+            jobs.append(remove_asin(a))
+
+    async with session.get_client() as client:
+        await asyncio.gather(*jobs)
