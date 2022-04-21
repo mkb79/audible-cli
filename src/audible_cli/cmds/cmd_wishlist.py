@@ -5,14 +5,20 @@ import logging
 import pathlib
 
 import click
+import httpx
+import questionary
 from click import echo
 
 from ..decorators import run_async, timeout_option, pass_session
-from ..models import Wishlist
+from ..models import Catalog, Wishlist
 from ..utils import export_to_csv
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_wishlist")
+
+# audible api raises a 500 status error when to many requests
+# where made to wishlist endpoint in short time
+limits = httpx.Limits(max_keepalive_connections=1, max_connections=1)
 
 
 async def _get_wishlist(session):
@@ -165,28 +171,85 @@ async def list_wishlist(session, **params):
     multiple=True,
     help="asin of the audiobook"
 )
+@click.option(
+    "--title", "-t",
+    multiple=True,
+    help="tile of the audiobook (partial search)"
+)
 @timeout_option
 @pass_session
 @run_async
-async def add_wishlist(session, asin):
-    """add asin(s) to wishlist"""
+async def add_wishlist(session, asin, title):
+    """add asin(s) to wishlist
+    
+    Run the command without any option for interactive mode.
+    """
 
     async def add_asin(asin):
         body = {"asin": asin}
         r = await client.post("wishlist", body=body)
         return r
 
-    async with session.get_client() as client:
+    asin = list(asin)
+    title = list(title)
+
+    if not asin and not title:
+        q = await questionary.select(
+            "Do you want to add an item by asin or title?",
+            choices=[
+                questionary.Choice(title="by title", value="title"),
+                questionary.Choice(title="by asin", value="asin")
+            ]
+        ).unsafe_ask_async()
+
+        if q == 'asin':
+            q = await questionary.text("Please enter the asin").unsafe_ask_async()
+            asin.append(q)
+        else:
+            q = await questionary.text("Please enter the title").unsafe_ask_async()
+            title.append(q)
+
+    for t in title:
+        async with session.get_client() as client:
+            catalog = await Catalog.from_api(
+                client,
+                title=t,
+                num_results=50
+            )
+
+        match = catalog.search_item_by_title(t)
+        full_match = [i for i in match if i[1] == 100]
+
+        if match:
+            choices = []
+            for i in full_match or match:
+                c = questionary.Choice(title=i[0].full_title, value=i[0].asin)
+                choices.append(c)
+    
+            answer = await questionary.checkbox(
+                f"Found the following matches for '{t}'. Which you want to add?",
+                choices=choices
+            ).unsafe_ask_async()
+
+            if answer is not None:
+                [asin.append(i) for i in answer]
+        else:
+            logger.error(
+                f"Skip title {t}: Not found in library"
+            )
+
+    async with session.get_client(limits=limits) as client:
         jobs = [add_asin(a) for a in asin]
         await asyncio.gather(*jobs)
 
     wishlist = await _get_wishlist(session)
     for a in asin:
-        if not wishlist.has_asin(a):
-            logger.error(f"{a} was not added to wishlist")
-        else:
+        if wishlist.has_asin(a):
             item = wishlist.get_item_by_asin(a)
             logger.info(f"{a} ({item.full_title}) added to wishlist")
+        else:
+            logger.error(f"{a} was not added to wishlist")
+
 
 @cli.command("remove")
 @click.option(
@@ -194,11 +257,19 @@ async def add_wishlist(session, asin):
     multiple=True,
     help="asin of the audiobook"
 )
+@click.option(
+    "--title", "-t",
+    multiple=True,
+    help="tile of the audiobook (partial search)"
+)
 @timeout_option
 @pass_session
 @run_async
-async def remove_wishlist(session, asin):
-    """remove asin(s) from wishlist"""
+async def remove_wishlist(session, asin, title):
+    """remove asin(s) from wishlist
+    
+    Run the command without any option for interactive mode.
+    """
 
     async def remove_asin(rasin):
         r = await client.delete(f"wishlist/{rasin}")
@@ -206,13 +277,50 @@ async def remove_wishlist(session, asin):
         logger.info(f"{rasin} ({item.full_title}) removed from wishlist")
         return r
 
-    jobs = []
+    asin = list(asin)
     wishlist = await _get_wishlist(session)
-    for a in asin:
-        if not wishlist.has_asin(a):
-            logger.error(f"{a} not in wishlist")
-        else:
-            jobs.append(remove_asin(a))
 
-    async with session.get_client() as client:
-        await asyncio.gather(*jobs)
+    if not asin and not title:
+        # interactive mode
+        choices = []
+        for i in wishlist:
+            c = questionary.Choice(title=i.full_title, value=i.asin)
+            choices.append(c)
+
+        asin = await questionary.checkbox(
+            "Select item(s) which you want to remove from whishlist",
+            choices=choices
+        ).unsafe_ask_async()
+
+    for t in title:
+        match = wishlist.search_item_by_title(t)
+        full_match = [i for i in match if i[1] == 100]
+
+        if match:
+            choices = []
+            for i in full_match or match:
+                c = questionary.Choice(title=i[0].full_title, value=i[0].asin)
+                choices.append(c)
+    
+            answer = await questionary.checkbox(
+                f"Found the following matches for '{t}'. Which you want to remove?",
+                choices=choices
+            ).unsafe_ask_async()
+
+            if answer is not None:
+                [asin.append(i) for i in answer]
+        else:
+            logger.error(
+                f"Skip title {t}: Not found in library"
+            )
+
+    if asin:
+        jobs = []
+        for a in asin:
+            if wishlist.has_asin(a):
+                jobs.append(remove_asin(a))
+            else:
+                logger.error(f"{a} not in wishlist")
+    
+        async with session.get_client(limits=limits) as client:
+            await asyncio.gather(*jobs)
