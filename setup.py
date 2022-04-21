@@ -54,7 +54,8 @@ setup(
         "Pillow",
         "tabulate",
         "toml",
-        "tqdm"
+        "tqdm",
+        "questionary"
     ],
     extras_require={
         'pyi': [
