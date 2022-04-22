@@ -178,7 +178,7 @@ def verbosity_option(func=None, *, logger=None, **kwargs):
 
 def timeout_option(func=None, **kwargs):
     def callback(ctx: click.Context, param, value):
-        if value is 0:
+        if value == 0:
             value = None
         session = ctx.ensure_object(Session)
         session.params[param.name] = value
