@@ -16,18 +16,38 @@ logger = logging.getLogger("audible_cli.options")
 pass_session = click.make_pass_decorator(Session, ensure=True)
 
 
-def run_async(func=None, *, finally_func=None):
+def run_async(func=None):
     def coro(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            loop = asyncio.get_event_loop()
-            try:
-                return loop.run_until_complete(f(*args, ** kwargs))
-            finally:
-                loop.run_until_complete(loop.shutdown_asyncgens())
-                loop.close()
-                if finally_func is not None:
-                    finally_func()
+            if hasattr(asyncio, "run"):
+                logger.debug("Using asyncio.run ...")
+                return asyncio.run(f(*args, ** kwargs))
+            else:
+                logger.debug("Using asyncio.run_until_complete ...")
+                loop = asyncio.get_event_loop()
+                try:
+                    return loop.run_until_complete(f(*args, ** kwargs))
+                finally:
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                    loop.close()
+        return wrapper
+
+    if callable(func):
+        return coro(func)
+
+    return coro
+
+
+def pass_client(func=None, **client_kwargs):
+    def coro(f):
+        @wraps(f)
+        @pass_session
+        @run_async
+        async def wrapper(session, *args, **kwargs):
+            client = session.get_client(**client_kwargs)
+            async with client.session:
+                return await f(*args, client, **kwargs)
         return wrapper
 
     if callable(func):
