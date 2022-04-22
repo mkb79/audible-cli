@@ -10,13 +10,13 @@ import sys
 import aiofiles
 import click
 import httpx
+import questionary
 from click import echo
-from tabulate import tabulate
 
 from ..decorators import (
     bunch_size_option,
-    run_async,
     timeout_option,
+    pass_client,
     pass_session
 )
 from ..exceptions import DirectoryDoesNotExists, NotFoundError
@@ -27,6 +27,10 @@ from ..utils import Downloader
 logger = logging.getLogger("audible_cli.cmds.cmd_download")
 
 SSL_PROTOCOLS = (asyncio.sslproto.SSLProtocol,)
+
+CLIENT_HEADERS = {
+    "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
+}
 
 
 def ignore_httpx_ssl_eror(loop):
@@ -333,7 +337,9 @@ async def consume(queue):
             await item
         except Exception as e:
             logger.error(e)
-        queue.task_done()
+            raise
+        finally:
+            queue.task_done()
 
 
 def queue_job(
@@ -535,9 +541,10 @@ def display_counter():
 )
 @bunch_size_option
 @pass_session
-@run_async(finally_func=display_counter)
-async def cli(session, **params):
+@pass_client(headers=CLIENT_HEADERS)
+async def cli(session, api_client, **params):
     """download audiobook(s) from library"""
+    client = api_client.session
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
 
     # which item(s) to download
@@ -574,117 +581,112 @@ async def cli(session, **params):
         filename_mode = session.config.get_profile_option(
             session.selected_profile, "filename_mode") or "ascii"
 
-    headers = {
-        "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
-    }
-    api_client = session.get_client(headers=headers)
-    client = api_client.session
+    # fetch the user library
+    library = await Library.from_api_full_sync(
+        api_client,
+        image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500",
+        bunch_size=bunch_size
+    )
 
-    async with api_client:
-        # fetch the user library
-        library = await Library.from_api_full_sync(
-            api_client,
-            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500",
-            bunch_size=bunch_size
-        )
+    if resolve_podcats:
+        await library.resolve_podcats()
 
-        if resolve_podcats:
-            await library.resolve_podcats()
+    # collect jobs
+    jobs = []
 
-        # collect jobs
-        jobs = []
+    if get_all:
+        asins = []
+        titles = []
+        for i in library:
+            jobs.append(i.asin)
 
-        if get_all:
-            asins = []
-            titles = []
-            for i in library:
-                jobs.append(i.asin)
+    for asin in asins:
+        if library.has_asin(asin):
+            jobs.append(asin)
+        else:
+            if not ignore_errors:
+                logger.error(f"Asin {asin} not found in library.")
+                click.Abort()
+            logger.error(
+                f"Skip asin {asin}: Not found in library"
+            )
 
-        for asin in asins:
-            if library.has_asin(asin):
-                jobs.append(asin)
+    for title in titles:
+        match = library.search_item_by_title(title)
+        full_match = [i for i in match if i[1] == 100]
+
+        if match:
+            if no_confirm:
+                [jobs.append(i[0].asin) for i in full_match or match]
             else:
-                if not ignore_errors:
-                    logger.error(f"Asin {asin} not found in library.")
-                    click.Abort()
-                logger.error(
-                    f"Skip asin {asin}: Not found in library"
-                )
+                choices = []
+                for i in full_match or match:
+                    a = i[0].asin
+                    t = i[0].full_title
+                    c = questionary.Choice(title=f"{a} # {t}", value=a)
+                    choices.append(c)
 
-        for title in titles:
-            match = library.search_item_by_title(title)
-            full_match = [i for i in match if i[1] == 100]
-    
-            if match:
-                echo(f"\nFound the following matches for '{title}'")
+                answer = await questionary.checkbox(
+                    f"Found the following matches for '{title}'. Which you want to download?",
+                    choices=choices
+                ).unsafe_ask_async()
+                if answer is not None:
+                    [jobs.append(i) for i in answer]
+                
+        else:
+            logger.error(
+                f"Skip title {title}: Not found in library"
+            )
 
-                table_data = []
-                for count, i in enumerate(full_match or match, start=1):
-                    table_data.append(
-                        [count, i[1], i[0].full_title, i[0].asin]
-                    )
-                head = ["#", "% match", "title", "asin"]
-                table = tabulate(
-                    table_data, head, tablefmt="pretty",
-                    colalign=("center", "center", "left", "center"))
-                echo(table)
-    
-                if no_confirm or click.confirm(
-                        "Proceed with this audiobook(s)",
-                        default=True
-                ):
-                    jobs.extend([i[0].asin for i in full_match or match])
-    
-            else:
-                logger.error(
-                    f"Skip title {title}: Not found in library"
-                )
+    queue = asyncio.Queue()
+    for job in jobs:
+        item = library.get_item_by_asin(job)
+        items = [item]
+        odir = pathlib.Path(output_dir)
 
-        queue = asyncio.Queue()
-        for job in jobs:
-            item = library.get_item_by_asin(job)
-            items = [item]
-            odir = pathlib.Path(output_dir)
+        if not ignore_podcasts and item.is_parent_podcast():
+            items.remove(item)
+            if item._children is None:
+                await item.get_child_items()
 
-            if not ignore_podcasts and item.is_parent_podcast():
-                items.remove(item)
-                if item._children is None:
-                    await item.get_child_items()
+            for i in item._children:
+                if i.asin not in jobs:
+                    items.append(i)
 
-                for i in item._children:
-                    if i.asin not in jobs:
-                        items.append(i)
+            podcast_dir = item.create_base_filename(filename_mode)
+            odir = output_dir / podcast_dir
+            if not odir.is_dir():
+                odir.mkdir(parents=True)
 
-                podcast_dir = item.create_base_filename(filename_mode)
-                odir = output_dir / podcast_dir
-                if not odir.is_dir():
-                    odir.mkdir(parents=True)
+        for item in items:
+            queue_job(
+                queue=queue,
+                get_cover=get_cover,
+                get_pdf=get_pdf,
+                get_chapters=get_chapters,
+                get_aax=get_aax,
+                get_aaxc=get_aaxc,
+                client=client,
+                output_dir=odir,
+                filename_mode=filename_mode,
+                item=item,
+                cover_size=cover_size,
+                quality=quality,
+                overwrite_existing=overwrite_existing
+            )
 
-            for item in items:
-                queue_job(
-                    queue=queue,
-                    get_cover=get_cover,
-                    get_pdf=get_pdf,
-                    get_chapters=get_chapters,
-                    get_aax=get_aax,
-                    get_aaxc=get_aaxc,
-                    client=client,
-                    output_dir=odir,
-                    filename_mode=filename_mode,
-                    item=item,
-                    cover_size=cover_size,
-                    quality=quality,
-                    overwrite_existing=overwrite_existing
-                )
-
+    try:
         # schedule the consumer
         consumers = [
             asyncio.ensure_future(consume(queue)) for _ in range(sim_jobs)
         ]
-
         # wait until the consumer has processed all items
         await queue.join()
 
+    finally:
         # the consumer is still awaiting an item, cancel it
         for consumer in consumers:
             consumer.cancel()
+    
+        await asyncio.gather(*consumers, return_exceptions=True)
+        display_counter()
