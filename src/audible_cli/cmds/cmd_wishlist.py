@@ -9,7 +9,7 @@ import httpx
 import questionary
 from click import echo
 
-from ..decorators import run_async, timeout_option, pass_session
+from ..decorators import timeout_option, pass_client
 from ..models import Catalog, Wishlist
 from ..utils import export_to_csv
 
@@ -21,17 +21,16 @@ logger = logging.getLogger("audible_cli.cmds.cmd_wishlist")
 limits = httpx.Limits(max_keepalive_connections=1, max_connections=1)
 
 
-async def _get_wishlist(session):
-    async with session.get_client() as client:
-        wishlist = await Wishlist.from_api(
-            client,
-            response_groups=(
-                "contributors, media, price, product_attrs, product_desc, "
-                "product_extended_attrs, product_plan_details, product_plans, "
-                "rating, sample, sku, series, reviews, review_attrs, ws4v, "
-                "customer_rights, categories, category_ladders, claim_code_url"
-            )
+async def _get_wishlist(client):
+    wishlist = await Wishlist.from_api(
+        client,
+        response_groups=(
+            "contributors, media, price, product_attrs, product_desc, "
+            "product_extended_attrs, product_plan_details, product_plans, "
+            "rating, sample, sku, series, reviews, review_attrs, ws4v, "
+            "customer_rights, categories, category_ladders, claim_code_url"
         )
+    )
     return wishlist
 
 
@@ -101,9 +100,8 @@ def cli():
     show_default=True,
     help="Output format"
 )
-@pass_session
-@run_async
-async def export_wishlist(session, **params):
+@pass_client
+async def export_wishlist(client, **params):
     """export wishlist"""
     output_format = params.get("format")
     output_filename: pathlib.Path = params.get("output")
@@ -111,7 +109,7 @@ async def export_wishlist(session, **params):
         suffix = "." + output_format
         output_filename = output_filename.with_suffix(suffix)
 
-    wishlist = await _get_wishlist(session)
+    wishlist = await _get_wishlist(client)
 
     prepared_wishlist = _prepare_wishlist_for_export(wishlist)
 
@@ -136,11 +134,10 @@ async def export_wishlist(session, **params):
 
 @cli.command("list")
 @timeout_option
-@pass_session
-@run_async
-async def list_wishlist(session, **params):
+@pass_client
+async def list_wishlist(client):
     """list titles in wishlist"""
-    wishlist = await _get_wishlist(session)
+    wishlist = await _get_wishlist(client)
 
     books = []
 
@@ -177,9 +174,8 @@ async def list_wishlist(session, **params):
     help="tile of the audiobook (partial search)"
 )
 @timeout_option
-@pass_session
-@run_async
-async def add_wishlist(session, asin, title):
+@pass_client(limits=limits)
+async def add_wishlist(client, asin, title):
     """add asin(s) to wishlist
     
     Run the command without any option for interactive mode.
@@ -210,12 +206,11 @@ async def add_wishlist(session, asin, title):
             title.append(q)
 
     for t in title:
-        async with session.get_client() as client:
-            catalog = await Catalog.from_api(
-                client,
-                title=t,
-                num_results=50
-            )
+        catalog = await Catalog.from_api(
+            client,
+            title=t,
+            num_results=50
+        )
 
         match = catalog.search_item_by_title(t)
         full_match = [i for i in match if i[1] == 100]
@@ -238,11 +233,10 @@ async def add_wishlist(session, asin, title):
                 f"Skip title {t}: Not found in library"
             )
 
-    async with session.get_client(limits=limits) as client:
-        jobs = [add_asin(a) for a in asin]
-        await asyncio.gather(*jobs)
+    jobs = [add_asin(a) for a in asin]
+    await asyncio.gather(*jobs)
 
-    wishlist = await _get_wishlist(session)
+    wishlist = await _get_wishlist(client)
     for a in asin:
         if wishlist.has_asin(a):
             item = wishlist.get_item_by_asin(a)
@@ -263,9 +257,8 @@ async def add_wishlist(session, asin, title):
     help="tile of the audiobook (partial search)"
 )
 @timeout_option
-@pass_session
-@run_async
-async def remove_wishlist(session, asin, title):
+@pass_client(limits=limits)
+async def remove_wishlist(client, asin, title):
     """remove asin(s) from wishlist
     
     Run the command without any option for interactive mode.
@@ -278,7 +271,7 @@ async def remove_wishlist(session, asin, title):
         return r
 
     asin = list(asin)
-    wishlist = await _get_wishlist(session)
+    wishlist = await _get_wishlist(client)
 
     if not asin and not title:
         # interactive mode
@@ -321,6 +314,5 @@ async def remove_wishlist(session, asin, title):
                 jobs.append(remove_asin(a))
             else:
                 logger.error(f"{a} not in wishlist")
-    
-        async with session.get_client(limits=limits) as client:
-            await asyncio.gather(*jobs)
+
+        await asyncio.gather(*jobs)
