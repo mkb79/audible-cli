@@ -9,7 +9,7 @@ import httpx
 import questionary
 from click import echo
 
-from ..decorators import timeout_option, pass_client
+from ..decorators import timeout_option, pass_client, wrap_async
 from ..models import Catalog, Wishlist
 from ..utils import export_to_csv
 
@@ -34,15 +34,33 @@ async def _get_wishlist(client):
     return wishlist
 
 
-def _prepare_wishlist_for_export(wishlist: dict):
-    keys_with_raw_values = (
-        "asin", "title", "subtitle", "runtime_length_min", "is_finished",
-        "percent_complete", "release_date"
-    )
+@click.group("wishlist")
+def cli():
+    """interact with wishlist"""
 
-    prepared_wishlist = []
 
-    for item in wishlist:
+@cli.command("export")
+@click.option(
+    "--output", "-o",
+    type=click.Path(),
+    default=pathlib.Path().cwd() / r"wishlist.{format}",
+    show_default=True,
+    help="output file"
+)
+@timeout_option
+@click.option(
+    "--format", "-f",
+    type=click.Choice(["tsv", "csv", "json"]),
+    default="tsv",
+    show_default=True,
+    help="Output format"
+)
+@pass_client
+async def export_wishlist(client, **params):
+    """export wishlist"""
+
+    @wrap_async
+    def _prepare_item(item):
         data_row = {}
         for key in item:
             v = getattr(item, key)
@@ -71,38 +89,8 @@ def _prepare_wishlist_for_export(wishlist: dict):
                     for ladder in genre["ladder"]:
                         genres.append(ladder["name"])
                 data_row["genres"] = ", ".join(genres)
+        return data_row
 
-        prepared_wishlist.append(data_row)
-
-    prepared_wishlist.sort(key=lambda x: x["asin"])
-
-    return prepared_wishlist
-
-
-@click.group("wishlist")
-def cli():
-    """interact with wishlist"""
-
-
-@cli.command("export")
-@click.option(
-    "--output", "-o",
-    type=click.Path(),
-    default=pathlib.Path().cwd() / r"wishlist.{format}",
-    show_default=True,
-    help="output file"
-)
-@timeout_option
-@click.option(
-    "--format", "-f",
-    type=click.Choice(["tsv", "csv", "json"]),
-    default="tsv",
-    show_default=True,
-    help="Output format"
-)
-@pass_client
-async def export_wishlist(client, **params):
-    """export wishlist"""
     output_format = params.get("format")
     output_filename: pathlib.Path = params.get("output")
     if output_filename.suffix == r".{format}":
@@ -111,23 +99,34 @@ async def export_wishlist(client, **params):
 
     wishlist = await _get_wishlist(client)
 
-    prepared_wishlist = _prepare_wishlist_for_export(wishlist)
-
-    headers = (
-        "asin", "title", "subtitle", "authors", "narrators", "series_title",
-        "series_sequence", "genres", "runtime_length_min", "is_finished",
-        "percent_complete", "rating", "num_ratings", "date_added",
-        "release_date", "cover_url"
+    keys_with_raw_values = (
+        "asin", "title", "subtitle", "runtime_length_min", "is_finished",
+        "percent_complete", "release_date"
     )
+
+    prepared_wishlist = await asyncio.gather(
+        *[_prepare_item(i) for i in wishlist]
+    )
+    prepared_wishlist.sort(key=lambda x: x["asin"])
 
     if output_format in ("tsv", "csv"):
         if output_format == csv:
             dialect = "excel"
         else:
             dialect = "excel-tab"
-        export_to_csv(output_filename, prepared_wishlist, headers, dialect)
 
-    if output_format == "json":
+        headers = (
+            "asin", "title", "subtitle", "authors", "narrators", "series_title",
+            "series_sequence", "genres", "runtime_length_min", "is_finished",
+            "percent_complete", "rating", "num_ratings", "date_added",
+            "release_date", "cover_url"
+        )
+
+        export_to_csv(
+            output_filename, prepared_wishlist, headers, dialect
+        )
+
+    elif output_format == "json":
         data = json.dumps(prepared_wishlist, indent=4)
         output_filename.write_text(data)
 
@@ -137,29 +136,34 @@ async def export_wishlist(client, **params):
 @pass_client
 async def list_wishlist(client):
     """list titles in wishlist"""
-    wishlist = await _get_wishlist(client)
 
-    books = []
+    @wrap_async
+    def _prepare_item(item):
+        fields = [item.asin]
 
-    for item in wishlist:
-        asin = item.asin
         authors = ", ".join(
             sorted(a["name"] for a in item.authors) if item.authors else ""
         )
+        if authors:
+            fields.append(authors)
+
         series = ", ".join(
             sorted(s["title"] for s in item.series) if item.series else ""
         )
-        title = item.title
-        books.append((asin, authors, series, title))
-
-    for asin, authors, series, title in sorted(books):
-        fields = [asin]
-        if authors:
-            fields.append(authors)
         if series:
             fields.append(series)
-        fields.append(title)
-        echo(": ".join(fields))
+
+        fields.append(item.title)
+        return ": ".join(fields)
+
+    wishlist = await _get_wishlist(client)
+
+    books = await asyncio.gather(
+        *[_prepare_item(i) for i in wishlist]
+    )
+
+    for i in sorted(books):
+        echo(i)
 
 
 @cli.command("add")
