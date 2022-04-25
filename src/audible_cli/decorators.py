@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from functools import wraps
+from functools import partial, wraps
 
 import click
 import httpx
@@ -16,27 +16,39 @@ logger = logging.getLogger("audible_cli.options")
 pass_session = click.make_pass_decorator(Session, ensure=True)
 
 
-def run_async(func=None):
-    def coro(f):
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            if hasattr(asyncio, "run"):
-                logger.debug("Using asyncio.run ...")
-                return asyncio.run(f(*args, ** kwargs))
-            else:
-                logger.debug("Using asyncio.run_until_complete ...")
-                loop = asyncio.get_event_loop()
-                try:
-                    return loop.run_until_complete(f(*args, ** kwargs))
-                finally:
-                    loop.run_until_complete(loop.shutdown_asyncgens())
-                    loop.close()
-        return wrapper
+def run_async(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if hasattr(asyncio, "run"):
+            logger.debug("Using asyncio.run ...")
+            return asyncio.run(f(*args, ** kwargs))
+        else:
+            logger.debug("Using asyncio.run_until_complete ...")
+            loop = asyncio.get_event_loop()
 
-    if callable(func):
-        return coro(func)
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
 
-    return coro
+            try:
+                return loop.run_until_complete(f(*args, ** kwargs))
+            finally:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+                loop.close()
+    return wrapper
+
+
+def wrap_async(f):
+    """Wrap a syncronous function and runs them in an executor"""
+
+    @wraps(f)
+    async def wrapper(*args, loop=None, executor=None, **kwargs):
+        if loop is None:
+            loop = asyncio.get_event_loop()
+
+        partial_func = partial(f, *args, **kwargs)
+        return await loop.run_in_executor(executor, partial_func)
+
+    return wrapper
 
 
 def pass_client(func=None, **client_kwargs):

@@ -1,10 +1,8 @@
-import asyncio
 import csv
 import io
 import logging
 import pathlib
 from difflib import SequenceMatcher
-from functools import partial, wraps
 from typing import List, Optional, Union
 
 import aiofiles
@@ -147,17 +145,6 @@ def asin_in_library(asin, library):
         return next(i for i in items if asin in i["asin"])
     except StopIteration:
         return False
-
-
-def wrap_async(func):
-    @wraps(func)
-    async def run(*args, loop=None, executor=None, **kwargs):
-        if loop is None:
-            loop = asyncio.get_event_loop()
-        pfunc = partial(func, *args, **kwargs)
-        return await loop.run_in_executor(executor, pfunc)
-
-    return run
 
 
 class DummyProgressBar:
