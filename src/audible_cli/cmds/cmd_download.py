@@ -11,6 +11,7 @@ import aiofiles
 import click
 import httpx
 import questionary
+from audible.exceptions import NotFoundError
 from click import echo
 
 from ..decorators import (
@@ -19,7 +20,7 @@ from ..decorators import (
     pass_client,
     pass_session
 )
-from ..exceptions import DirectoryDoesNotExists, NotFoundError
+from ..exceptions import DirectoryDoesNotExists
 from ..models import Library
 from ..utils import Downloader
 
@@ -84,6 +85,7 @@ class DownloadCounter:
     def __init__(self):
         self._aax: int = 0
         self._aaxc: int = 0
+        self._annotation: int = 0
         self._chapter: int = 0
         self._cover: int = 0
         self._pdf: int = 0
@@ -105,6 +107,14 @@ class DownloadCounter:
     def count_aaxc(self):
         self._aaxc += 1
         logger.debug(f"Currently downloaded aaxc files: {self.aaxc}")
+
+    @property
+    def annotation(self):
+        return self._annotation
+
+    def count_annotation(self):
+        self._annotation += 1
+        logger.debug(f"Currently downloaded annotations: {self.annotation}")
 
     @property
     def chapter(self):
@@ -150,6 +160,7 @@ class DownloadCounter:
         return {
             "aax": self.aax,
             "aaxc": self.aaxc,
+            "annotation": self.annotation,
             "chapter": self.chapter,
             "cover": self.cover,
             "pdf": self.pdf,
@@ -225,8 +236,8 @@ async def download_chapters(
     try:
         metadata = await item.get_content_metadata(quality)
     except NotFoundError:
-        logger.error(
-            f"Can't get chapters for {item.full_title}. Skip item."
+        logger.info(
+            f"No chapters found for {item.full_title}."
         )
         return
     metadata = json.dumps(metadata, indent=4)
@@ -234,6 +245,34 @@ async def download_chapters(
         await f.write(metadata)
     logger.info(f"Chapter file saved to {file}.")
     counter.count_chapter()
+
+
+async def download_annotations(
+        output_dir, base_filename, item, overwrite_existing
+):
+    if not output_dir.is_dir():
+        raise DirectoryDoesNotExists(output_dir)
+
+    filename = base_filename + "-annotations.json"
+    file = output_dir / filename
+    if file.exists() and not overwrite_existing:
+        logger.info(
+            f"File {file} already exists. Skip saving annotations"
+        )
+        return True
+
+    try:
+        annotation = await item.get_annotations()
+    except NotFoundError:
+        logger.info(
+            f"No annotations found for {item.full_title}."
+        )
+        return
+    annotation = json.dumps(annotation, indent=4)
+    async with aiofiles.open(file, "w") as f:
+        await f.write(annotation)
+    logger.info(f"Annotation file saved to {file}.")
+    counter.count_annotation()
 
 
 async def download_aax(
@@ -346,6 +385,7 @@ def queue_job(
         queue,
         get_cover,
         get_pdf,
+        get_annotation,
         get_chapters,
         get_aax,
         get_aaxc,
@@ -389,6 +429,16 @@ def queue_job(
                 base_filename=base_filename,
                 item=item,
                 quality=quality,
+                overwrite_existing=overwrite_existing
+            )
+        )
+
+    if get_annotation:
+        queue.put_nowait(
+            download_annotations(
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
                 overwrite_existing=overwrite_existing
             )
         )
@@ -499,6 +549,11 @@ def display_counter():
     help="saves chapter metadata as JSON file"
 )
 @click.option(
+    "--annotation",
+    is_flag=True,
+    help="saves the annotations (e.g. bookmarks, notes) as JSON file"
+)
+@click.option(
     "--no-confirm", "-y",
     is_flag=True,
     help="start without confirm"
@@ -558,10 +613,13 @@ async def cli(session, api_client, **params):
     # what to download
     get_aax = params.get("aax")
     get_aaxc = params.get("aaxc")
+    get_annotation = params.get("annotation")
     get_chapters = params.get("chapter")
     get_cover = params.get("cover")
     get_pdf = params.get("pdf")
-    if not any([get_aax, get_aaxc, get_chapters, get_cover, get_pdf]):
+    if not any(
+        [get_aax, get_aaxc, get_annotation, get_chapters, get_cover, get_pdf]
+    ):
         logger.error("Please select an option what you want download.")
         click.Abort()
 
@@ -663,6 +721,7 @@ async def cli(session, api_client, **params):
                 queue=queue,
                 get_cover=get_cover,
                 get_pdf=get_pdf,
+                get_annotation=get_annotation,
                 get_chapters=get_chapters,
                 get_aax=get_aax,
                 get_aaxc=get_aaxc,
