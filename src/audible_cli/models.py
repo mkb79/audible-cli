@@ -8,7 +8,6 @@ import audible
 import httpx
 from audible.aescipher import decrypt_voucher_from_licenserequest
 
-
 from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
 from .exceptions import AudibleCliException
 from .utils import LongestSubString
@@ -312,6 +311,17 @@ class LibraryItem(BaseItem):
         metadata = await self._client.get(url, params=params)
 
         return metadata
+
+    async def get_annotations(self):
+        url = f"https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/sidecar"
+        params = {
+            "type": "AUDI",
+            "key": self.asin
+        }
+
+        annotations = await self._client.get(url, params=params)
+
+        return annotations
 
 
 class WishlistItem(BaseItem):
