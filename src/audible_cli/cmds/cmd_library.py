@@ -1,5 +1,4 @@
 import asyncio
-import csv
 import json
 import pathlib
 
@@ -116,7 +115,7 @@ async def export_library(session, **params):
     prepared_library.sort(key=lambda x: x["asin"])
 
     if output_format in ("tsv", "csv"):
-        if output_format == csv:
+        if output_format == "csv":
             dialect = "excel"
         else:
             dialect = "excel-tab"
