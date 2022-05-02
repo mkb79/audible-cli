@@ -167,7 +167,7 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
 @click.option(
     "--external-login",
     is_flag=True,
-    help="Authenticate using a webbrowser."
+    help="Authenticate using a web browser."
 )
 @click.option(
     "--with-username",
