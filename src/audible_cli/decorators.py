@@ -130,7 +130,10 @@ def version_option(func=None, **kwargs):
 def profile_option(func=None, **kwargs):
     kwargs.setdefault("callback", add_param_to_session)
     kwargs.setdefault("expose_value", False)
-    kwargs.setdefault("help", "The profile to use instead primary profile (case sensitive!).")
+    kwargs.setdefault(
+        "help",
+        "The profile to use instead primary profile (case sensitive!)."
+    )
 
     option = click.option("--profile", "-P", **kwargs)
 
