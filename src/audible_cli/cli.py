@@ -31,7 +31,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 @profile_option
 @password_option
 @version_option
-@verbosity_option(logger=logger)
+@verbosity_option(cli_logger=logger)
 def cli():
     """Entrypoint for all other subcommands and groups."""
 
@@ -39,7 +39,7 @@ def cli():
 @click.command(context_settings=CONTEXT_SETTINGS)
 @click.pass_context
 @version_option
-@verbosity_option(logger=logger)
+@verbosity_option(cli_logger=logger)
 def quickstart(ctx):
     """Entrypoint for the quickstart command"""
     try:

@@ -156,7 +156,7 @@ def password_option(func=None, **kwargs):
     return option
 
 
-def verbosity_option(func=None, *, logger=None, **kwargs):
+def verbosity_option(func=None, *, cli_logger=None, **kwargs):
     """A decorator that adds a `--verbosity, -v` option to the decorated
     command.
     Keyword arguments are passed to
@@ -169,7 +169,7 @@ def verbosity_option(func=None, *, logger=None, **kwargs):
                 f"Must be CRITICAL, ERROR, WARNING, INFO or DEBUG, "
                 f"not {value}"
             )
-        logger.setLevel(x)
+        cli_logger.setLevel(x)
 
     kwargs.setdefault("default", "INFO")
     kwargs.setdefault("metavar", "LVL")
@@ -181,7 +181,7 @@ def verbosity_option(func=None, *, logger=None, **kwargs):
     kwargs.setdefault("is_eager", True)
     kwargs.setdefault("callback", callback)
 
-    logger = _normalize_logger(logger)
+    cli_logger = _normalize_logger(cli_logger)
 
     option = click.option("--verbosity", "-v", **kwargs)
 
