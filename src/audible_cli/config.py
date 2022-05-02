@@ -335,7 +335,7 @@ class Session:
             profile: str,
             password: Optional[str] = None,
             **kwargs
-        ) -> AsyncClient:
+    ) -> AsyncClient:
         auth = self.get_auth_for_profile(profile, password)
         kwargs.setdefault("timeout", self.params.get("timeout", 5))
         return AsyncClient(auth=auth, **kwargs)        
