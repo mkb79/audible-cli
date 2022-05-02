@@ -36,7 +36,7 @@ class ConfigFile:
     
     Args:
         filename: The file path to the config file
-        file_exists: If ``True``, the file must exists and the file content 
+        file_exists: If ``True``, the file must exist and the file content
             is loaded.
     """
 
@@ -87,7 +87,7 @@ class ConfigFile:
         return self.data["APP"]
 
     def has_profile(self, name: str) -> bool:
-        """Check if a profile with these name are in the configuration data
+        """Check if a profile with this name are in the configuration data
         
         Args:
             name: The name of the profile
@@ -119,7 +119,7 @@ class ConfigFile:
         """Returns the value for an option for the given profile.
         
         Looks first, if an option is in the ``profile`` section. If not, it 
-        searchs for the option in the ``APP`` section. If not found, it 
+        searches for the option in the ``APP`` section. If not found, it
         returns the ``default``.
         
         Args:
@@ -261,7 +261,7 @@ class Session:
         """Returns the selected config profile name for this session
         
         The `profile` to use must be set using the ``add_param_to_session`` 
-        callback of a click option. Otherwise the primary profile from the 
+        callback of a click option. Otherwise, the primary profile from the
         config is used.
         """
         profile = self.params.get("profile") or self.config.primary_profile
@@ -281,7 +281,7 @@ class Session:
         """Returns an Authenticator for a profile
         
         If an Authenticator for this profile is already loaded, it will 
-        return the Authenticator without reloading it. This way an session can 
+        return the Authenticator without reloading it. This way a session can
         hold multiple Authenticators for different profiles. Commands can use 
         this to make API requests for more than one profile.
         
