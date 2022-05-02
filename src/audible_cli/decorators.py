@@ -38,7 +38,7 @@ def run_async(f):
 
 
 def wrap_async(f):
-    """Wrap a syncronous function and runs them in an executor"""
+    """Wrap a synchronous function and runs them in an executor"""
 
     @wraps(f)
     async def wrapper(*args, loop=None, executor=None, **kwargs):
