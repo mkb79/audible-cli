@@ -2,15 +2,17 @@ import asyncio
 import logging
 import string
 import unicodedata
+from math import ceil
 from typing import List, Optional, Union
 
 import audible
 import httpx
 from audible.aescipher import decrypt_voucher_from_licenserequest
+from audible.client import convert_response_content
 
 from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
 from .exceptions import AudibleCliException
-from .utils import LongestSubString
+from .utils import full_response_callback, LongestSubString
 
 
 logger = logging.getLogger("audible_cli.models")
@@ -173,7 +175,7 @@ class LibraryItem(BaseItem):
         """
 
         # Only items with content_delivery_type 
-        # MultiPartBook or Periodical have child elemts
+        # MultiPartBook or Periodical have child elements
         if not self.has_children:
             return
 
@@ -346,6 +348,10 @@ class BaseList:
     def _prepare_data(self, data: Union[dict, list]) -> Union[dict, list]:
         return data
 
+    @property
+    def data(self):
+        return self._data
+
     def get_item_by_asin(self, asin):
         try:
             return next(i for i in self._data if asin == i.asin)
@@ -385,6 +391,7 @@ class Library(BaseList):
     async def from_api(
             cls,
             api_client: audible.AsyncClient,
+            include_total_count_header: bool = False,
             **request_params
     ):
         if "response_groups" not in request_params:
@@ -400,8 +407,18 @@ class Library(BaseList):
                 "periodicals, provided_review, product_details"
             )
 
-        resp = await api_client.get("library", **request_params)
-        return cls(resp, api_client=api_client)
+        resp: httpx.Response = await api_client.get(
+            "library",
+            response_callback=full_response_callback,
+            **request_params
+        )
+        resp_content = convert_response_content(resp)
+        total_count_header = resp.headers.get("total-count")
+        cls_instance = cls(resp_content, api_client=api_client)
+
+        if include_total_count_header:
+            return cls_instance, total_count_header
+        return cls_instance
 
     @classmethod
     async def from_api_full_sync(
@@ -410,34 +427,42 @@ class Library(BaseList):
             bunch_size: int = 1000,
             **request_params
     ) -> "Library":
-        request_params["page"] = 1
+        request_params.pop("page", None)
         request_params["num_results"] = bunch_size
 
-        library = []
-        while True:
-            resp = await cls.from_api(api_client, params=request_params)
-            items = resp._data
-            len_items = len(items)
-            library.extend(items)
-            if len_items < bunch_size:
-                break
-            request_params["page"] += 1
-            print(request_params["page"])
+        library, total_count = await cls.from_api(
+            api_client,
+            page=1,
+            params=request_params,
+            include_total_count_header=True,
+        )
+        pages = ceil(int(total_count) / bunch_size)
+        if pages == 1:
+            return library
 
-        resp._data = library
-        return resp
+        additional_pages = []
+        for page in range(2, pages+1):
+            additional_pages.append(
+                cls.from_api(
+                    api_client,
+                    page=page,
+                    params=request_params,
+                )
+            )
+
+        additional_pages = await asyncio.gather(*additional_pages)
+
+        for p in additional_pages:
+            library.data.extend(p.data)
+
+        return library
 
     async def resolve_podcats(self):
-        podcasts = []
-        for i in self:
-            if i.is_parent_podcast():
-                podcasts.append(i)
-
         podcast_items = await asyncio.gather(
-            *[i.get_child_items() for i in podcasts]
+            *[i.get_child_items() for i in self if i.is_parent_podcast()]
         )
         for i in podcast_items:
-            self._data.extend(i._data)
+            self.data.extend(i.data)
 
 
 class Catalog(BaseList):
@@ -497,16 +522,11 @@ class Catalog(BaseList):
         return cls(resp, api_client=api_client)
 
     async def resolve_podcats(self):
-        podcasts = []
-        for i in self:
-            if i.is_parent_podcast():
-                podcasts.append(i)
-
         podcast_items = await asyncio.gather(
-            *[i.get_child_items() for i in podcasts]
+            *[i.get_child_items() for i in self if i.is_parent_podcast()]
         )
         for i in podcast_items:
-            self._data.extend(i._data)
+            self.data.extend(i.data)
 
 
 class Wishlist(BaseList):
