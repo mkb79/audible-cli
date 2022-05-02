@@ -141,7 +141,7 @@ an authentication to the audible server is necessary to register a new device.
 @click.command("quickstart")
 @pass_session
 def cli(session):
-    """Quicksetup audible"""
+    """Quick setup audible"""
     config_file: pathlib.Path = session.app_dir / CONFIG_FILE
     config = ConfigFile(config_file, file_exists=False)
     if config_file.is_file():
