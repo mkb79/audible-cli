@@ -107,7 +107,7 @@ class ConfigFile:
     @property
     def primary_profile(self) -> str:
         if "primary_profile" not in self.app_config:
-            raise AudibleCliException("No primary profile in config set")
+            raise AudibleCliException("No primary profile set in config")
         return self.app_config["primary_profile"]
 
     def get_profile_option(
