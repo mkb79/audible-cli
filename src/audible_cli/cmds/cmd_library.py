@@ -7,8 +7,8 @@ from click import echo
 
 from ..decorators import (
     bunch_size_option,
-    run_async,
     timeout_option,
+    pass_client,
     pass_session,
     wrap_async
 )
@@ -21,24 +21,22 @@ def cli():
     """interact with library"""
 
 
-async def _get_library(session):
+async def _get_library(session, client):
     bunch_size = session.params.get("bunch_size")
 
-    async with session.get_client() as client:
-        library = await Library.from_api_full_sync(
-            client,
-            response_groups=(
-                "contributors, media, price, product_attrs, product_desc, "
-                "product_extended_attrs, product_plan_details, product_plans, "
-                "rating, sample, sku, series, reviews, ws4v, origin, "
-                "relationships, review_attrs, categories, badge_types, "
-                "category_ladders, claim_code_url, is_downloaded, "
-                "is_finished, is_returnable, origin_asin, pdf_url, "
-                "percent_complete, provided_review"
-            ),
-            bunch_size=bunch_size
-        )
-    return library
+    return await Library.from_api_full_sync(
+        client,
+        response_groups=(
+            "contributors, media, price, product_attrs, product_desc, "
+            "product_extended_attrs, product_plan_details, product_plans, "
+            "rating, sample, sku, series, reviews, ws4v, origin, "
+            "relationships, review_attrs, categories, badge_types, "
+            "category_ladders, claim_code_url, is_downloaded, "
+            "is_finished, is_returnable, origin_asin, pdf_url, "
+            "percent_complete, provided_review"
+        ),
+        bunch_size=bunch_size
+    )
 
 
 @cli.command("export")
@@ -58,9 +56,14 @@ async def _get_library(session):
     help="Output format"
 )
 @bunch_size_option
+@click.option(
+    "--resolve-podcasts",
+    is_flag=True,
+    help="Resolve podcasts to show all episodes"
+)
 @pass_session
-@run_async
-async def export_library(session, **params):
+@pass_client
+async def export_library(session, client, **params):
     """export library"""
 
     @wrap_async
@@ -102,7 +105,9 @@ async def export_library(session, **params):
         suffix = "." + output_format
         output_filename = output_filename.with_suffix(suffix)
 
-    library = await _get_library(session)
+    library = await _get_library(session, client)
+    if params.get("resolve_podcasts"):
+        await library.resolve_podcats()
 
     keys_with_raw_values = (
         "asin", "title", "subtitle", "runtime_length_min", "is_finished",
@@ -137,9 +142,14 @@ async def export_library(session, **params):
 @cli.command("list")
 @timeout_option
 @bunch_size_option
+@click.option(
+    "--resolve-podcasts",
+    is_flag=True,
+    help="Resolve podcasts to show all episodes"
+)
 @pass_session
-@run_async
-async def list_library(session):
+@pass_client
+async def list_library(session, client, resolve_podcasts=False):
     """list titles in library"""
 
     @wrap_async
@@ -161,7 +171,11 @@ async def list_library(session):
         fields.append(item.title)
         return ": ".join(fields)
 
-    library = await _get_library(session)
+    library = await _get_library(session, client)
+
+    if resolve_podcasts:
+        await library.resolve_podcats()
+
     books = await asyncio.gather(
         *[_prepare_item(i) for i in library]
     )
