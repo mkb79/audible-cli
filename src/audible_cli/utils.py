@@ -32,7 +32,7 @@ def prompt_captcha_callback(captcha_url: str) -> str:
         img.show()
     else:
         echo(
-            "Please open the following url with a webbrowser "
+            "Please open the following url with a web browser "
             "to get the captcha:"
         )
         echo(captcha_url)
@@ -60,7 +60,7 @@ def prompt_external_callback(url: str) -> str:
     return default_login_url_callback(url)
 
 
-def full_response_callback(resp: httpx.Response):
+def full_response_callback(resp: httpx.Response) -> httpx.Response:
     raise_for_status(resp)
     return resp
 
@@ -301,7 +301,7 @@ def export_to_csv(
     data: list,
     headers: Union[list, tuple],
     dialect: str
-):
+) -> None:
     with file.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=headers, dialect=dialect)
         writer.writeheader()
