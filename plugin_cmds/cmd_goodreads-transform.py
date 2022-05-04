@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 import click
 from audible_cli.decorators import (
     bunch_size_option,
-    run_async,
     timeout_option,
+    pass_client,
     pass_session
 )
 from audible_cli.models import Library
@@ -25,16 +25,22 @@ logger = logging.getLogger("audible_cli.cmds.cmd_goodreads-transform")
     show_default=True,
     help="output file"
 )
-@timeout_option()
-@bunch_size_option()
+@timeout_option
+@bunch_size_option
 @pass_session
-@run_async()
-async def cli(session, **params):
+@pass_client
+async def cli(session, client, output):
     """YOUR COMMAND DESCRIPTION"""
-    output = params.get("output")
 
     logger.debug("fetching library")
-    library = await _get_library(session)
+    bunch_size = session.params.get("bunch_size")
+    library = await Library.from_api_full_sync(
+        client,
+        response_groups=(
+            "product_details, contributors, is_finished, product_desc"
+        ),
+        bunch_size=bunch_size
+    )
 
     logger.debug("prepare library")
     library = _prepare_library_for_export(library)
@@ -50,21 +56,6 @@ async def cli(session, **params):
     )
 
     logger.info(f"File saved to {output}")
-
-
-async def _get_library(session):
-    bunch_size = session.params.get("bunch_size")
-
-    async with session.get_client() as client:
-        # added product_detail to response_groups to obtain isbn
-        library = await Library.from_api_full_sync(
-            client,
-            response_groups=(
-                "product_details, contributors, is_finished, product_desc"
-            ),
-            bunch_size=bunch_size
-        )
-    return library
 
 
 def _prepare_library_for_export(library):
@@ -109,9 +100,11 @@ def _prepare_library_for_export(library):
         else:
             skipped_items += 1
 
-    logger.debug(f"{isbn_api_counter} isbns from API")
-    logger.debug(f"{isbn_counter} isbns requested with isbntools")
-    logger.debug(f"{isbn_no_result_counter} isbns without a result")
-    logger.debug(f"{skipped_items} title skipped due to no isbn for title found or title not read")
+    logger.debug(f"ISBNs from API: {isbn_api_counter}")
+    logger.debug(f"ISBNs requested with isbntools: {isbn_counter}")
+    logger.debug(f"No result with isbntools: {isbn_no_result_counter}")
+    logger.debug(
+        f"title skipped from file due to no ISBN or title not read: "
+        f"{skipped_items}")
 
     return prepared_library

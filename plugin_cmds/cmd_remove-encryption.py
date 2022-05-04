@@ -2,7 +2,7 @@
 This is a proof-of-concept and for testing purposes only. No error handling. 
 Need further work. Some options does not work or options are missing.
 
-Needs at least ffmpeg 4.1 with aaxc patch.
+Needs at least ffmpeg 4.4
 """
 
 
@@ -14,7 +14,7 @@ import subprocess
 from shutil import which
 
 import click
-from audible_cli.decoratos import pass_session
+from audible_cli.decorators import pass_session
 from click import echo, secho
 
 
@@ -48,6 +48,10 @@ class ApiMeta:
     def get_runtime_length_ms(self):
         return self._meta_parsed["content_metadata"]["chapter_info"][
             "runtime_length_ms"]
+
+    def is_accurate(self):
+        return self._meta_parsed["content_metadata"]["chapter_info"][
+            "is_accurate"]
 
 
 class FFMeta:
@@ -107,7 +111,8 @@ class FFMeta:
                 self._write_section(fp, section, self._ffmeta_parsed[section],
                                     d)
 
-    def _write_section(self, fp, section_name, section_items, delimiter):
+    @staticmethod
+    def _write_section(fp, section_name, section_items, delimiter):
         """Write a single section to the specified `fp`."""
         if section_name is not None:
             fp.write(f"[{section_name}]\n")
@@ -121,6 +126,10 @@ class FFMeta:
     def update_chapters_from_api_meta(self, api_meta, separate_intro_outro=True):
         if not isinstance(api_meta, ApiMeta):
             api_meta = ApiMeta(api_meta)
+
+        if not api_meta.is_accurate():
+            echo("Metadata from API is not accurate. Skip.")
+            return
 
         # assert api_meta.count_chapters() == self.count_chapters()
 
@@ -170,43 +179,54 @@ class FFMeta:
         self._ffmeta_parsed["CHAPTER"] = new_chapters
 
 
-def decrypt_aax(files, activation_bytes):
+def decrypt_aax(files, activation_bytes, rebuild_chapters):
     for file in files:
         outfile = file.with_suffix(".m4b")
         metafile = file.with_suffix(".meta")
         metafile_new = file.with_suffix(".new.meta")
-        # apimeta = CHAPTERFILE
+        base_filename = file.stem.rsplit("-")[0]
+        chapters = file.with_name(base_filename + "-chapters").with_suffix(".json")
+        apimeta = json.loads(chapters.read_text())
 
         if outfile.exists():
             secho(f"file {outfile} already exists Skip.", fg="blue")
             continue
-    
-        cmd = ["ffmpeg",
-               "-activation_bytes", activation_bytes,
-               "-i", str(file),
-               "-f", "ffmetadata",
-               str(metafile)]
-        subprocess.check_output(cmd, universal_newlines=True)
-    
-        ffmeta_class = FFMeta(metafile)
-        #ffmeta_class.update_chapters_from_api_meta(apimeta)
-        ffmeta_class.write(metafile_new)
-        click.echo("Replaced all titles.")
-    
-        cmd = ["ffmpeg",
-               "-activation_bytes", activation_bytes,
-               "-i", str(file),
-               "-i", str(metafile_new),
-               "-map_metadata", "0",
-               "-map_chapters", "1",
-               "-c", "copy",
-               str(outfile)]
-        subprocess.check_output(cmd, universal_newlines=True)
-        metafile.unlink()
-        metafile_new.unlink()
+
+        if rebuild_chapters and apimeta["content_metadata"]["chapter_info"][
+                "is_accurate"]:
+            cmd = ["ffmpeg",
+                   "-activation_bytes", activation_bytes,
+                   "-i", str(file),
+                   "-f", "ffmetadata",
+                   str(metafile)]
+            subprocess.check_output(cmd, universal_newlines=True)
+
+            ffmeta_class = FFMeta(metafile)
+            ffmeta_class.update_chapters_from_api_meta(apimeta)
+            ffmeta_class.write(metafile_new)
+            click.echo("Replaced all titles.")
+
+            cmd = ["ffmpeg",
+                   "-activation_bytes", activation_bytes,
+                   "-i", str(file),
+                   "-i", str(metafile_new),
+                   "-map_metadata", "0",
+                   "-map_chapters", "1",
+                   "-c", "copy",
+                   str(outfile)]
+            subprocess.check_output(cmd, universal_newlines=True)
+            metafile.unlink()
+            metafile_new.unlink()
+        else:
+            cmd = ["ffmpeg",
+                   "-activation_bytes", activation_bytes,
+                   "-i", str(file),
+                   "-c", "copy",
+                   str(outfile)]
+            subprocess.check_output(cmd, universal_newlines=True)
 
 
-def decrypt_aaxc(files):
+def decrypt_aaxc(files, rebuild_chapters):
     for file in files:
         metafile = file.with_suffix(".meta")
         metafile_new = file.with_suffix(".new.meta")
@@ -221,32 +241,42 @@ def decrypt_aaxc(files):
         apimeta = voucher["content_license"]
         audible_key = apimeta["license_response"]["key"]
         audible_iv = apimeta["license_response"]["iv"]
+
+        if rebuild_chapters and apimeta["content_metadata"]["chapter_info"][
+                "is_accurate"]:
+            cmd = ["ffmpeg",
+                   "-audible_key", audible_key,
+                   "-audible_iv", audible_iv,
+                   "-i", str(file),
+                   "-f", "ffmetadata",
+                   str(metafile)]
+            subprocess.check_output(cmd, universal_newlines=True)
     
-        cmd = ["ffmpeg",
-               "-audible_key", audible_key,
-               "-audible_iv", audible_iv,
-               "-i", str(file),
-               "-f", "ffmetadata",
-               str(metafile)]
-        subprocess.check_output(cmd, universal_newlines=True)
+            ffmeta_class = FFMeta(metafile)
+            ffmeta_class.update_chapters_from_api_meta(apimeta)
+            ffmeta_class.write(metafile_new)
+            click.echo("Replaced all titles.")
     
-        ffmeta_class = FFMeta(metafile)
-        ffmeta_class.update_chapters_from_api_meta(apimeta)
-        ffmeta_class.write(metafile_new)
-        click.echo("Replaced all titles.")
-    
-        cmd = ["ffmpeg",
-               "-audible_key", audible_key,
-               "-audible_iv", audible_iv,
-               "-i", str(file),
-               "-i", str(metafile_new),
-               "-map_metadata", "0",
-               "-map_chapters", "1",
-               "-c", "copy",
-               str(outfile)]
-        subprocess.check_output(cmd, universal_newlines=True)
-        metafile.unlink()
-        metafile_new.unlink()
+            cmd = ["ffmpeg",
+                   "-audible_key", audible_key,
+                   "-audible_iv", audible_iv,
+                   "-i", str(file),
+                   "-i", str(metafile_new),
+                   "-map_metadata", "0",
+                   "-map_chapters", "1",
+                   "-c", "copy",
+                   str(outfile)]
+            subprocess.check_output(cmd, universal_newlines=True)
+            metafile.unlink()
+            metafile_new.unlink()
+        else:
+            cmd = ["ffmpeg",
+                   "-audible_key", audible_key,
+                   "-audible_iv", audible_iv,
+                   "-i", str(file),
+                   "-c", "copy",
+                   str(outfile)]
+            subprocess.check_output(cmd, universal_newlines=True)
 
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -268,11 +298,18 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
     is_flag=True,
     help="overwrite existing files"
 )
+@click.option(
+    "--rebuild-chapters",
+    is_flag=True,
+    help="Rebuild chapters from chapter file"
+)
 @pass_session
 def cli(session, **options):
     if not which("ffmpeg"):
         ctx = click.get_current_context()
         ctx.fail("ffmpeg not found")
+
+    rebuild_chapters = options.get("rebuild_chapters")
 
     jobs = {"aaxc": [], "aax":[]}
 
@@ -280,9 +317,6 @@ def cli(session, **options):
         cwd = pathlib.Path.cwd()
         jobs["aaxc"].extend(list(cwd.glob('*.aaxc')))
         jobs["aax"].extend(list(cwd.glob('*.aax')))
-        for suffix in jobs:
-            for i in jobs[suffix]:
-                i = i.resolve()
         
     else:
         for file in options.get("input"):
@@ -294,6 +328,5 @@ def cli(session, **options):
             else:
                 secho(f"file suffix {file.suffix} not supported", fg="red")
 
-    decrypt_aaxc(jobs["aaxc"])
-    decrypt_aax(jobs["aax"], session.auth.activation_bytes)
-
+    decrypt_aaxc(jobs["aaxc"], rebuild_chapters)
+    decrypt_aax(jobs["aax"], session.auth.activation_bytes, rebuild_chapters)

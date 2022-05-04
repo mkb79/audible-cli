@@ -16,6 +16,6 @@ async def cli(client, asin):
     try:
         r = await client.get(url, params=params)
     except NotFoundError:
-        click.echo(f"No annotions found for asin {asin}")
+        click.echo(f"No annotations found for asin {asin}")
     else:
         click.echo(r)

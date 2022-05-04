@@ -5,7 +5,7 @@ import pathlib
 from datetime import datetime
 
 import click
-from audible_cli.decorators import pass_session, run_async
+from audible_cli.decorators import pass_client
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_listening-stats")
@@ -14,10 +14,10 @@ current_year = datetime.now().year
 
 
 def ms_to_hms(milliseconds):
-    seconds = (int) (milliseconds / 1000) % 60
-    minutes = (int) ((milliseconds / (1000*60)) % 60)
-    hours   = (int) ((milliseconds / (1000*60*60)) % 24)
-    return hours, minutes, seconds
+    seconds = int((milliseconds / 1000) % 60)
+    minutes = int(((milliseconds / (1000*60)) % 60))
+    hours = int(((milliseconds / (1000*60*60)) % 24))
+    return {"hours": hours, "minutes": minutes, "seconds": seconds}
 
 
 async def _get_stats_year(client, year):
@@ -28,7 +28,7 @@ async def _get_stats_year(client, year):
         monthly_listening_interval_start_date=f"{year}-01",
         store="Audible"
     )
-    #iterate over each month
+    # iterate over each month
     for stat in stats['aggregated_monthly_listening_stats']:
         stats_year[stat["interval_identifier"]] = ms_to_hms(stat["aggregated_sum"])
     return stats_year
@@ -49,22 +49,19 @@ async def _get_stats_year(client, year):
     show_default=True,
     help="start year for collecting listening stats"
 )
-@pass_session
-@run_async()
-async def cli(session, output, signup_year):
+@pass_client
+async def cli(client, output, signup_year):
     """get and analyse listening statistics"""
     year_range = [y for y in range(signup_year, current_year+1)]
 
-    async with session.get_client() as client:
+    r = await asyncio.gather(
+        *[_get_stats_year(client, y) for y in year_range]
+    )
 
-        r = await asyncio.gather(
-            *[_get_stats_year(client, y) for y in year_range]
-        )
-
-    aggreated_stats = {}
+    aggregated_stats = {}
     for i in r:
         for k, v in i.items():
-            aggreated_stats[k] = v
+            aggregated_stats[k] = v
 
-    aggreated_stats = json.dumps(aggreated_stats, indent=4)
-    output.write_text(aggreated_stats)
+    aggregated_stats = json.dumps(aggregated_stats, indent=4)
+    output.write_text(aggregated_stats)
