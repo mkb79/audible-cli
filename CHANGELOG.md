@@ -6,7 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
--
+### Added
+
+- `questionary` package to dependencies
+- `add` and `remove` subcommand to wishlist
+- `full_response_callback` to `utils`
+- `export_to_csv` to `utils`
+- `run_async` to `decorators`
+- `pass_client` to `decorators`
+- `profile_option` to `decorators`
+- `password_option` to `decorators`
+- `timeout_option` to `decorators`
+- `bunch_size_option` to `decorators`
+
+### Changed
+
+- bump `audible` to v0.8.1
+- rework plugin examples in `plugin_cmds`
+- move `click_verbosity_logger` from `_logging` to `decorators` and rename it to `verbosity_option`
+- move `wrap_async` from `utils` to `decorators`
+- move `add_param_to_session` from `config` to `decorators`
+- move `pass_session` from `config` to `decorators`
+- `download` command can now get `annotations` like bookmarks and notes
+- `download` command let you now select items when using `--title` option
+
+### Fixed
+
+- the `library export` and `wishlist export` command will now export to `csv` correctly
+- 
 
 ## [0.1.3] - 2022-03-27
 
