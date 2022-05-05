@@ -225,7 +225,8 @@ async def download_annotations(
 
 
 async def download_aax(
-        client, output_dir, base_filename, item, quality, overwrite_existing
+        client, output_dir, base_filename, item,
+        quality, overwrite_existing, allow_alternate_formats
 ):
     # url, codec = await item.get_aax_url(quality)
     url, codec = await item.get_aax_url_old(quality)
@@ -235,10 +236,23 @@ async def download_aax(
         url, filepath, client, overwrite_existing,
         ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
     )
-    downloaded = await dl.run(pb=True)
+    try:
+        downloaded = await dl.run(pb=True)
 
-    if downloaded:
-        counter.count_aax()
+        if downloaded:
+            counter.count_aax()
+
+    except:
+        logger.error('AAX file requested but not available.')
+        if allow_alternate_formats:
+            return await download_aaxc(
+                client=client,
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
+                quality=quality,
+                overwrite_existing=overwrite_existing
+            )
 
 
 async def download_aaxc(
@@ -254,7 +268,7 @@ async def download_aaxc(
             filepath = pathlib.Path(
                 output_dir) / f"{base_filename}-{codec}.aaxc"
             lr_file = filepath.with_suffix(".voucher")
-        
+
             if lr_file.is_file():
                 if filepath.is_file():
                     logger.info(
@@ -344,7 +358,8 @@ def queue_job(
         item,
         cover_size,
         quality,
-        overwrite_existing
+        overwrite_existing,
+        allow_alternate_formats
 ):
     base_filename = item.create_base_filename(filename_mode)
 
@@ -400,7 +415,8 @@ def queue_job(
                 base_filename=base_filename,
                 item=item,
                 quality=quality,
-                overwrite_existing=overwrite_existing
+                overwrite_existing=overwrite_existing,
+                allow_alternate_formats=allow_alternate_formats
             )
         )
 
@@ -508,6 +524,11 @@ def display_counter():
     help="start without confirm"
 )
 @click.option(
+    "--allow-alternate-formats",
+    is_flag=True,
+    help="Try alternate audio formats if preffered format isn't available"
+)
+@click.option(
     "--overwrite",
     is_flag=True,
     help="rename existing files"
@@ -577,6 +598,7 @@ async def cli(session, api_client, **params):
     quality = params.get("quality")
     cover_size = params.get("cover_size")
     overwrite_existing = params.get("overwrite")
+    allow_alternate_formats = params.get("allow_alternate_formats")
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
     resolve_podcats = params.get("resolve_podcasts")
@@ -639,7 +661,7 @@ async def cli(session, api_client, **params):
                 ).unsafe_ask_async()
                 if answer is not None:
                     [jobs.append(i) for i in answer]
-                
+
         else:
             logger.error(
                 f"Skip title {title}: Not found in library"
@@ -680,7 +702,8 @@ async def cli(session, api_client, **params):
                 item=item,
                 cover_size=cover_size,
                 quality=quality,
-                overwrite_existing=overwrite_existing
+                overwrite_existing=overwrite_existing,
+                allow_alternate_formats=allow_alternate_formats
             )
 
     try:
@@ -695,6 +718,6 @@ async def cli(session, api_client, **params):
         # the consumer is still awaiting an item, cancel it
         for consumer in consumers:
             consumer.cancel()
-    
+
         await asyncio.gather(*consumers, return_exceptions=True)
         display_counter()
