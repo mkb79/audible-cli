@@ -18,7 +18,7 @@ from tabulate import tabulate
 from ..config import pass_session
 from ..exceptions import DirectoryDoesNotExists, NotFoundError
 from ..models import Library
-from ..utils import Downloader
+from ..utils import Downloader, yesNo
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_download")
@@ -256,10 +256,23 @@ async def download_aax(
         url, filepath, client, overwrite_existing,
         ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
     )
-    downloaded = await dl.run(pb=True)
+    try:
+        downloaded = await dl.run(pb=True)
 
-    if downloaded:
-        counter.count_aax()
+        if downloaded:
+            counter.count_aax()
+
+    except:
+        logger.error('AAX file requested but not available.')
+        if yesNo('No AAX file found in library. Do you want to try AAXC?'):
+            return await download_aaxc(
+                client=client,
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
+                quality=quality,
+                overwrite_existing=overwrite_existing
+            )
 
 
 async def download_aaxc(
