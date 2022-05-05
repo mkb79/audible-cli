@@ -147,12 +147,12 @@ class LibraryItem(BaseItem):
 
     async def get_child_items(self, **request_params) -> Optional["Library"]:
         """Get child elements of MultiPartBooks and Podcasts
-        
+
         With these all parts of a MultiPartBook or all episodes of a Podcasts
         can be shown.
         """
 
-        # Only items with content_delivery_type 
+        # Only items with content_delivery_type
         # MultiPartBook or Periodical have child elemts
         if not self.has_children:
             return
@@ -205,7 +205,7 @@ class LibraryItem(BaseItem):
             raise AudibleCliException(
                 f"{self.full_title} is not downloadable in AAX format"
             )
-        
+
         url = (
             "https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
             "FSDownloadContent"

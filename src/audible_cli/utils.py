@@ -21,16 +21,6 @@ from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
 logger = logging.getLogger("audible_cli.utils")
 
 
-def yesNo(question) -> bool:
-    #ghetto case statement to preserve backwards compatibilty
-    ans = input(question + '(y/N)')
-    if ans == 'y': return True
-    if ans == 'Y': return True
-    if ans == 'yes': return True
-    if ans == 'ye': return True
-    return False
-
-
 def prompt_captcha_callback(captcha_url: str) -> str:
     """Helper function for handling captcha."""
 

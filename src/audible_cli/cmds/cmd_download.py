@@ -18,7 +18,7 @@ from tabulate import tabulate
 from ..config import pass_session
 from ..exceptions import DirectoryDoesNotExists, NotFoundError
 from ..models import Library
-from ..utils import Downloader, yesNo
+from ..utils import Downloader
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_download")
@@ -246,7 +246,8 @@ async def download_chapters(
 
 
 async def download_aax(
-        client, output_dir, base_filename, item, quality, overwrite_existing
+        client, output_dir, base_filename, item,
+        quality, overwrite_existing, allow_alternate_formats
 ):
     # url, codec = await item.get_aax_url(quality)
     url, codec = await item.get_aax_url_old(quality)
@@ -264,7 +265,7 @@ async def download_aax(
 
     except:
         logger.error('AAX file requested but not available.')
-        if yesNo('No AAX file found in library. Do you want to try AAXC?'):
+        if allow_alternate_formats:
             return await download_aaxc(
                 client=client,
                 output_dir=output_dir,
@@ -288,7 +289,7 @@ async def download_aaxc(
             filepath = pathlib.Path(
                 output_dir) / f"{base_filename}-{codec}.aaxc"
             lr_file = filepath.with_suffix(".voucher")
-        
+
             if lr_file.is_file():
                 if filepath.is_file():
                     logger.info(
@@ -375,7 +376,8 @@ def queue_job(
         item,
         cover_size,
         quality,
-        overwrite_existing
+        overwrite_existing,
+        allow_alternate_formats
 ):
     base_filename = create_base_filename(item=item, mode=filename_mode)
 
@@ -421,7 +423,8 @@ def queue_job(
                 base_filename=base_filename,
                 item=item,
                 quality=quality,
-                overwrite_existing=overwrite_existing
+                overwrite_existing=overwrite_existing,
+                allow_alternate_formats=allow_alternate_formats
             )
         )
 
@@ -464,6 +467,7 @@ async def main(config, auth, **params):
     quality = params.get("quality")
     cover_size = params.get("cover_size")
     overwrite_existing = params.get("overwrite")
+    allow_alternate_formats = params.get("allow_alternate_formats")
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
     resolve_podcats = params.get("resolve_podcasts")
@@ -476,8 +480,8 @@ async def main(config, auth, **params):
     filename_mode = params.get("filename_mode")
     if filename_mode == "config":
         filename_mode = config.profile_config.get("filename_mode") or \
-                        config.app_config.get("filename_mode") or \
-                        "ascii"
+            config.app_config.get("filename_mode") or \
+            "ascii"
 
     headers = {
         "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
@@ -519,7 +523,7 @@ async def main(config, auth, **params):
         for title in titles:
             match = library.search_item_by_title(title)
             full_match = [i for i in match if i[1] == 100]
-    
+
             if full_match or match:
                 echo(f"\nFound the following matches for '{title}'")
                 table_data = [[i[1], i[0].full_title, i[0].asin]
@@ -529,13 +533,13 @@ async def main(config, auth, **params):
                     table_data, head, tablefmt="pretty",
                     colalign=("center", "left", "center"))
                 echo(table)
-    
+
                 if no_confirm or click.confirm(
                         "Proceed with this audiobook(s)",
                         default=True
                 ):
                     jobs.extend([i[0].asin for i in full_match or match])
-    
+
             else:
                 logger.error(
                     f"Skip title {title}: Not found in library"
@@ -576,7 +580,8 @@ async def main(config, auth, **params):
                     item=item,
                     cover_size=cover_size,
                     quality=quality,
-                    overwrite_existing=overwrite_existing
+                    overwrite_existing=overwrite_existing,
+                    allow_alternate_formats=allow_alternate_formats
                 )
 
         # schedule the consumer
@@ -659,6 +664,11 @@ async def main(config, auth, **params):
     help="start without confirm"
 )
 @click.option(
+    "--allow-alternate-formats",
+    is_flag=True,
+    help="Try alternate audio formats if preffered format isn't available"
+)
+@click.option(
     "--overwrite",
     is_flag=True,
     help="rename existing files"
@@ -728,7 +738,7 @@ def cli(session, **params):
             for k, v in counter.as_dict().items():
                 if v == 0:
                     continue
-    
+
                 if k == "voucher_saved":
                     k = "voucher"
                 elif k == "voucher":
