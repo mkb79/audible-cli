@@ -228,22 +228,21 @@ async def download_aax(
         client, output_dir, base_filename, item,
         quality, overwrite_existing, allow_alternate_formats
 ):
-    # url, codec = await item.get_aax_url(quality)
-    url, codec = await item.get_aax_url_old(quality)
-    filename = base_filename + f"-{codec}.aax"
-    filepath = output_dir / filename
-    dl = Downloader(
-        url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
-    )
     try:
+        url, codec = await item.get_aax_url_old(quality)
+        filename = base_filename + f"-{codec}.aax"
+        filepath = output_dir / filename
+        dl = Downloader(
+            url, filepath, client, overwrite_existing,
+            ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
+        )
         downloaded = await dl.run(pb=True)
 
         if downloaded:
             counter.count_aax()
-
     except:
-        logger.error('AAX file requested but not available.')
+        # if the above fails for some reason, try again with all the same
+        # parameters, except aaxc instead of aax
         if allow_alternate_formats:
             return await download_aaxc(
                 client=client,

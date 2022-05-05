@@ -213,14 +213,16 @@ class LibraryItem(BaseItem):
         if self.customer_rights is not None:
             if not self.customer_rights["is_consumable_offline"]:
                 return False
-            else:
-                return True
+            # origin_type is set to Purchase for titles bought with
+            # credits or money, and None for titles 'Included with
+            # Membership'. The latter require downloading as aaxc files
+            if self.origin_type == None:
+                return False
+            return True
 
     async def get_aax_url_old(self, quality: str = "high"):
         if not self.is_downloadable():
-            raise AudibleCliException(
-                f"{self.full_title} is not downloadable. Skip item."
-            )
+            return await self.get_aaxc_url(quality=quality)
 
         codec, codec_name = self._get_codec(quality)
         if codec is None:
