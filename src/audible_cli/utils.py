@@ -242,10 +242,6 @@ class Downloader:
                     msg = self._tmp_file.read_text()
                 except:  # noqa
                     msg = "Unknown"
-                if msg == 'No Library Record Found for user.':
-                    logger.error('No Library Record Found for user. Check if available in different format.')
-                    raise Exception
-
                 logger.error(
                     f"Error downloading {self._file}. Wrong content type. "
                     f"Expected type(s): {self._expected_content_type}; "
