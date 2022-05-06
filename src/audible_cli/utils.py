@@ -250,8 +250,7 @@ class Downloader:
             file.rename(file.with_suffix(f"{file.suffix}.old.{i}"))
         tmp_file.rename(file)
         logger.info(
-            f"File {self._file} downloaded to {self._file.parent} "
-            f"in {elapsed}."
+            f"File {self._file} downloaded in {elapsed}."
         )
         return True
 
