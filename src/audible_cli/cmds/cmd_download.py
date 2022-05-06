@@ -269,7 +269,7 @@ async def download_aaxc(
             filepath = pathlib.Path(
                 output_dir) / f"{base_filename}-{codec}.aaxc"
             lr_file = filepath.with_suffix(".voucher")
-        
+
             if lr_file.is_file():
                 if filepath.is_file():
                     logger.info(
@@ -408,7 +408,7 @@ def queue_job(
             )
         )
 
-    if get_aax:
+    if get_aax or aax_fallback:
         queue.put_nowait(
             download_aax(
                 client=client,
@@ -663,7 +663,7 @@ async def cli(session, api_client, **params):
                 ).unsafe_ask_async()
                 if answer is not None:
                     [jobs.append(i) for i in answer]
-                
+
         else:
             logger.error(
                 f"Skip title {title}: Not found in library"
@@ -720,6 +720,6 @@ async def cli(session, api_client, **params):
         # the consumer is still awaiting an item, cancel it
         for consumer in consumers:
             consumer.cancel()
-    
+
         await asyncio.gather(*consumers, return_exceptions=True)
         display_counter()
