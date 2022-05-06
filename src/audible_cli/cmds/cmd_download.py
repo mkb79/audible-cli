@@ -242,6 +242,7 @@ async def download_aax(
                 quality=quality,
                 overwrite_existing=overwrite_existing
             )
+        raise
 
     filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
