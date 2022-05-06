@@ -253,10 +253,13 @@ class Downloader:
                 i += 1
             file.rename(file.with_suffix(f"{file.suffix}.old.{i}"))
         tmp_file.rename(file)
-        logger.info(
-            f"File {self._file} downloaded to {self._file.parent} "
-            f"in {elapsed}."
-        )
+
+        msg = (f"File {self._file} downloaded in {elapsed}.")
+        logger.info(msg)
+
+        with open('log.txt', 'a+') as file:
+            file.write(msg + '\n')
+
         return True
 
     def _remove_tmp_file(self):
