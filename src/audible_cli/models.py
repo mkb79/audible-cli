@@ -11,7 +11,7 @@ from audible.aescipher import decrypt_voucher_from_licenserequest
 from audible.client import convert_response_content
 
 from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
-from .exceptions import AudibleCliException
+from .exceptions import AudibleCliException, NotDownloadableAsAAX
 from .utils import full_response_callback, LongestSubString
 
 
@@ -211,22 +211,19 @@ class LibraryItem(BaseItem):
     def is_downloadable(self):
         # customer_rights must be in response_groups
         if self.customer_rights is not None:
-            if not self.customer_rights["is_consumable_offline"]:
-                return False
-            # origin_type is set to Purchase for titles bought with
-            # credits or money, and None for titles 'Included with
-            # Membership'. The latter require downloading as aaxc files
-            if self.origin_type == None:
-                return False
-            return True
+            if self.customer_rights["is_consumable_offline"]:
+                return True
+            return False
 
     async def get_aax_url_old(self, quality: str = "high"):
         if not self.is_downloadable():
-            return await self.get_aaxc_url(quality=quality)
+            raise AudibleCliException(
+                f"{self.full_title} is not downloadable."
+            )
 
         codec, codec_name = self._get_codec(quality)
-        if codec is None:
-            raise AudibleCliException(
+        if codec is None or self.is_ayce:
+            raise NotDownloadableAsAAX(
                 f"{self.full_title} is not downloadable in AAX format"
             )
 
@@ -262,8 +259,8 @@ class LibraryItem(BaseItem):
             )
 
         codec, codec_name = self._get_codec(quality)
-        if codec is None:
-            raise AudibleCliException(
+        if codec is None or self.is_ayce:
+            raise NotDownloadableAsAAX(
                 f"{self.full_title} is not downloadable in AAX format"
             )
 
