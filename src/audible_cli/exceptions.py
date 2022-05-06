@@ -9,6 +9,10 @@ class NotFoundError(AudibleCliException):
     """Raised if an item is not found"""
 
 
+class NotDownloadableAsAAX(AudibleCliException):
+    """Raised if an item is not found"""
+
+
 class FileDoesNotExists(AudibleCliException):
     """Raised if a file does not exist"""
 

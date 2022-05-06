@@ -18,7 +18,7 @@ from ..decorators import (
     pass_client,
     pass_session
 )
-from ..exceptions import DirectoryDoesNotExists
+from ..exceptions import DirectoryDoesNotExists, NotDownloadableAsAAX
 from ..models import Library
 from ..utils import Downloader
 
@@ -225,10 +225,24 @@ async def download_annotations(
 
 
 async def download_aax(
-        client, output_dir, base_filename, item, quality, overwrite_existing
+        client, output_dir, base_filename, item, quality, overwrite_existing,
+        aax_fallback
 ):
     # url, codec = await item.get_aax_url(quality)
-    url, codec = await item.get_aax_url_old(quality)
+    try:
+        url, codec = await item.get_aax_url_old(quality)
+    except NotDownloadableAsAAX:
+        if aax_fallback:
+            logger.info(f"Fallback to aaxc for {item.full_title}")
+            return await download_aaxc(
+                client=client,
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
+                quality=quality,
+                overwrite_existing=overwrite_existing
+            )
+
     filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
     dl = Downloader(
@@ -344,7 +358,8 @@ def queue_job(
         item,
         cover_size,
         quality,
-        overwrite_existing
+        overwrite_existing,
+        aax_fallback
 ):
     base_filename = item.create_base_filename(filename_mode)
 
@@ -400,7 +415,8 @@ def queue_job(
                 base_filename=base_filename,
                 item=item,
                 quality=quality,
-                overwrite_existing=overwrite_existing
+                overwrite_existing=overwrite_existing,
+                aax_fallback=aax_fallback
             )
         )
 
@@ -467,6 +483,11 @@ def display_counter():
     "--aaxc",
     is_flag=True,
     help="Download book in aaxc format incl. voucher file"
+)
+@click.option(
+    "--aax-fallback",
+    is_flag=True,
+    help="Download book in aax format and fallback to aaxc, if former is not supported."
 )
 @click.option(
     "--quality", "-q",
@@ -562,12 +583,14 @@ async def cli(session, api_client, **params):
     # what to download
     get_aax = params.get("aax")
     get_aaxc = params.get("aaxc")
+    aax_fallback = params.get("aax_fallback")
     get_annotation = params.get("annotation")
     get_chapters = params.get("chapter")
     get_cover = params.get("cover")
     get_pdf = params.get("pdf")
     if not any(
-        [get_aax, get_aaxc, get_annotation, get_chapters, get_cover, get_pdf]
+        [get_aax, get_aaxc, aax_fallback, get_annotation, get_chapters,
+         get_cover, get_pdf]
     ):
         logger.error("Please select an option what you want download.")
         click.Abort()
@@ -680,7 +703,8 @@ async def cli(session, api_client, **params):
                 item=item,
                 cover_size=cover_size,
                 quality=quality,
-                overwrite_existing=overwrite_existing
+                overwrite_existing=overwrite_existing,
+                aax_fallback=aax_fallback
             )
 
     try:
