@@ -8,6 +8,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# macOS stuff
+.DS_Store
+
+# Post-install logs
+log.txt
+
 # C extensions
 *.so
 
