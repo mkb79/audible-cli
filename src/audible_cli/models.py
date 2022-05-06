@@ -210,7 +210,6 @@ class LibraryItem(BaseItem):
 
     def is_downloadable(self):
         # customer_rights must be in response_groups
-        logger.info(f'{self.extended_product_description}')
         if self.customer_rights is not None:
             if not self.customer_rights["is_consumable_offline"]:
                 return False
