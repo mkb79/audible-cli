@@ -530,6 +530,11 @@ def display_counter():
     help="start without confirm"
 )
 @click.option(
+    "--allow-alternate-formats",
+    is_flag=True,
+    help="Try alternate audio formats if preffered format isn't available"
+)
+@click.option(
     "--overwrite",
     is_flag=True,
     help="rename existing files"
@@ -601,6 +606,7 @@ async def cli(session, api_client, **params):
     quality = params.get("quality")
     cover_size = params.get("cover_size")
     overwrite_existing = params.get("overwrite")
+    allow_alternate_formats = params.get("allow_alternate_formats")
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
     resolve_podcats = params.get("resolve_podcasts")

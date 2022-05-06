@@ -96,6 +96,8 @@ async def export_library(session, client, **params):
                     for ladder in genre["ladder"]:
                         genres.append(ladder["name"])
                 data_row["genres"] = ", ".join(genres)
+            elif key == "extended_product_description":
+                data_row["description"] = item[key]
 
         return data_row
 
@@ -129,7 +131,7 @@ async def export_library(session, client, **params):
             "asin", "title", "subtitle", "authors", "narrators", "series_title",
             "series_sequence", "genres", "runtime_length_min", "is_finished",
             "percent_complete", "rating", "num_ratings", "date_added",
-            "release_date", "cover_url"
+            "release_date", "cover_url", "description"
         )
 
         export_to_csv(output_filename, prepared_library, headers, dialect)

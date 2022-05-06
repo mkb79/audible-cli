@@ -82,16 +82,16 @@ class BaseItem:
 
         if "ascii" in mode:
             base_filename = self.full_title_slugify
-    
+
         elif "unicode" in mode:
             base_filename = unicodedata.normalize("NFKD", self.full_title)
-    
+
         else:
             base_filename = self.asin
-    
+
         if "asin" in mode:
             base_filename = self.asin + "_" + base_filename
-    
+
         return base_filename
 
     def substring_in_title_accuracy(self, substring):
@@ -169,12 +169,12 @@ class LibraryItem(BaseItem):
 
     async def get_child_items(self, **request_params) -> Optional["Library"]:
         """Get child elements of MultiPartBooks and Podcasts
-        
+
         With these all parts of a MultiPartBook or all episodes of a Podcasts
         can be shown.
         """
 
-        # Only items with content_delivery_type 
+        # Only items with content_delivery_type
         # MultiPartBook or Periodical have child elements
         if not self.has_children:
             return
@@ -211,22 +211,25 @@ class LibraryItem(BaseItem):
     def is_downloadable(self):
         # customer_rights must be in response_groups
         if self.customer_rights is not None:
-            if self.customer_rights["is_consumable_offline"]:
-                return True
-            return False
+            if not self.customer_rights["is_consumable_offline"]:
+                return False
+            # origin_type is set to Purchase for titles bought with
+            # credits or money, and None for titles 'Included with
+            # Membership'. The latter require downloading as aaxc files
+            if self.origin_type == None:
+                return False
+            return True
 
     async def get_aax_url_old(self, quality: str = "high"):
         if not self.is_downloadable():
-            raise AudibleCliException(
-                f"{self.full_title} is not downloadable."
-            )
+            return await self.get_aaxc_url(quality=quality)
 
         codec, codec_name = self._get_codec(quality)
         if codec is None or self.is_ayce:
             raise NotDownloadableAsAAX(
                 f"{self.full_title} is not downloadable in AAX format"
             )
-        
+
         url = (
             "https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
             "FSDownloadContent"
