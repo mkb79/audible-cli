@@ -38,6 +38,18 @@ async def _get_library(session, client):
         bunch_size=bunch_size
     )
 
+async def _get_sorted_library(session, client):
+    library = await _get_library(session, client)
+    return await _sort_library(library)
+
+
+async def _sort_library(library):
+    prepared_library = await asyncio.gather(
+        *[_prepare_item(i) for i in library]
+    )
+    prepared_library.sort(key=lambda x: x["asin"])
+    return prepared_library
+
 
 @wrap_async
 def _prepare_item(item):
@@ -101,14 +113,7 @@ async def export_library(session, client, **params):
         suffix = "." + output_format
         output_filename = output_filename.with_suffix(suffix)
 
-    library = await _get_library(session, client)
-    if params.get("resolve_podcasts"):
-        await library.resolve_podcats()
-
-    prepared_library = await asyncio.gather(
-        *[_prepare_item(i) for i in library]
-    )
-    prepared_library.sort(key=lambda x: x["asin"])
+    library = await _get_sorted_library(session, client)
 
     if output_format in ("tsv", "csv"):
         dialect = "csv" if output_format == "csv" else "excel-tab"
@@ -118,10 +123,10 @@ async def export_library(session, client, **params):
             "percent_complete", "rating", "num_ratings", "date_added",
             "release_date", "cover_url", "description"
         )
-        export_to_csv(output_filename, prepared_library, headers, dialect)
+        export_to_csv(output_filename, library, headers, dialect)
 
     elif output_format == "json":
-        data = json.dumps(prepared_library, indent=4)
+        data = json.dumps(library, indent=4)
         output_filename.write_text(data)
 
 
