@@ -110,18 +110,13 @@ async def export_library(session, client, **params):
     prepared_library.sort(key=lambda x: x["asin"])
 
     if output_format in ("tsv", "csv"):
-        if output_format == "csv":
-            dialect = "excel"
-        else:
-            dialect = "excel-tab"
-
+        dialect = "csv" if output_format == "csv" else "excel-tab"
         headers = (
             "asin", "title", "subtitle", "authors", "narrators", "series_title",
             "series_sequence", "genres", "runtime_length_min", "is_finished",
             "percent_complete", "rating", "num_ratings", "date_added",
             "release_date", "cover_url", "description"
         )
-
         export_to_csv(output_filename, prepared_library, headers, dialect)
 
     elif output_format == "json":
