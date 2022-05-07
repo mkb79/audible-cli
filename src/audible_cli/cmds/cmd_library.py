@@ -66,9 +66,9 @@ def _prepare_item(item):
     if item["series"] is not None:
         data_row["series_title"] = item["series"][0]["title"]
         data_row["series_sequence"] = item["series"][0]["sequence"]
-    overall_distributing = item["rating"] or {}
-    data_row["rating"] = overall_distributing.get("display_average_rating", "-")
-    data_row["num_ratings"] = overall_distributing.get("num_ratings", "-")
+    ratings = item["rating"] or {}
+    data_row["rating"] = ratings.get("display_average_rating", "-")
+    data_row["num_ratings"] = ratings.get("num_ratings", "-")
     data_row["date_added"] = item["library_status"]["date_added"]
     data_row["cover_url"] = item["product_images"].get("500", "-")
     genres = []
