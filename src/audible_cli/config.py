@@ -26,14 +26,14 @@ logger = logging.getLogger("audible_cli.config")
 class ConfigFile:
     """Presents an audible-cli configuration file
 
-    Instantiate a :class:`~audible_cli.config.ConfigFile` will load the file 
-    content by default. To create a new config file, the ``file_exists`` 
+    Instantiate a :class:`~audible_cli.config.ConfigFile` will load the file
+    content by default. To create a new config file, the ``file_exists``
     argument must be set to ``False``.
-    
-    Audible-cli configuration files are written in the toml markup language. 
-    It has a main section named `APP` and sections for each profile named 
-    `profile.<profile_name>`. 
-    
+
+    Audible-cli configuration files are written in the toml markup language.
+    It has a main section named `APP` and sections for each profile named
+    `profile.<profile_name>`.
+
     Args:
         filename: The file path to the config file
         file_exists: If ``True``, the file must exist and the file content
@@ -88,7 +88,7 @@ class ConfigFile:
 
     def has_profile(self, name: str) -> bool:
         """Check if a profile with this name are in the configuration data
-        
+
         Args:
             name: The name of the profile
         """
@@ -96,7 +96,7 @@ class ConfigFile:
 
     def get_profile(self, name: str) -> Dict[str, str]:
         """Returns the configuration data for these profile name
-        
+
         Args:
             name: The name of the profile
         """
@@ -117,11 +117,11 @@ class ConfigFile:
             default: Optional[str] = None
     ) -> str:
         """Returns the value for an option for the given profile.
-        
-        Looks first, if an option is in the ``profile`` section. If not, it 
+
+        Looks first, if an option is in the ``profile`` section. If not, it
         searches for the option in the ``APP`` section. If not found, it
         returns the ``default``.
-        
+
         Args:
             profile: The name of the profile
             option: The name of the option to search for
@@ -144,13 +144,13 @@ class ConfigFile:
             **additional_options
     ) -> None:
         """Adds a new profile to the config
-        
+
         Args:
             name: The name of the profile
             auth_file: The name of the auth_file
-            country_code: The country code of the marketplace to use with 
+            country_code: The country code of the marketplace to use with
                 this profile
-            is_primary: If ``True``, this profile is set as primary in the 
+            is_primary: If ``True``, this profile is set as primary in the
                 ``APP`` section
             write_config: If ``True``, save the config to file
         """
@@ -175,12 +175,12 @@ class ConfigFile:
 
     def delete_profile(self, name: str, write_config: bool = True) -> None:
         """Deletes a profile from config
-        
+
         Args:
             name: The name of the profile
             write_config: If ``True``, save the config to file
 
-        Note:    
+        Note:
             Does not delete the auth file.
         """
         if not self.has_profile(name):
@@ -198,9 +198,9 @@ class ConfigFile:
             filename: Optional[Union[str, pathlib.Path]] = None
     ) -> None:
         """Write the config data to file
-        
+
         Args:
-            filename: If not ``None`` the config is written to these file path 
+            filename: If not ``None`` the config is written to these file path
                 instead of ``self.filename``
         """
         f = pathlib.Path(filename or self.filename).resolve()
@@ -216,6 +216,7 @@ class ConfigFile:
 
 class Session:
     """Holds the settings for the current session"""
+
     def __init__(self) -> None:
         self._auths: Dict[str, Authenticator] = {}
         self._config: Optional[CONFIG_FILE] = None
@@ -230,9 +231,9 @@ class Session:
     @property
     def params(self):
         """Returns the parameter of the session
-        
-        Parameter are usually added using the ``add_param_to_session`` 
-        callback on a click option. This way an option from a parent command 
+
+        Parameter are usually added using the ``add_param_to_session``
+        callback on a click option. This way an option from a parent command
         can be accessed from his subcommands.
         """
         return self._params
@@ -259,8 +260,8 @@ class Session:
     @property
     def selected_profile(self):
         """Returns the selected config profile name for this session
-        
-        The `profile` to use must be set using the ``add_param_to_session`` 
+
+        The `profile` to use must be set using the ``add_param_to_session``
         callback of a click option. Otherwise, the primary profile from the
         config is used.
         """
@@ -279,12 +280,12 @@ class Session:
             password: Optional[str] = None
     ) -> audible.Authenticator:
         """Returns an Authenticator for a profile
-        
-        If an Authenticator for this profile is already loaded, it will 
+
+        If an Authenticator for this profile is already loaded, it will
         return the Authenticator without reloading it. This way a session can
-        hold multiple Authenticators for different profiles. Commands can use 
+        hold multiple Authenticators for different profiles. Commands can use
         this to make API requests for more than one profile.
-        
+
         Args:
             profile: The name of the profile
             password: The password of the auth file
@@ -338,7 +339,7 @@ class Session:
     ) -> AsyncClient:
         auth = self.get_auth_for_profile(profile, password)
         kwargs.setdefault("timeout", self.params.get("timeout", 5))
-        return AsyncClient(auth=auth, **kwargs)        
+        return AsyncClient(auth=auth, **kwargs)
 
     def get_client(self, **kwargs) -> AsyncClient:
         profile = self.selected_profile
