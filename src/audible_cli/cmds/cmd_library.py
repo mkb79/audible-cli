@@ -39,6 +39,34 @@ async def _get_library(session, client):
     )
 
 
+@wrap_async
+def _prepare_item(item):
+    data_row = {}
+    data_row["asin"] = item["asin"]
+    data_row["title"] = item["title"]
+    data_row["subtitle"] = item["subtitle"]
+    data_row["runtime_length_min"] = item["runtime_length_min"]
+    data_row["is_finished"] = item["is_finished"]
+    data_row["percent_complete"] = item["percent_complete"]
+    data_row["release_date"] = item["release_date"]
+    data_row["authors"] = ", ".join(i["name"] for i in item["authors"])
+    data_row["narrators"] = ", ".join(i["name"] for i in item["narrators"])
+    data_row["series_title"] = item["series"]#["title"]
+    data_row["series_sequence"] = item["series"]#["sequence"]
+    overall_distributing = item["rating"] or {}
+    data_row["rating"] = overall_distributing.get("display_average_rating", "-")
+    data_row["num_ratings"] = overall_distributing.get("num_ratings", "-")
+    data_row["date_added"] = item["library_status"]["date_added"]
+    data_row["cover_url"] = item["product_images"].get("500", "-")
+    genres = []
+    for genre in item["category_ladders"]:
+            for ladder in genre["ladder"]:
+                genres.append(ladder["name"])
+    data_row["genres"] = ", ".join(genres)
+    data_row["description"] = item["extended_product_description"]
+    return data_row
+
+
 @cli.command("export")
 @click.option(
     "--output", "-o",
@@ -66,41 +94,6 @@ async def _get_library(session, client):
 async def export_library(session, client, **params):
     """export library"""
 
-    @wrap_async
-    def _prepare_item(item):
-        data_row = {}
-        for key in item:
-            v = getattr(item, key)
-            if v is None:
-                pass
-            elif key in keys_with_raw_values:
-                data_row[key] = v
-            elif key in ("authors", "narrators"):
-                data_row[key] = ", ".join([i["name"] for i in v])
-            elif key == "series":
-                data_row["series_title"] = v[0]["title"]
-                data_row["series_sequence"] = v[0]["sequence"]
-            elif key == "rating":
-                overall_distributing = v.get("overall_distribution") or {}
-                data_row["rating"] = overall_distributing.get(
-                    "display_average_rating", "-")
-                data_row["num_ratings"] = overall_distributing.get(
-                    "num_ratings", "-")
-            elif key == "library_status":
-                data_row["date_added"] = v["date_added"]
-            elif key == "product_images":
-                data_row["cover_url"] = v.get("500", "-")
-            elif key == "category_ladders":
-                genres = []
-                for genre in v:
-                    for ladder in genre["ladder"]:
-                        genres.append(ladder["name"])
-                data_row["genres"] = ", ".join(genres)
-            elif key == "extended_product_description":
-                data_row["description"] = item[key]
-
-        return data_row
-
     output_format = params.get("format")
     output_filename: pathlib.Path = params.get("output")
     if output_filename.suffix == r".{format}":
@@ -110,11 +103,6 @@ async def export_library(session, client, **params):
     library = await _get_library(session, client)
     if params.get("resolve_podcasts"):
         await library.resolve_podcats()
-
-    keys_with_raw_values = (
-        "asin", "title", "subtitle", "runtime_length_min", "is_finished",
-        "percent_complete", "release_date"
-    )
 
     prepared_library = await asyncio.gather(
         *[_prepare_item(i) for i in library]
