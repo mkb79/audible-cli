@@ -51,8 +51,9 @@ def _prepare_item(item):
     data_row["release_date"] = item["release_date"]
     data_row["authors"] = ", ".join(i["name"] for i in item["authors"])
     data_row["narrators"] = ", ".join(i["name"] for i in item["narrators"])
-    data_row["series_title"] = item["series"]#["title"]
-    data_row["series_sequence"] = item["series"]#["sequence"]
+    if item["series"] is not None:
+        data_row["series_title"] = item["series"][0]["title"]
+        data_row["series_sequence"] = item["series"][0]["sequence"]
     overall_distributing = item["rating"] or {}
     data_row["rating"] = overall_distributing.get("display_average_rating", "-")
     data_row["num_ratings"] = overall_distributing.get("num_ratings", "-")
