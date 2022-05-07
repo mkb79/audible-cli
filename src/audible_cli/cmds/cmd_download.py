@@ -225,7 +225,6 @@ async def download_annotations(
 
 
 async def download_aax(
-
         client, output_dir, base_filename, item, quality, overwrite_existing,
         aax_fallback
 ):
@@ -243,6 +242,18 @@ async def download_aax(
                 quality=quality,
                 overwrite_existing=overwrite_existing
             )
+        raise
+
+    filename = base_filename + f"-{codec}.aax"
+    filepath = output_dir / filename
+    dl = Downloader(
+        url, filepath, client, overwrite_existing,
+        ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
+    )
+    downloaded = await dl.run(pb=True)
+
+    if downloaded:
+        counter.count_aax()
 
         raise
 
