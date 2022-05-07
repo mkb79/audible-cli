@@ -273,6 +273,11 @@ class LibraryItem(BaseItem):
         return httpx.URL(url, params=params), codec_name
 
     async def get_aaxc_url(self, quality: str = "high"):
+        if not self.is_downloadable():
+            raise AudibleCliException(
+                f"{self.full_title} is not downloadable."
+            )
+
         assert quality in ("best", "high", "normal",)
 
         body = {
