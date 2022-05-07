@@ -54,13 +54,10 @@ async def _sort_library(library):
 @wrap_async
 def _prepare_item(item):
     data_row = {}
-    data_row["asin"] = item["asin"]
-    data_row["title"] = item["title"]
-    data_row["subtitle"] = item["subtitle"]
-    data_row["runtime_length_min"] = item["runtime_length_min"]
-    data_row["is_finished"] = item["is_finished"]
-    data_row["percent_complete"] = item["percent_complete"]
-    data_row["release_date"] = item["release_date"]
+    for key in ["asin", "title", "subtitle", "runtime_length_min",
+              "is_finished", "percent_complete", "release_date"]:
+        data_row[key] = item[key]
+
     data_row["authors"] = ", ".join(i["name"] for i in item["authors"])
     data_row["narrators"] = ", ".join(i["name"] for i in item["narrators"])
     if item["series"] is not None:
