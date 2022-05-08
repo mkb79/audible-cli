@@ -55,7 +55,8 @@ setup(
         "tabulate",
         "toml",
         "tqdm",
-        "questionary"
+        "questionary",
+        "sqlalchemy"
     ],
     extras_require={
         'pyi': [
