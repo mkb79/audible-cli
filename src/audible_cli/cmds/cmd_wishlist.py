@@ -180,7 +180,7 @@ async def list_wishlist(client):
 @pass_client(limits=limits)
 async def add_wishlist(client, asin, title):
     """add asin(s) to wishlist
-    
+
     Run the command without any option for interactive mode.
     """
 
@@ -223,7 +223,7 @@ async def add_wishlist(client, asin, title):
             for i in full_match or match:
                 c = questionary.Choice(title=i[0].full_title, value=i[0].asin)
                 choices.append(c)
-    
+
             answer = await questionary.checkbox(
                 f"Found the following matches for '{t}'. Which you want to add?",
                 choices=choices
@@ -263,7 +263,7 @@ async def add_wishlist(client, asin, title):
 @pass_client(limits=limits)
 async def remove_wishlist(client, asin, title):
     """remove asin(s) from wishlist
-    
+
     Run the command without any option for interactive mode.
     """
 
@@ -297,7 +297,7 @@ async def remove_wishlist(client, asin, title):
             for i in full_match or match:
                 c = questionary.Choice(title=i[0].full_title, value=i[0].asin)
                 choices.append(c)
-    
+
             answer = await questionary.checkbox(
                 f"Found the following matches for '{t}'. Which you want to remove?",
                 choices=choices

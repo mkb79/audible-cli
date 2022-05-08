@@ -63,7 +63,7 @@ logger = logging.getLogger("audible_cli.cmds.cmd_api")
 @pass_session
 def cli(session, **options):
     """Send requests to an Audible API endpoint
-    
+
     Take a look at 
     https://audible.readthedocs.io/en/latest/misc/external_api.html for known 
     endpoints and parameters.
@@ -96,7 +96,7 @@ def cli(session, **options):
         with Client(auth=auth, country_code=country_code) as client:
             r = client._request(method, endpoint, params=params, json=body)
     except Exception as e:
-        logger.error(e)            
+        logger.error(e)
         sys.exit(1)
 
     if output_format == "json":

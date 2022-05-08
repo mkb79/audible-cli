@@ -82,16 +82,16 @@ class BaseItem:
 
         if "ascii" in mode:
             base_filename = self.full_title_slugify
-    
+
         elif "unicode" in mode:
             base_filename = unicodedata.normalize("NFKD", self.full_title)
-    
+
         else:
             base_filename = self.asin
-    
+
         if "asin" in mode:
             base_filename = self.asin + "_" + base_filename
-    
+
         return base_filename
 
     def substring_in_title_accuracy(self, substring):
@@ -226,7 +226,7 @@ class LibraryItem(BaseItem):
             raise NotDownloadableAsAAX(
                 f"{self.full_title} is not downloadable in AAX format"
             )
-        
+
         url = (
             "https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
             "FSDownloadContent"
