@@ -585,13 +585,18 @@ async def cli(session, api_client, **params):
     get_aax = params.get("aax")
     get_aaxc = params.get("aaxc")
     aax_fallback = params.get("aax_fallback")
+    if aax_fallback:
+        if get_aax:
+            logger.info("Using --aax is redundant and can be left when using --aax-fallback")
+        get_aax = True
+        if get_aaxc:
+            logger.warning("Do not mix --aaxc with --aax-fallback option.")
     get_annotation = params.get("annotation")
     get_chapters = params.get("chapter")
     get_cover = params.get("cover")
     get_pdf = params.get("pdf")
     if not any(
-        [get_aax, get_aaxc, aax_fallback, get_annotation, get_chapters,
-         get_cover, get_pdf]
+        [get_aax, get_aaxc, get_annotation, get_chapters, get_cover, get_pdf]
     ):
         logger.error("Please select an option what you want download.")
         click.Abort()
