@@ -29,6 +29,7 @@ CLIENT_HEADERS = {
     "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
 }
 
+from .cmd_db import _is_downloaded, _update_book
 
 class DownloadCounter:
     def __init__(self):
@@ -254,19 +255,9 @@ async def download_aax(
 
     if downloaded:
         counter.count_aax()
+        _update_book(item.asin, downloaded=True)
 
         raise
-
-    filename = base_filename + f"-{codec}.aax"
-    filepath = output_dir / filename
-    dl = Downloader(
-        url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
-    )
-    downloaded = await dl.run(pb=True)
-
-    if downloaded:
-        counter.count_aax()
 
 
 async def download_aaxc(
@@ -344,6 +335,7 @@ async def download_aaxc(
 
     if downloaded:
         counter.count_aaxc()
+        _update_book(item.asin, downloaded=True)
 
 
 async def consume(queue):
@@ -421,30 +413,31 @@ def queue_job(
             )
         )
 
-    if get_aax or aax_fallback:
-        queue.put_nowait(
-            download_aax(
-                client=client,
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                quality=quality,
-                overwrite_existing=overwrite_existing,
-                aax_fallback=aax_fallback
+    if not _is_downloaded(item.asin) or overwrite_existing:
+        if get_aax or aax_fallback:
+            queue.put_nowait(
+                download_aax(
+                    client=client,
+                    output_dir=output_dir,
+                    base_filename=base_filename,
+                    item=item,
+                    quality=quality,
+                    overwrite_existing=overwrite_existing,
+                    aax_fallback=aax_fallback
+                )
             )
-        )
 
-    if get_aaxc:
-        queue.put_nowait(
-            download_aaxc(
-                client=client,
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                quality=quality,
-                overwrite_existing=overwrite_existing
+        if get_aaxc and not _is_downloaded(item.asin):
+            queue.put_nowait(
+                download_aaxc(
+                    client=client,
+                    output_dir=output_dir,
+                    base_filename=base_filename,
+                    item=item,
+                    quality=quality,
+                    overwrite_existing=overwrite_existing
+                )
             )
-        )
 
 
 def display_counter():
@@ -645,6 +638,14 @@ async def cli(session, api_client, **params):
             jobs.append(i.asin)
 
     for asin in asins:
+        if _is_downloaded(asin):
+            logger.info(
+                f"{asin} already downloaded. Skipping. "
+                f"Run \naudible db -r {asin}\n or use the "
+                "--overwrite flag to download anyway"
+            )
+            continue
+
         if library.has_asin(asin):
             jobs.append(asin)
         else:

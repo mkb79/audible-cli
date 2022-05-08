@@ -2,6 +2,7 @@
 !/src/audible_cli
 /src/audible_cli/*.bak
 library.csv
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

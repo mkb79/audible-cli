@@ -7,7 +7,8 @@ from . import (
     cmd_library,
     cmd_manage,
     cmd_quickstart,
-    cmd_wishlist
+    cmd_wishlist,
+    cmd_db,
 )
 
 cli_cmds = [
@@ -17,7 +18,8 @@ cli_cmds = [
     cmd_library.cli,
     cmd_manage.cli,
     cmd_quickstart.cli,
-    cmd_wishlist.cli
+    cmd_wishlist.cli,
+    cmd_db.cli,
 ]
 
 

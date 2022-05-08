@@ -51,6 +51,7 @@ async def _sort_library(library):
     return prepared_library
 
 
+# these attributes need to stay in sync with audible_cli.db_models.Book class
 @wrap_async
 def _prepare_item(item):
     data_row = {}

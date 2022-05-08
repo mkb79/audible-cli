@@ -292,6 +292,7 @@ class Downloader:
             return await self._stream_load(pb) if stream else \
                 await self._load()
         finally:
+            print(self.__dict__)
             self._remove_tmp_file()
 
 
