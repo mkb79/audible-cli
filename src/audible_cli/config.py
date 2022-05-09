@@ -281,7 +281,7 @@ class Session:
     ) -> audible.Authenticator:
         """Returns an Authenticator for a profile
 
-        If an Authenticator for this profile is already loaded, it will
+        If an Authenticator for this profile is already loaded, it will\
         return the Authenticator without reloading it. This way a session can
         hold multiple Authenticators for different profiles. Commands can use
         this to make API requests for more than one profile.

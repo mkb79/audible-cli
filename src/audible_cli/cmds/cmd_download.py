@@ -255,19 +255,6 @@ async def download_aax(
     if downloaded:
         counter.count_aax()
 
-        raise
-
-    filename = base_filename + f"-{codec}.aax"
-    filepath = output_dir / filename
-    dl = Downloader(
-        url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
-    )
-    downloaded = await dl.run(pb=True)
-
-    if downloaded:
-        counter.count_aax()
-
 
 async def download_aaxc(
         client, output_dir, base_filename, item,
@@ -598,6 +585,12 @@ async def cli(session, api_client, **params):
     get_aax = params.get("aax")
     get_aaxc = params.get("aaxc")
     aax_fallback = params.get("aax_fallback")
+    if aax_fallback:
+        if get_aax:
+            logger.info("Using --aax is redundant and can be left when using --aax-fallback")
+        get_aax = True
+        if get_aaxc:
+            logger.warning("Do not mix --aaxc with --aax-fallback option.")
     get_annotation = params.get("annotation")
     get_chapters = params.get("chapter")
     get_cover = params.get("cover")
