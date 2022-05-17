@@ -13,7 +13,7 @@ It depends on the following packages:
 * aiofiles
 * audible
 * click
-* colorama (on windows machines)
+* colorama (on Windows machines)
 * httpx
 * Pillow
 * tabulate
@@ -30,7 +30,7 @@ pip install audible-cli
 
 ```
 
-or install it directly from github with
+or install it directly from GitHub with
 
 ```shell
 
@@ -44,7 +44,7 @@ pip install .
 
 If you don't want to install `Python` and `audible-cli` on your machine, you can
 find standalone exe files below or on the [releases](https://github.com/mkb79/audible-cli/releases) 
-page. At this moment Windows, Linux and MacOS are supported.
+page (including beta releases). At this moment Windows, Linux and macOS are supported.
 
 ### Links
 
@@ -82,7 +82,7 @@ pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint
 
 ### Hints
 
-There are some limitations when using plugins. The binarys maybe does not contain
+There are some limitations when using plugins. The binary maybe does not contain
 all the dependencies from your plugin script. 
 
 ## Tab Completion
@@ -103,7 +103,7 @@ as config dir. Otherwise, it will use a folder depending on the operating
 system.
 
 | OS       | Path                                      |
-| ---      | ---                                       |
+|----------|-------------------------------------------|
 | Windows  | ``C:\Users\<user>\AppData\Local\audible`` |
 | Unix     | ``~/.audible``                            |
 | Mac OS X | ``~/.audible``                            |
@@ -199,9 +199,9 @@ There are 6 different verbosity levels:
 - error
 - critical
 
-By default the verbosity level is set to `info`. You can provide another level like so: `audible -v <level> <subcommand> ...`.
+By default, the verbosity level is set to `info`. You can provide another level like so: `audible -v <level> <subcommand> ...`.
 
-If you use the `download` sudcommand with the `--all` flag there will be a huge output. Best practise is to set the verbosity level to `error` with `audible -v error download --all ...`
+If you use the `download` subcommand with the `--all` flag there will be a huge output. Best practise is to set the verbosity level to `error` with `audible -v error download --all ...`
 
 ## Plugins
 
@@ -217,13 +217,13 @@ You can provide own subcommands and execute them with `audible SUBCOMMAND`.
 All plugin commands must be placed in the plugin folder. Every subcommand must 
 have his own file. Every file have to be named ``cmd_{SUBCOMMAND}.py``. 
 Each subcommand file must have a function called `cli` as entrypoint. 
-This function have to be decorated with ``@click.group(name="GROUP_NAME")`` or  
+This function has to be decorated with ``@click.group(name="GROUP_NAME")`` or  
 ``@click.command(name="GROUP_NAME")``.
 
 Relative imports in the command files doesn't work. So you have to work with 
 absolute imports. Please take care about this. If you have any issues with 
 absolute imports please add your plugin path to the `PYTHONPATH` variable or 
-add this lines of code to the begining of your command script:
+add this lines of code to the beginning of your command script:
 
 ```python
 import sys
@@ -239,7 +239,7 @@ Examples can be found
 
 If you want to develop a complete plugin package for ``audible-cli`` you can
 do this on an easy way. You only need to register your sub-commands or 
-sub-groups to an entry-point in your setup.py that is loaded by the core 
+subgroups to an entry-point in your setup.py that is loaded by the core 
 package.
 
 Example for a setup.py
