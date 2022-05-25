@@ -1,13 +1,15 @@
 import logging
+import pathlib
 import sys
 
-import audible
 import click
 from click import echo, secho, prompt
 from tabulate import tabulate
 
-from ..config import Config, pass_session
+from .. import __version__
+from ..config import ConfigFile
 from ..constants import CONFIG_FILE, DEFAULT_AUTH_FILE_EXTENSION
+from ..decorators import pass_session
 from ..utils import build_auth_file
 
 
@@ -31,10 +33,10 @@ def tabulate_summary(d: dict) -> str:
     return tabulate(data, head, tablefmt="pretty", colalign=("left", "left"))
 
 
-def ask_user(config: Config):
+def ask_user(config: ConfigFile):
     d = {}
     welcome_message = (
-        f"Welcome to the audible {audible.__version__} quickstart utility.")
+        f"\nWelcome to the audible-cli {__version__} quickstart utility.")
     secho(welcome_message, bold=True)
     secho(len(welcome_message) * "=", bold=True)
 
@@ -50,11 +52,11 @@ config dir. If the auth file doesn't exists, it will be created. In this case,
 an authentication to the audible server is necessary to register a new device.
 """
     echo()
-    secho(intro, bold=True)
+    secho(intro)
 
     path = config.dirname.absolute()
     secho("Selected dir to proceed with:", bold=True)
-    echo(path.absolute())
+    echo(path)
 
     echo()
     echo("Please enter values for the following settings (just press Enter "
@@ -137,17 +139,14 @@ an authentication to the audible server is necessary to register a new device.
 
 
 @click.command("quickstart")
-@click.pass_context
 @pass_session
-def cli(session, ctx):
-    """Quicksetup audible"""
-    session._config = Config()
-    config = session.config
-    config._config_file = session.app_dir / CONFIG_FILE
-    if config.file_exists():
-        m = f"Config file {config.filename} already exists. Quickstart will " \
+def cli(session):
+    """Quick setup audible"""
+    config_file: pathlib.Path = session.app_dir / CONFIG_FILE
+    config = ConfigFile(config_file, file_exists=False)
+    if config_file.is_file():
+        m = f"Config file {config_file} already exists. Quickstart will " \
             f"not overwrite existing files."
-
         logger.error(m)
         raise click.Abort()
 
@@ -157,16 +156,9 @@ def cli(session, ctx):
     echo(tabulate_summary(d))
     click.confirm("Do you want to continue?", abort=True)
 
-    config.add_profile(
-        name=d.get("profile_name"),
-        auth_file=d.get("auth_file"),
-        country_code=d.get("country_code"),
-        is_primary=True,
-        write_config=False)
-
     if "use_existing_auth_file" not in d:
         build_auth_file(
-            filename=config.dirname / d.get("auth_file"),
+            filename=session.app_dir / d.get("auth_file"),
             username=d.get("audible_username"),
             password=d.get("audible_password"),
             country_code=d.get("country_code"),
@@ -175,4 +167,9 @@ def cli(session, ctx):
             with_username=d.get("with_username")
         )
 
-    config.write_config()
+    config.add_profile(
+        name=d.get("profile_name"),
+        auth_file=d.get("auth_file"),
+        country_code=d.get("country_code"),
+        is_primary=True,
+    )

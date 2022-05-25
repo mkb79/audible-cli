@@ -1,2 +1,2 @@
-_AUDIBLE_COMPLETE=source_bash audible
-_AUDIBLE_QUICKSTART_COMPLETE=source_bash audible-quickstart
+_AUDIBLE_COMPLETE=bash_source audible
+_AUDIBLE_QUICKSTART_COMPLETE=bash_source audible-quickstart

@@ -6,7 +6,7 @@ from audible import Authenticator
 from click import echo, secho
 from tabulate import tabulate
 
-from ..config import pass_session
+from ..decorators import pass_session
 from ..utils import build_auth_file
 
 
@@ -45,13 +45,13 @@ def config_editor(session):
 def list_profiles(session):
     """List all profiles in the config file"""
     head = ["P", "Profile", "auth file", "cc"]
-    profiles = session.config.data.get("profile")
+    config = session.config
+    profiles = config.data.get("profile")
 
     data = []
     for profile in profiles:
-        p = profiles.get(profile)
-        auth_file = p.get("auth_file")
-        country_code = p.get("country_code")
+        auth_file = config.get_profile_option(profile, "auth_file")
+        country_code = config.get_profile_option(profile, "country_code")
         is_primary = profile == session.config.primary_profile
         data.append(
             ["*" if is_primary else "", profile, auth_file, country_code])
@@ -92,7 +92,7 @@ def list_profiles(session):
 def add_profile(ctx, session, profile, country_code, auth_file, is_primary):
     """Adds a profile to config file"""
     if not (session.config.dirname / auth_file).exists():
-        logger.error("Auth file doesn't exists.")
+        logger.error("Auth file doesn't exists")
         raise click.Abort()
 
     session.config.add_profile(
@@ -167,7 +167,7 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
 @click.option(
     "--external-login",
     is_flag=True,
-    help="Authenticate using a webbrowser."
+    help="Authenticate using a web browser."
 )
 @click.option(
     "--with-username",

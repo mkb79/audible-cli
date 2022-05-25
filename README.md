@@ -188,6 +188,8 @@ At this time, there the following buildin subcommands:
 - `wishlist`
     - `export`
     - `list`
+    - `add`
+    - `remove`
 
 ## Verbosity option
 

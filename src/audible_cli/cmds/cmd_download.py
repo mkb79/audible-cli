@@ -3,80 +3,38 @@ import asyncio.log
 import asyncio.sslproto
 import json
 import pathlib
-import ssl
 import logging
-import sys
-import unicodedata
 
 import aiofiles
-import audible
 import click
 import httpx
+import questionary
+from audible.exceptions import NotFoundError
 from click import echo
-from tabulate import tabulate
 
-from ..config import pass_session
-from ..exceptions import DirectoryDoesNotExists, NotFoundError
+from ..decorators import (
+    bunch_size_option,
+    timeout_option,
+    pass_client,
+    pass_session
+)
+from ..exceptions import DirectoryDoesNotExists, NotDownloadableAsAAX
 from ..models import Library
 from ..utils import Downloader
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_download")
 
-SSL_PROTOCOLS = (asyncio.sslproto.SSLProtocol,)
-
-
-def ignore_httpx_ssl_eror(loop):
-    """Ignore aiohttp #3535 / cpython #13548 issue with SSL data after close
-
-    There is an issue in Python 3.7 up to 3.7.3 that over-reports a
-    ssl.SSLError fatal error (ssl.SSLError: [SSL: KRB5_S_INIT] application data
-    after close notify (_ssl.c:2609)) after we are already done with the
-    connection. See GitHub issues aio-libs/aiohttp#3535 and
-    python/cpython#13548.
-
-    Given a loop, this sets up an exception handler that ignores this specific
-    exception, but passes everything else on to the previous exception handler
-    this one replaces.
-
-    Checks for fixed Python versions, disabling itself when running on 3.7.4+
-    or 3.8.
-
-    """
-    if sys.version_info >= (3, 7, 4):
-        return
-
-    orig_handler = loop.get_exception_handler()
-
-    def ignore_ssl_error(context):
-        if context.get("message") in {
-            "SSL error in data received",
-            "Fatal error on transport",
-        }:
-            # validate we have the right exception, transport and protocol
-            exception = context.get("exception")
-            protocol = context.get("protocol")
-            if (
-                    isinstance(exception, ssl.SSLError)
-                    and exception.reason == "KRB5_S_INIT"
-                    and isinstance(protocol, SSL_PROTOCOLS)
-            ):
-                if loop.get_debug():
-                    asyncio.log.logger.debug(
-                        "Ignoring httpx SSL KRB5_S_INIT error")
-                return
-        if orig_handler is not None:
-            orig_handler(loop, context)
-        else:
-            loop.default_exception_handler(context)
-
-    loop.set_exception_handler(ignore_ssl_error)
+CLIENT_HEADERS = {
+    "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
+}
 
 
 class DownloadCounter:
     def __init__(self):
         self._aax: int = 0
         self._aaxc: int = 0
+        self._annotation: int = 0
         self._chapter: int = 0
         self._cover: int = 0
         self._pdf: int = 0
@@ -98,6 +56,14 @@ class DownloadCounter:
     def count_aaxc(self):
         self._aaxc += 1
         logger.debug(f"Currently downloaded aaxc files: {self.aaxc}")
+
+    @property
+    def annotation(self):
+        return self._annotation
+
+    def count_annotation(self):
+        self._annotation += 1
+        logger.debug(f"Currently downloaded annotations: {self.annotation}")
 
     @property
     def chapter(self):
@@ -143,6 +109,7 @@ class DownloadCounter:
         return {
             "aax": self.aax,
             "aaxc": self.aaxc,
+            "annotation": self.annotation,
             "chapter": self.chapter,
             "cover": self.cover,
             "pdf": self.pdf,
@@ -159,22 +126,6 @@ class DownloadCounter:
 
 
 counter = DownloadCounter()
-
-
-def create_base_filename(item, mode):
-    if "ascii" in mode:
-        base_filename = item.full_title_slugify
-
-    elif "unicode" in mode:
-        base_filename = unicodedata.normalize("NFKD", item.full_title)
-
-    else:
-        base_filename = item.asin
-
-    if "asin" in mode:
-        base_filename = item.asin + "_" + base_filename
-
-    return base_filename
 
 
 async def download_cover(
@@ -234,8 +185,8 @@ async def download_chapters(
     try:
         metadata = await item.get_content_metadata(quality)
     except NotFoundError:
-        logger.error(
-            f"Can't get chapters for {item.full_title}. Skip item."
+        logger.info(
+            f"No chapters found for {item.full_title}."
         )
         return
     metadata = json.dumps(metadata, indent=4)
@@ -245,11 +196,54 @@ async def download_chapters(
     counter.count_chapter()
 
 
+async def download_annotations(
+        output_dir, base_filename, item, overwrite_existing
+):
+    if not output_dir.is_dir():
+        raise DirectoryDoesNotExists(output_dir)
+
+    filename = base_filename + "-annotations.json"
+    file = output_dir / filename
+    if file.exists() and not overwrite_existing:
+        logger.info(
+            f"File {file} already exists. Skip saving annotations"
+        )
+        return True
+
+    try:
+        annotation = await item.get_annotations()
+    except NotFoundError:
+        logger.info(
+            f"No annotations found for {item.full_title}."
+        )
+        return
+    annotation = json.dumps(annotation, indent=4)
+    async with aiofiles.open(file, "w") as f:
+        await f.write(annotation)
+    logger.info(f"Annotation file saved to {file}.")
+    counter.count_annotation()
+
+
 async def download_aax(
-        client, output_dir, base_filename, item, quality, overwrite_existing
+        client, output_dir, base_filename, item, quality, overwrite_existing,
+        aax_fallback
 ):
     # url, codec = await item.get_aax_url(quality)
-    url, codec = await item.get_aax_url_old(quality)
+    try:
+        url, codec = await item.get_aax_url_old(quality)
+    except NotDownloadableAsAAX:
+        if aax_fallback:
+            logger.info(f"Fallback to aaxc for {item.full_title}")
+            return await download_aaxc(
+                client=client,
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
+                quality=quality,
+                overwrite_existing=overwrite_existing
+            )
+        raise
+
     filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
     dl = Downloader(
@@ -346,13 +340,16 @@ async def consume(queue):
             await item
         except Exception as e:
             logger.error(e)
-        queue.task_done()
+            raise
+        finally:
+            queue.task_done()
 
 
 def queue_job(
         queue,
         get_cover,
         get_pdf,
+        get_annotation,
         get_chapters,
         get_aax,
         get_aaxc,
@@ -362,9 +359,10 @@ def queue_job(
         item,
         cover_size,
         quality,
-        overwrite_existing
+        overwrite_existing,
+        aax_fallback
 ):
-    base_filename = create_base_filename(item=item, mode=filename_mode)
+    base_filename = item.create_base_filename(filename_mode)
 
     if get_cover:
         queue.put_nowait(
@@ -400,6 +398,16 @@ def queue_job(
             )
         )
 
+    if get_annotation:
+        queue.put_nowait(
+            download_annotations(
+                output_dir=output_dir,
+                base_filename=base_filename,
+                item=item,
+                overwrite_existing=overwrite_existing
+            )
+        )
+
     if get_aax:
         queue.put_nowait(
             download_aax(
@@ -408,7 +416,8 @@ def queue_job(
                 base_filename=base_filename,
                 item=item,
                 quality=quality,
-                overwrite_existing=overwrite_existing
+                overwrite_existing=overwrite_existing,
+                aax_fallback=aax_fallback
             )
         )
 
@@ -425,158 +434,23 @@ def queue_job(
         )
 
 
-async def main(config, auth, **params):
-    output_dir = pathlib.Path(params.get("output_dir")).resolve()
+def display_counter():
+    if counter.has_downloads():
+        echo("The download ended with the following result:")
+        for k, v in counter.as_dict().items():
+            if v == 0:
+                continue
 
-    # which item(s) to download
-    get_all = params.get("all") is True
-    asins = params.get("asin")
-    titles = params.get("title")
-    if get_all and (asins or titles):
-        logger.error(f"Do not mix *asin* or *title* option with *all* option.")
-        click.Abort()
-
-    # what to download
-    get_aax = params.get("aax")
-    get_aaxc = params.get("aaxc")
-    get_chapters = params.get("chapter")
-    get_cover = params.get("cover")
-    get_pdf = params.get("pdf")
-    if not any([get_aax, get_aaxc, get_chapters, get_cover, get_pdf]):
-        logger.error("Please select an option what you want download.")
-        click.Abort()
-
-    # additional options
-    sim_jobs = params.get("jobs")
-    quality = params.get("quality")
-    cover_size = params.get("cover_size")
-    overwrite_existing = params.get("overwrite")
-    ignore_errors = params.get("ignore_errors")
-    no_confirm = params.get("no_confirm")
-    resolve_podcats = params.get("resolve_podcasts")
-    ignore_podcasts = params.get("ignore_podcasts")
-    bunch_size = params.get("bunch_size")
-    timeout = params.get("timeout")
-    if timeout == 0:
-        timeout = None
-
-    filename_mode = params.get("filename_mode")
-    if filename_mode == "config":
-        filename_mode = config.profile_config.get("filename_mode") or \
-                        config.app_config.get("filename_mode") or \
-                        "ascii"
-
-    headers = {
-        "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
-    }
-    client = httpx.AsyncClient(auth=auth, timeout=timeout, headers=headers)
-    api_client = audible.AsyncClient(auth, timeout=timeout)
-
-    async with client, api_client:
-        # fetch the user library
-        library = await Library.from_api_full_sync(
-            api_client,
-            image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500",
-            bunch_size=bunch_size
-        )
-
-        if resolve_podcats:
-            await library.resolve_podcats()
-
-        # collect jobs
-        jobs = []
-
-        if get_all:
-            asins = []
-            titles = []
-            for i in library:
-                jobs.append(i.asin)
-
-        for asin in asins:
-            if library.has_asin(asin):
-                jobs.append(asin)
-            else:
-                if not ignore_errors:
-                    logger.error(f"Asin {asin} not found in library.")
-                    click.Abort()
-                logger.error(
-                    f"Skip asin {asin}: Not found in library"
-                )
-
-        for title in titles:
-            match = library.search_item_by_title(title)
-            full_match = [i for i in match if i[1] == 100]
-    
-            if full_match or match:
-                echo(f"\nFound the following matches for '{title}'")
-                table_data = [[i[1], i[0].full_title, i[0].asin]
-                              for i in full_match or match]
-                head = ["% match", "title", "asin"]
-                table = tabulate(
-                    table_data, head, tablefmt="pretty",
-                    colalign=("center", "left", "center"))
-                echo(table)
-    
-                if no_confirm or click.confirm(
-                        "Proceed with this audiobook(s)",
-                        default=True
-                ):
-                    jobs.extend([i[0].asin for i in full_match or match])
-    
-            else:
-                logger.error(
-                    f"Skip title {title}: Not found in library"
-                )
-
-        queue = asyncio.Queue()
-
-        for job in jobs:
-            item = library.get_item_by_asin(job)
-            items = [item]
-            odir = pathlib.Path(output_dir)
-
-            if not ignore_podcasts and item.is_parent_podcast():
-                items.remove(item)
-                if item._children is None:
-                    await item.get_child_items()
-
-                for i in item._children:
-                    if i.asin not in jobs:
-                        items.append(i)
-
-                podcast_dir = create_base_filename(item, filename_mode)
-                odir = output_dir / podcast_dir
-                if not odir.is_dir():
-                    odir.mkdir(parents=True)
-
-            for item in items:
-                queue_job(
-                    queue=queue,
-                    get_cover=get_cover,
-                    get_pdf=get_pdf,
-                    get_chapters=get_chapters,
-                    get_aax=get_aax,
-                    get_aaxc=get_aaxc,
-                    client=client,
-                    output_dir=odir,
-                    filename_mode=filename_mode,
-                    item=item,
-                    cover_size=cover_size,
-                    quality=quality,
-                    overwrite_existing=overwrite_existing
-                )
-
-        # schedule the consumer
-        consumers = [
-            asyncio.ensure_future(consume(queue)) for _ in range(sim_jobs)
-        ]
-
-        # wait until the consumer has processed all items
-        await queue.join()
-
-        # the consumer is still awaiting an item, cancel it
-        for consumer in consumers:
-            consumer.cancel()
+            if k == "voucher_saved":
+                k = "voucher"
+            elif k == "voucher":
+                diff = v - counter.voucher_saved
+                if diff > 0:
+                    echo(f"Unsaved voucher: {diff}")
+                continue
+            echo(f"New {k} files: {v}")
+    else:
+        echo("No new files downloaded.")
 
 
 @click.command("download")
@@ -612,6 +486,11 @@ async def main(config, auth, **params):
     help="Download book in aaxc format incl. voucher file"
 )
 @click.option(
+    "--aax-fallback",
+    is_flag=True,
+    help="Download book in aax format and fallback to aaxc, if former is not supported."
+)
+@click.option(
     "--quality", "-q",
     default="best",
     show_default=True,
@@ -639,6 +518,11 @@ async def main(config, auth, **params):
     "--chapter",
     is_flag=True,
     help="saves chapter metadata as JSON file"
+)
+@click.option(
+    "--annotation",
+    is_flag=True,
+    help="saves the annotations (e.g. bookmarks, notes) as JSON file"
 )
 @click.option(
     "--no-confirm", "-y",
@@ -670,14 +554,7 @@ async def main(config, auth, **params):
     default="config",
     help="Filename mode to use. [default: config]"
 )
-@click.option(
-    "--timeout",
-    type=click.INT,
-    default=10,
-    show_default=True,
-    help="Increase the timeout time if you got any TimeoutErrors. "
-         "Set to 0 to disable timeout."
-)
+@timeout_option
 @click.option(
     "--resolve-podcasts",
     is_flag=True,
@@ -688,41 +565,166 @@ async def main(config, auth, **params):
     is_flag=True,
     help="Ignore a podcast if it have episodes"
 )
-@click.option(
-    "--bunch-size",
-    type=click.IntRange(10, 1000),
-    default=1000,
-    show_default=True,
-    help="How many library items should be requested per request. A lower "
-         "size results in more requests to get the full library. A higher "
-         "size can result in a TimeOutError on low internet connections."
-)
+@bunch_size_option
 @pass_session
-def cli(session, **params):
+@pass_client(headers=CLIENT_HEADERS)
+async def cli(session, api_client, **params):
     """download audiobook(s) from library"""
-    loop = asyncio.get_event_loop()
-    ignore_httpx_ssl_eror(loop)
-    auth = session.auth
-    config = session.config
-    try:
-        loop.run_until_complete(main(config, auth, **params))
-    finally:
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        loop.close()
+    client = api_client.session
+    output_dir = pathlib.Path(params.get("output_dir")).resolve()
 
-        if counter.has_downloads():
-            echo("The download ended with the following result:")
-            for k, v in counter.as_dict().items():
-                if v == 0:
-                    continue
-    
-                if k == "voucher_saved":
-                    k = "voucher"
-                elif k == "voucher":
-                    diff = v - counter.voucher_saved
-                    if diff > 0:
-                        echo(f"Unsaved voucher: {diff}")
-                    continue
-                echo(f"New {k} files: {v}")
+    # which item(s) to download
+    get_all = params.get("all") is True
+    asins = params.get("asin")
+    titles = params.get("title")
+    if get_all and (asins or titles):
+        logger.error(f"Do not mix *asin* or *title* option with *all* option.")
+        click.Abort()
+
+    # what to download
+    get_aax = params.get("aax")
+    get_aaxc = params.get("aaxc")
+    aax_fallback = params.get("aax_fallback")
+    if aax_fallback:
+        if get_aax:
+            logger.info("Using --aax is redundant and can be left when using --aax-fallback")
+        get_aax = True
+        if get_aaxc:
+            logger.warning("Do not mix --aaxc with --aax-fallback option.")
+    get_annotation = params.get("annotation")
+    get_chapters = params.get("chapter")
+    get_cover = params.get("cover")
+    get_pdf = params.get("pdf")
+    if not any(
+        [get_aax, get_aaxc, get_annotation, get_chapters, get_cover, get_pdf]
+    ):
+        logger.error("Please select an option what you want download.")
+        click.Abort()
+
+    # additional options
+    sim_jobs = params.get("jobs")
+    quality = params.get("quality")
+    cover_size = params.get("cover_size")
+    overwrite_existing = params.get("overwrite")
+    ignore_errors = params.get("ignore_errors")
+    no_confirm = params.get("no_confirm")
+    resolve_podcats = params.get("resolve_podcasts")
+    ignore_podcasts = params.get("ignore_podcasts")
+    bunch_size = session.params.get("bunch_size")
+
+    filename_mode = params.get("filename_mode")
+    if filename_mode == "config":
+        filename_mode = session.config.get_profile_option(
+            session.selected_profile, "filename_mode") or "ascii"
+
+    # fetch the user library
+    library = await Library.from_api_full_sync(
+        api_client,
+        image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500",
+        bunch_size=bunch_size
+    )
+
+    if resolve_podcats:
+        await library.resolve_podcats()
+
+    # collect jobs
+    jobs = []
+
+    if get_all:
+        asins = []
+        titles = []
+        for i in library:
+            jobs.append(i.asin)
+
+    for asin in asins:
+        if library.has_asin(asin):
+            jobs.append(asin)
         else:
-            echo("No new files downloaded.")
+            if not ignore_errors:
+                logger.error(f"Asin {asin} not found in library.")
+                click.Abort()
+            logger.error(
+                f"Skip asin {asin}: Not found in library"
+            )
+
+    for title in titles:
+        match = library.search_item_by_title(title)
+        full_match = [i for i in match if i[1] == 100]
+
+        if match:
+            if no_confirm:
+                [jobs.append(i[0].asin) for i in full_match or match]
+            else:
+                choices = []
+                for i in full_match or match:
+                    a = i[0].asin
+                    t = i[0].full_title
+                    c = questionary.Choice(title=f"{a} # {t}", value=a)
+                    choices.append(c)
+
+                answer = await questionary.checkbox(
+                    f"Found the following matches for '{title}'. Which you want to download?",
+                    choices=choices
+                ).unsafe_ask_async()
+                if answer is not None:
+                    [jobs.append(i) for i in answer]
+                
+        else:
+            logger.error(
+                f"Skip title {title}: Not found in library"
+            )
+
+    queue = asyncio.Queue()
+    for job in jobs:
+        item = library.get_item_by_asin(job)
+        items = [item]
+        odir = pathlib.Path(output_dir)
+
+        if not ignore_podcasts and item.is_parent_podcast():
+            items.remove(item)
+            if item._children is None:
+                await item.get_child_items()
+
+            for i in item._children:
+                if i.asin not in jobs:
+                    items.append(i)
+
+            podcast_dir = item.create_base_filename(filename_mode)
+            odir = output_dir / podcast_dir
+            if not odir.is_dir():
+                odir.mkdir(parents=True)
+
+        for item in items:
+            queue_job(
+                queue=queue,
+                get_cover=get_cover,
+                get_pdf=get_pdf,
+                get_annotation=get_annotation,
+                get_chapters=get_chapters,
+                get_aax=get_aax,
+                get_aaxc=get_aaxc,
+                client=client,
+                output_dir=odir,
+                filename_mode=filename_mode,
+                item=item,
+                cover_size=cover_size,
+                quality=quality,
+                overwrite_existing=overwrite_existing,
+                aax_fallback=aax_fallback
+            )
+
+    try:
+        # schedule the consumer
+        consumers = [
+            asyncio.ensure_future(consume(queue)) for _ in range(sim_jobs)
+        ]
+        # wait until the consumer has processed all items
+        await queue.join()
+
+    finally:
+        # the consumer is still awaiting an item, cancel it
+        for consumer in consumers:
+            consumer.cancel()
+    
+        await asyncio.gather(*consumers, return_exceptions=True)
+        display_counter()

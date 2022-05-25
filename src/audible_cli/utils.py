@@ -1,9 +1,8 @@
-import asyncio
+import csv
 import io
 import logging
 import pathlib
 from difflib import SequenceMatcher
-from functools import partial, wraps
 from typing import List, Optional, Union
 
 import aiofiles
@@ -12,6 +11,7 @@ import httpx
 import tqdm
 from PIL import Image
 from audible import Authenticator
+from audible.client import raise_for_status
 from audible.login import default_login_url_callback
 from click import echo, secho, prompt
 
@@ -32,7 +32,7 @@ def prompt_captcha_callback(captcha_url: str) -> str:
         img.show()
     else:
         echo(
-            "Please open the following url with a webbrowser "
+            "Please open the following url with a web browser "
             "to get the captcha:"
         )
         echo(captcha_url)
@@ -58,6 +58,11 @@ def prompt_external_callback(url: str) -> str:
         pass
 
     return default_login_url_callback(url)
+
+
+def full_response_callback(resp: httpx.Response) -> httpx.Response:
+    raise_for_status(resp)
+    return resp
 
 
 def build_auth_file(
@@ -140,17 +145,6 @@ def asin_in_library(asin, library):
         return next(i for i in items if asin in i["asin"])
     except StopIteration:
         return False
-
-
-def wrap_async(func):
-    @wraps(func)
-    async def run(*args, loop=None, executor=None, **kwargs):
-        if loop is None:
-            loop = asyncio.get_event_loop()
-        pfunc = partial(func, *args, **kwargs)
-        return await loop.run_in_executor(executor, pfunc)
-
-    return run
 
 
 class DummyProgressBar:
@@ -256,8 +250,7 @@ class Downloader:
             file.rename(file.with_suffix(f"{file.suffix}.old.{i}"))
         tmp_file.rename(file)
         logger.info(
-            f"File {self._file} downloaded to {self._file.parent} "
-            f"in {elapsed}."
+            f"File {self._file} downloaded in {elapsed}."
         )
         return True
 
@@ -300,3 +293,17 @@ class Downloader:
                 await self._load()
         finally:
             self._remove_tmp_file()
+
+
+def export_to_csv(
+    file: pathlib.Path,
+    data: list,
+    headers: Union[list, tuple],
+    dialect: str
+) -> None:
+    with file.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=headers, dialect=dialect)
+        writer.writeheader()
+
+        for i in data:
+            writer.writerow(i)

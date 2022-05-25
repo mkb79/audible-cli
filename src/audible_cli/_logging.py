@@ -73,42 +73,6 @@ log_helper = AudibleCliLogHelper()
 
 
 # copied from https://github.com/Toilal/click-logging
-
-def click_verbosity_option(logger=None, *names, **kwargs):
-    """A decorator that adds a `--verbosity, -v` option to the decorated
-    command.
-    Name can be configured through ``*names``. Keyword arguments are passed to
-    the underlying ``click.option`` decorator.
-    """
-
-    if not names:
-        names = ["--verbosity", "-v"]
-
-    kwargs.setdefault("default", "INFO")
-    kwargs.setdefault("metavar", "LVL")
-    kwargs.setdefault("expose_value", False)
-    kwargs.setdefault(
-        "help", "Either CRITICAL, ERROR, WARNING, "
-        "INFO or DEBUG. [default: INFO]"
-    )
-    kwargs.setdefault("is_eager", True)
-
-    logger = _normalize_logger(logger)
-
-    def decorator(f):
-        def _set_level(ctx, param, value):
-            x = getattr(logging, value.upper(), None)
-            if x is None:
-                raise click.BadParameter(
-                    f"Must be CRITICAL, ERROR, WARNING, INFO or DEBUG, "
-                    f"not {value}"
-                )
-            logger.setLevel(x)
-
-        return click.option(*names, callback=_set_level, **kwargs)(f)
-    return decorator
-
-
 class ColorFormatter(logging.Formatter):
     def __init__(self, style_kwargs):
         self.style_kwargs = style_kwargs

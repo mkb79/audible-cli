@@ -6,7 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
--
+### Added
+
+- `--aax-fallback` option to `download` command to download books in aax format and fallback to aaxc, if the book is not available as aax
+- `--annotation` option to `download` command to get bookmarks and notes
+- `questionary` package to dependencies
+- `add` and `remove` subcommands to wishlist
+- `full_response_callback` to `utils`
+- `export_to_csv` to `utils`
+- `run_async` to `decorators`
+- `pass_client` to `decorators`
+- `profile_option` to `decorators`
+- `password_option` to `decorators`
+- `timeout_option` to `decorators`
+- `bunch_size_option` to `decorators`
+- `ConfigFile.get_profile_option` get the value for an option for a given profile
+- `Session.selected.profile` to get the profile name for the current session
+- `Session.get_auth_for_profile` to get an auth file for a given profile
+- `models.BaseItem.create_base_filename` to build a filename in given mode
+- `models.LibraryItem.get_annotations` to get annotations for a library item
+
+### Changed
+
+- bump `audible` to v0.8.2 to fix a bug in httpx
+- rework plugin examples in `plugin_cmds`
+- rename `config.Config` to `config.ConfigFile`
+- move `click_verbosity_logger` from `_logging` to `decorators` and rename it to `verbosity_option`
+- move `wrap_async` from `utils` to `decorators`
+- move `add_param_to_session` from `config` to `decorators`
+- move `pass_session` from `config` to `decorators`
+- `download` command let you now select items when using `--title` option
+
+### Fixed
+
+- the `library export` and `wishlist export` command will now export to `csv` correctly
+- 
 
 ## [0.1.3] - 2022-03-27
 
@@ -25,7 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - the `--version` option now checks if an update for `audible-cli` is available
-- build macOS release in onedir mode
+- build macOS releases in onedir mode
 
 ### Bugfix
 
