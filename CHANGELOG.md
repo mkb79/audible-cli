@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- bump `audible` to v0.8.1
+- bump `audible` to v0.8.2 to fix a bug in httpx
 - rework plugin examples in `plugin_cmds`
 - rename `config.Config` to `config.ConfigFile`
 - move `click_verbosity_logger` from `_logging` to `decorators` and rename it to `verbosity_option`

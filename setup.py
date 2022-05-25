@@ -46,10 +46,10 @@ setup(
     ],
     install_requires=[
         "aiofiles",
-        "audible>=0.8.1",
+        "audible>=0.8.2",
         "click>=8",
         "colorama; platform_system=='Windows'",
-        "httpx>=0.20.0,<0.23.0",
+        "httpx>=0.20.0,<0.24.0",
         "packaging",
         "Pillow",
         "tabulate",
