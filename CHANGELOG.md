@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+-
+
+## [0.2.0] - 2022-06-01
+
 ### Added
 
 - `--aax-fallback` option to `download` command to download books in aax format and fallback to aaxc, if the book is not available as aax
