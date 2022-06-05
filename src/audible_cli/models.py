@@ -272,36 +272,49 @@ class LibraryItem(BaseItem):
         }
         return httpx.URL(url, params=params), codec_name
 
-    async def get_aaxc_url(self, quality: str = "high"):
+    async def get_aaxc_url(
+            self,
+            quality: str = "high",
+            license_response_groups: Optional[str] = None
+    ):
         if not self.is_downloadable():
             raise AudibleCliException(
                 f"{self.full_title} is not downloadable."
             )
 
+        lr = await self.get_license(quality, license_response_groups)
+
+        content_metadata = lr["content_license"]["content_metadata"]
+        url = httpx.URL(content_metadata["content_url"]["offline_url"])
+        codec = content_metadata["content_reference"]["content_format"]
+
+        return url, codec, lr
+
+    async def get_license(
+            self,
+            quality: str = "high",
+            response_groups: Optional[str] = None
+    ):
         assert quality in ("best", "high", "normal",)
+
+        if response_groups is None:
+            response_groups = "last_position_heard, pdf_url, content_reference"
 
         body = {
             "supported_drm_types": ["Mpeg", "Adrm"],
             "quality": "Extreme" if quality in ("best", "high") else "Normal",
             "consumption_type": "Download",
-            "response_groups": (
-                "last_position_heard, pdf_url, content_reference, chapter_info"
-            )
+            "response_groups": response_groups
         }
 
         lr = await self._client.post(
             f"content/{self.asin}/licenserequest",
             body=body
         )
-
-        content_metadata = lr["content_license"]["content_metadata"]
-        url = httpx.URL(content_metadata["content_url"]["offline_url"])
-        codec = content_metadata["content_reference"]["content_format"]
-
         voucher = decrypt_voucher_from_licenserequest(self._client.auth, lr)
         lr["content_license"]["license_response"] = voucher
 
-        return url, codec, lr
+        return lr
 
     async def get_content_metadata(self, quality: str = "high"):
         assert quality in ("best", "high", "normal",)
