@@ -162,6 +162,14 @@ Use the `audible-quickstart` or `audible quickstart` command in your shell
 to create your first config, profile and auth file. `audible-quickstart` 
 runs on the interactive mode, so you have to answer multiple questions to finish.
 
+If you have used `audible quickstart` and want to add a second profile, you need to first create a new authfile and then update your config.toml file.
+
+So the correct order is:
+
+   1. add a new auth file using your second account using `audible manage auth-file add`
+   2. add a new profile to your config and use the second auth file using `audible manage profile add`
+
+
 ## Commands
 
 Call `audible -h` to show the help and a list of all available subcommands. You can show the help for each subcommand like so: `audible <subcommand> -h`. If a subcommand has another subcommands, you csn do it the same way.
