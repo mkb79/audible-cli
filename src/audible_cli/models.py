@@ -61,7 +61,7 @@ class BaseItem:
     @property
     def full_title_slugify(self):
         valid_chars = "-_.() " + string.ascii_letters + string.digits
-        cleaned_title = unicodedata.normalize("NFKD", self.full_title)
+        cleaned_title = unicodedata.normalize("NFKD", self.full_title or "")
         cleaned_title = cleaned_title.encode("ASCII", "ignore")
         cleaned_title = cleaned_title.replace(b" ", b"_")
         slug_title = "".join(
@@ -84,7 +84,7 @@ class BaseItem:
             base_filename = self.full_title_slugify
 
         elif "unicode" in mode:
-            base_filename = unicodedata.normalize("NFKD", self.full_title)
+            base_filename = unicodedata.normalize("NFKD", self.full_title or "")
 
         else:
             base_filename = self.asin
