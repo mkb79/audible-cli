@@ -185,7 +185,7 @@ def decrypt_aax(files, activation_bytes, rebuild_chapters):
         metafile = file.with_suffix(".meta")
         metafile_new = file.with_suffix(".new.meta")
         base_filename = file.stem.rsplit("-")[0]
-        chapters = file.with_name(base_filename + "-chapters").with_suffix(".json")
+        chapters = file.with_name(base_filename + "-chapters.json")
         apimeta = json.loads(chapters.read_text())
 
         if outfile.exists():
