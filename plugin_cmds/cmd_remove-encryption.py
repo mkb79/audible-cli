@@ -1,6 +1,6 @@
 """
 This is a proof-of-concept and for testing purposes only. No error handling. 
-Need further work. Some options does not work or options are missing.
+Need further work. Some options do not work or options are missing.
 
 Needs at least ffmpeg 4.4
 """
@@ -11,6 +11,7 @@ import operator
 import pathlib
 import re
 import subprocess
+from functools import reduce
 from shutil import which
 
 import click
@@ -34,8 +35,13 @@ class ApiMeta:
         return len(self.get_chapters())
 
     def get_chapters(self):
-        return self._meta_parsed["content_metadata"]["chapter_info"][
-            "chapters"]
+        def extract_chapters(initial, current):
+            if "chapters" in current:
+                return initial + [current] + current['chapters']
+            else:
+                return initial + [current]
+
+        return list(reduce(extract_chapters, self._meta_parsed["content_metadata"]["chapter_info"]["chapters"], []))
 
     def get_intro_duration_ms(self):
         return self._meta_parsed["content_metadata"]["chapter_info"][
