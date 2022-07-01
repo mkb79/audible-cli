@@ -599,7 +599,7 @@ async def cli(session, api_client, **params):
         [get_aax, get_aaxc, get_annotation, get_chapters, get_cover, get_pdf]
     ):
         logger.error("Please select an option what you want download.")
-        click.Abort()
+        raise click.Abort()
 
     # additional options
     sim_jobs = params.get("jobs")
