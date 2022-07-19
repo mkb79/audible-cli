@@ -6,7 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
--
+### Added
+
+- moved licenserequest part from `models.LibraryItem.get_aaxc_url` to its own `models.LibraryItem.get_license` function
+
+### Changed
+
+- by default a licenserequest (voucher) will not include chapter information for now
 
 ## [0.2.0] - 2022-06-01
 
