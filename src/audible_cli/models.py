@@ -302,7 +302,7 @@ class LibraryItem(BaseItem):
 
         body = {
             "supported_drm_types": ["Mpeg", "Adrm"],
-            "quality": "Extreme" if quality in ("best", "high") else "Normal",
+            "quality": "High" if quality in ("best", "high") else "Normal",
             "consumption_type": "Download",
             "response_groups": response_groups
         }
