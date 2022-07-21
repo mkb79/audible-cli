@@ -185,104 +185,192 @@ class FFMeta:
         self._ffmeta_parsed["CHAPTER"] = new_chapters
 
 
-def decrypt_aax(files, activation_bytes, rebuild_chapters):
+def decrypt_aax(
+        files, activation_bytes, rebuild_chapters, ignore_missing_chapters,
+        separate_intro_outro
+):
     for file in files:
         outfile = file.with_suffix(".m4b")
-        metafile = file.with_suffix(".meta")
-        metafile_new = file.with_suffix(".new.meta")
-        base_filename = file.stem.rsplit("-", 1)[0]
-        chapters = file.with_name(base_filename + "-chapters.json")
-        apimeta = json.loads(chapters.read_text())
 
         if outfile.exists():
-            secho(f"file {outfile} already exists Skip.", fg="blue")
+            secho(f"Skip {file.name}: already decrypted", fg="blue")
             continue
 
-        if rebuild_chapters and apimeta["content_metadata"]["chapter_info"][
-                "is_accurate"]:
-            cmd = ["ffmpeg",
-                   "-activation_bytes", activation_bytes,
-                   "-i", str(file),
-                   "-f", "ffmetadata",
-                   str(metafile)]
+        can_rebuild_chapters = False
+        if rebuild_chapters:
+            metafile = file.with_suffix(".meta")
+            metafile_new = file.with_suffix(".new.meta")
+            base_filename = file.stem.rsplit("-", 1)[0]
+            chapter_file = file.with_name(base_filename + "-chapters.json")
+
+            has_chapters = False
+            try:
+                content_metadata = json.loads(chapter_file.read_text())
+            except:
+                secho(f"No chapter data found for {file.name}", fg="red")
+            else:
+                echo(f"Using chapters from {chapter_file.name}")
+                has_chapters = True
+
+            if has_chapters:
+                if not content_metadata["content_metadata"]["chapter_info"][
+                        "is_accurate"]:
+                    secho(f"Chapter data are not accurate", fg="red")
+                else:
+                    can_rebuild_chapters = True
+
+        if rebuild_chapters and not can_rebuild_chapters and not ignore_missing_chapters:
+            secho(f"Skip {file.name}: chapter data can not be rebuild", fg="red")
+            continue
+
+        if can_rebuild_chapters:
+            cmd = [
+                "ffmpeg",
+                "-v", "quiet",
+                "-stats",
+                "-activation_bytes", activation_bytes,
+                "-i", str(file),
+                "-f", "ffmetadata",
+                str(metafile)
+            ]
             subprocess.check_output(cmd, universal_newlines=True)
 
             ffmeta_class = FFMeta(metafile)
-            ffmeta_class.update_chapters_from_api_meta(apimeta)
+            ffmeta_class.update_chapters_from_api_meta(
+                content_metadata, separate_intro_outro
+            )
             ffmeta_class.write(metafile_new)
             click.echo("Replaced all titles.")
 
-            cmd = ["ffmpeg",
-                   "-activation_bytes", activation_bytes,
-                   "-i", str(file),
-                   "-i", str(metafile_new),
-                   "-map_metadata", "0",
-                   "-map_chapters", "1",
-                   "-c", "copy",
-                   str(outfile)]
+            cmd = [
+                "ffmpeg",
+                "-v", "quiet",
+                "-stats",
+                "-activation_bytes", activation_bytes,
+                "-i", str(file),
+                "-i", str(metafile_new),
+                "-map_metadata", "0",
+                "-map_chapters", "1",
+                "-c", "copy",
+                str(outfile)
+            ]
             subprocess.check_output(cmd, universal_newlines=True)
             metafile.unlink()
             metafile_new.unlink()
         else:
-            cmd = ["ffmpeg",
-                   "-activation_bytes", activation_bytes,
-                   "-i", str(file),
-                   "-c", "copy",
-                   str(outfile)]
+            cmd = [
+                "ffmpeg",
+                "-v", "quiet",
+                "-stats",
+                "-activation_bytes", activation_bytes,
+                "-i", str(file),
+                "-c", "copy",
+                str(outfile)
+            ]
             subprocess.check_output(cmd, universal_newlines=True)
 
+        echo(f"File decryption successful: {outfile.name}")
 
-def decrypt_aaxc(files, rebuild_chapters):
+
+def decrypt_aaxc(
+        files, rebuild_chapters, ignore_missing_chapters, separate_intro_outro
+):
     for file in files:
-        metafile = file.with_suffix(".meta")
-        metafile_new = file.with_suffix(".new.meta")
-        voucher = file.with_suffix(".voucher")
-        voucher = json.loads(voucher.read_text())
         outfile = file.with_suffix(".m4b")
 
         if outfile.exists():
-            secho(f"file {outfile} already exists Skip.", fg="blue")
+            secho(f"Skip {file.name}: already decrypted", fg="blue")
             continue
-    
-        apimeta = voucher["content_license"]
-        audible_key = apimeta["license_response"]["key"]
-        audible_iv = apimeta["license_response"]["iv"]
 
-        if rebuild_chapters and apimeta["content_metadata"]["chapter_info"][
-                "is_accurate"]:
-            cmd = ["ffmpeg",
-                   "-audible_key", audible_key,
-                   "-audible_iv", audible_iv,
-                   "-i", str(file),
-                   "-f", "ffmetadata",
-                   str(metafile)]
+        voucher_file = file.with_suffix(".voucher")
+        voucher = json.loads(voucher_file.read_text())
+        voucher = voucher["content_license"]
+        audible_key = voucher["license_response"]["key"]
+        audible_iv = voucher["license_response"]["iv"]
+
+        can_rebuild_chapters = False
+        if rebuild_chapters:
+            metafile = file.with_suffix(".meta")
+            metafile_new = file.with_suffix(".new.meta")
+
+            has_chapters = False
+            if "chapter_info" in voucher.get("content_metadata", {}):
+                content_metadata = voucher
+                echo(f"Using chapters from {voucher_file}")
+                has_chapters = True
+            else:
+                base_filename = file.stem.rsplit("-", 1)[0]
+                chapter_file = file.with_name(base_filename + "-chapters.json")
+
+                try:
+                    content_metadata = json.loads(chapter_file.read_text())
+                except:
+                    secho(f"No chapter data found for {file.name}", fg="red")
+                else:
+                    echo(f"Using chapters from {chapter_file.name}")
+                    has_chapters = True
+
+            if has_chapters:
+                if not content_metadata["content_metadata"]["chapter_info"][
+                        "is_accurate"]:
+                    secho(f"Chapter data are not accurate", fg="red")
+                else:
+                    can_rebuild_chapters = True
+
+        if rebuild_chapters and not can_rebuild_chapters and not ignore_missing_chapters:
+            secho(f"Skip {file.name}: chapter data can not be rebuild", fg="red")
+            continue
+
+        if can_rebuild_chapters:
+            cmd = [
+                "ffmpeg",
+                "-v", "quiet",
+                "-stats",
+                "-audible_key", audible_key,
+                "-audible_iv", audible_iv,
+                "-i", str(file),
+                "-f", "ffmetadata",
+                str(metafile)
+            ]
             subprocess.check_output(cmd, universal_newlines=True)
     
             ffmeta_class = FFMeta(metafile)
-            ffmeta_class.update_chapters_from_api_meta(apimeta)
+            ffmeta_class.update_chapters_from_api_meta(
+                content_metadata, separate_intro_outro
+            )
             ffmeta_class.write(metafile_new)
             click.echo("Replaced all titles.")
     
-            cmd = ["ffmpeg",
-                   "-audible_key", audible_key,
-                   "-audible_iv", audible_iv,
-                   "-i", str(file),
-                   "-i", str(metafile_new),
-                   "-map_metadata", "0",
-                   "-map_chapters", "1",
-                   "-c", "copy",
-                   str(outfile)]
+            cmd = [
+                "ffmpeg",
+                "-v", "quiet",
+                "-stats",
+                "-audible_key", audible_key,
+                "-audible_iv", audible_iv,
+                "-i", str(file),
+                "-i", str(metafile_new),
+                "-map_metadata", "0",
+                "-map_chapters", "1",
+                "-c", "copy",
+                str(outfile)
+            ]
             subprocess.check_output(cmd, universal_newlines=True)
             metafile.unlink()
             metafile_new.unlink()
         else:
-            cmd = ["ffmpeg",
-                   "-audible_key", audible_key,
-                   "-audible_iv", audible_iv,
-                   "-i", str(file),
-                   "-c", "copy",
-                   str(outfile)]
+            cmd = [
+                "ffmpeg",
+                "-v", "quiet",
+                "-stats",
+                "-audible_key", audible_key,
+                "-audible_iv", audible_iv,
+                "-i", str(file),
+                "-c", "copy",
+                str(outfile)
+            ]
             subprocess.check_output(cmd, universal_newlines=True)
+
+        echo(f"File decryption successful: {outfile.name}")
 
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -295,7 +383,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
     multiple=True,
     help="Input file")
 @click.option(
-    "--all",
+    "--all", "-a",
     is_flag=True,
     help="convert all files in folder"
 )
@@ -305,9 +393,22 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
     help="overwrite existing files"
 )
 @click.option(
-    "--rebuild-chapters",
+    "--rebuild-chapters", "-r",
     is_flag=True,
     help="Rebuild chapters from chapter file"
+)
+@click.option(
+    "--separate-intro-outro", "-s",
+    is_flag=True,
+    help="Separate Audible Brand Intro and Outro to own Chapter. Only use with `--rebuild-chapters`."
+)
+@click.option(
+    "--ignore-missing-chapters", "-t", 
+    is_flag=True,
+    help=(
+        "Decrypt without rebuilding chapters when chapters are not present. "
+        "Otherwise an item is skipped when this option is not provided. Only use with `--rebuild-chapters`."
+    )
 )
 @pass_session
 def cli(session, **options):
@@ -316,6 +417,8 @@ def cli(session, **options):
         ctx.fail("ffmpeg not found")
 
     rebuild_chapters = options.get("rebuild_chapters")
+    ignore_missing_chapters = options.get("ignore_missing_chapters")
+    separate_intro_outro = options.get("separate_intro_outro")
 
     jobs = {"aaxc": [], "aax":[]}
 
@@ -334,5 +437,16 @@ def cli(session, **options):
             else:
                 secho(f"file suffix {file.suffix} not supported", fg="red")
 
-    decrypt_aaxc(jobs["aaxc"], rebuild_chapters)
-    decrypt_aax(jobs["aax"], session.auth.activation_bytes, rebuild_chapters)
+    decrypt_aaxc(
+        jobs["aaxc"],
+        rebuild_chapters,
+        ignore_missing_chapters,
+        separate_intro_outro
+    )
+
+    decrypt_aax(
+        jobs["aax"],
+        session.auth.activation_bytes, rebuild_chapters,
+        ignore_missing_chapters,
+        separate_intro_outro
+    )
