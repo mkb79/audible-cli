@@ -323,7 +323,7 @@ class LibraryItem(BaseItem):
         params = {
             "response_groups": "last_position_heard, content_reference, "
                                "chapter_info",
-            "quality": "Extreme" if quality in ("best", "high") else "Normal",
+            "quality": "High" if quality in ("best", "high") else "Normal",
             "drm_type": "Adrm"
         }
 
