@@ -8,11 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- moved licenserequest part from `models.LibraryItem.get_aaxc_url` to its own `models.LibraryItem.get_license` function
+- `library` command now outputs the `extended_product_description` field
+- 
 
 ### Changed
 
-- by default a licenserequest (voucher) will not include chapter information for now
+- by default a licenserequest (voucher) will not include chapter information by default
+- moved licenserequest part from `models.LibraryItem.get_aaxc_url` to its own `models.LibraryItem.get_license` function
+- allow book tiltes with hyphens # 96
+- if there is no title fallback to an empty string #98
+
+### Fixed
+
+- `Extreme` quality is not supported by the Audible API anymore #107
+- download command continued execution after error #104
+- Currently paths with dots will break the decryption #97
+
+### Misc
+
+- reworked `cmd_remove-encryption` plugin command (e.g. support nested chapters, use chapter file for aaxc files)
+- added explanation in README.md for creating a second profile
 
 ## [0.2.0] - 2022-06-01
 
