@@ -110,7 +110,7 @@ async def export_library(session, client, **params):
         await library.resolve_podcats()
 
     keys_with_raw_values = (
-        "asin", "title", "subtitle", "runtime_length_min", "is_finished",
+        "asin", "title", "subtitle", "extended_product_description", "runtime_length_min", "is_finished",
         "percent_complete", "release_date"
     )
 
@@ -126,7 +126,7 @@ async def export_library(session, client, **params):
             dialect = "excel-tab"
 
         headers = (
-            "asin", "title", "subtitle", "authors", "narrators", "series_title",
+            "asin", "title", "subtitle", "extended_product_description", "authors", "narrators", "series_title",
             "series_sequence", "genres", "runtime_length_min", "is_finished",
             "percent_complete", "rating", "num_ratings", "date_added",
             "release_date", "cover_url"
