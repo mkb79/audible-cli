@@ -621,7 +621,11 @@ async def cli(session, api_client, **params):
     library = await Library.from_api_full_sync(
         api_client,
         image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500",
-        bunch_size=bunch_size
+        bunch_size=bunch_size,
+        response_groups=(
+            "product_desc, media, product_attrs, relationships, "
+            "series, customer_rights"
+        )
     )
 
     if resolve_podcats:
