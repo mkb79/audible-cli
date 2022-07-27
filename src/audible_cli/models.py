@@ -450,8 +450,8 @@ class Library(BaseList):
         library, total_count = await cls.from_api(
             api_client,
             page=1,
-            params=request_params,
             include_total_count_header=True,
+            **request_params
         )
         pages = ceil(int(total_count) / bunch_size)
         if pages == 1:
@@ -463,7 +463,7 @@ class Library(BaseList):
                 cls.from_api(
                     api_client,
                     page=page,
-                    params=request_params,
+                    **request_params
                 )
             )
 
