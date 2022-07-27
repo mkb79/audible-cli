@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `Extreme` quality is not supported by the Audible API anymore (#107)
 - download command continued execution after error (#104)
 - Currently paths with dots will break the decryption (#97)
+- `models.Library.from_api_full_sync` called `models.Library.from_api` with incorrect keyword arguments
 
 ### Misc
 
