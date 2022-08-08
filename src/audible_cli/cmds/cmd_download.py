@@ -624,7 +624,7 @@ async def cli(session, api_client, **params):
         bunch_size=bunch_size,
         response_groups=(
             "product_desc, media, product_attrs, relationships, "
-            "series, customer_rights"
+            "series, customer_rights, pdf_url"
         )
     )
 

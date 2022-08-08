@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
--
+### Bugfix
+
+- PDFs could not be found using the download command (#112)
 
 ## [0.2.1] - 2022-07-29
 
