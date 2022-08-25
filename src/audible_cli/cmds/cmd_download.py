@@ -9,6 +9,7 @@ import aiofiles
 import click
 import httpx
 import questionary
+from iso8601 import parse_date
 from audible.exceptions import NotFoundError
 from click import echo
 
@@ -466,6 +467,14 @@ def display_counter():
     help="download all library items, overrides --asin and --title options"
 )
 @click.option(
+    "--after",
+    type=str,
+    default='',
+    help="download items purchased later than this date"
+    "Use the date specified in the 'audible library export' file"
+    # RFC 3339 format
+)
+@click.option(
     "--asin", "-a",
     multiple=True,
     help="asin of the audiobook"
@@ -575,10 +584,14 @@ async def cli(session, api_client, **params):
 
     # which item(s) to download
     get_all = params.get("all") is True
+    after = params.get("after")
     asins = params.get("asin")
     titles = params.get("title")
-    if get_all and (asins or titles):
-        logger.error(f"Do not mix *asin* or *title* option with *all* option.")
+    if after != '' and (asins or titles):
+        logger.error(f"Do not mix *asin* or *title* option with *after* option.")
+        click.Abort()
+    if get_all and (asins or titles or after != ''):
+        logger.error(f"Do not mix *asin*,*title*, or *after* option with *all* option.")
         click.Abort()
 
     # what to download
@@ -639,6 +652,11 @@ async def cli(session, api_client, **params):
         titles = []
         for i in library:
             jobs.append(i.asin)
+
+    if after != '':
+        for i in library:
+            if parse_date(i.purchase_date) > parse_date(after):
+                jobs.append(i.asin)
 
     for asin in asins:
         if library.has_asin(asin):

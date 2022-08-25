@@ -111,7 +111,7 @@ async def export_library(session, client, **params):
 
     keys_with_raw_values = (
         "asin", "title", "subtitle", "extended_product_description", "runtime_length_min", "is_finished",
-        "percent_complete", "release_date"
+        "percent_complete", "release_date", "purchase_date"
     )
 
     prepared_library = await asyncio.gather(
@@ -129,7 +129,7 @@ async def export_library(session, client, **params):
             "asin", "title", "subtitle", "extended_product_description", "authors", "narrators", "series_title",
             "series_sequence", "genres", "runtime_length_min", "is_finished",
             "percent_complete", "rating", "num_ratings", "date_added",
-            "release_date", "cover_url"
+            "release_date", "cover_url", "purchase_date"
         )
 
         export_to_csv(output_filename, prepared_library, headers, dialect)
