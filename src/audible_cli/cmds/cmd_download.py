@@ -469,7 +469,8 @@ def display_counter():
     "--after",
     type=str,
     default='1970-01-01T00:10:09.000Z',
-    help="timestamp for 'purchased after' date. In bash:\n'date +%s000'"
+    help="timestamp for 'purchased after' date. In bash:"
+         "date '+%Y-%m-%dT%H:%Mz'"
 )
 @click.option(
     "--asin", "-a",
