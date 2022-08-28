@@ -9,7 +9,6 @@ import aiofiles
 import click
 import httpx
 import questionary
-from iso8601 import parse_date
 from audible.exceptions import NotFoundError
 from click import echo
 
@@ -469,10 +468,8 @@ def display_counter():
 @click.option(
     "--after",
     type=str,
-    default='',
-    help="download items purchased later than this date"
-    "Use the date specified in the 'audible library export' file"
-    # RFC 3339 format
+    default='1970-01-01T00:10:09.000Z',
+    help="timestamp for 'purchased after' date. In bash:\n'date +%s000'"
 )
 @click.option(
     "--asin", "-a",
@@ -587,11 +584,8 @@ async def cli(session, api_client, **params):
     after = params.get("after")
     asins = params.get("asin")
     titles = params.get("title")
-    if after != '' and (asins or titles):
-        logger.error(f"Do not mix *asin* or *title* option with *after* option.")
-        click.Abort()
-    if get_all and (asins or titles or after != ''):
-        logger.error(f"Do not mix *asin*,*title*, or *after* option with *all* option.")
+    if get_all and (asins or titles):
+        logger.error(f"Do not mix *asin* or *title* option with *all* option.")
         click.Abort()
 
     # what to download
@@ -638,7 +632,9 @@ async def cli(session, api_client, **params):
         response_groups=(
             "product_desc, media, product_attrs, relationships, "
             "series, customer_rights, pdf_url"
-        )
+        ),
+        purchased_after=after,
+        status="Active",
     )
 
     if resolve_podcats:
@@ -652,11 +648,6 @@ async def cli(session, api_client, **params):
         titles = []
         for i in library:
             jobs.append(i.asin)
-
-    if after != '':
-        for i in library:
-            if parse_date(i.purchase_date) > parse_date(after):
-                jobs.append(i.asin)
 
     for asin in asins:
         if library.has_asin(asin):
