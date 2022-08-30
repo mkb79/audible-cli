@@ -4,6 +4,7 @@ import asyncio.sslproto
 import json
 import pathlib
 import logging
+from datetime import datetime
 
 import aiofiles
 import click
@@ -28,6 +29,12 @@ logger = logging.getLogger("audible_cli.cmds.cmd_download")
 CLIENT_HEADERS = {
     "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
 }
+datetime_type = click.DateTime([
+    "%Y-%m-%d",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%fZ"
+])
 
 
 class DownloadCounter:
@@ -269,7 +276,7 @@ async def download_aaxc(
             filepath = pathlib.Path(
                 output_dir) / f"{base_filename}-{codec}.aaxc"
             lr_file = filepath.with_suffix(".voucher")
-        
+
             if lr_file.is_file():
                 if filepath.is_file():
                     logger.info(
@@ -466,13 +473,6 @@ def display_counter():
     help="download all library items, overrides --asin and --title options"
 )
 @click.option(
-    "--after",
-    type=str,
-    default='1970-01-01T00:10:09.000Z',
-    help="timestamp for 'purchased after' date. In bash:"
-         "date '+%Y-%m-%dT%H:%Mz'"
-)
-@click.option(
     "--asin", "-a",
     multiple=True,
     help="asin of the audiobook"
@@ -532,6 +532,18 @@ def display_counter():
     help="saves the annotations (e.g. bookmarks, notes) as JSON file"
 )
 @click.option(
+    "--start-date",
+    type=datetime_type,
+    default="1900-1-1",
+    help="Only considers books added to library on or after this UTC date."
+)
+@click.option(
+    "--end-date",
+    type=datetime_type,
+    default=datetime.utcnow(),
+    help="Only considers books added to library on or before this UTC date."
+)
+@click.option(
     "--no-confirm", "-y",
     is_flag=True,
     help="start without confirm"
@@ -582,7 +594,6 @@ async def cli(session, api_client, **params):
 
     # which item(s) to download
     get_all = params.get("all") is True
-    after = params.get("after")
     asins = params.get("asin")
     titles = params.get("title")
     if get_all and (asins or titles):
@@ -595,7 +606,9 @@ async def cli(session, api_client, **params):
     aax_fallback = params.get("aax_fallback")
     if aax_fallback:
         if get_aax:
-            logger.info("Using --aax is redundant and can be left when using --aax-fallback")
+            logger.info(
+                "Using --aax is redundant and can be left when using --aax-fallback"
+            )
         get_aax = True
         if get_aaxc:
             logger.warning("Do not mix --aaxc with --aax-fallback option.")
@@ -620,6 +633,17 @@ async def cli(session, api_client, **params):
     ignore_podcasts = params.get("ignore_podcasts")
     bunch_size = session.params.get("bunch_size")
 
+    start_date = params.get("start_date")
+    purchased_after = start_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    end_date = params.get("end_date")
+    if start_date > end_date:
+        logger.error("start date must be before or equal the end date")
+        raise click.Abort()
+
+    logger.info(f"Selected start date: {purchased_after}")
+    logger.info(
+        f"Selected end   date: {end_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}")
+
     filename_mode = params.get("filename_mode")
     if filename_mode == "config":
         filename_mode = session.config.get_profile_option(
@@ -634,7 +658,7 @@ async def cli(session, api_client, **params):
             "product_desc, media, product_attrs, relationships, "
             "series, customer_rights, pdf_url"
         ),
-        purchased_after=after,
+        purchased_after=purchased_after,
         status="Active",
     )
 
@@ -682,7 +706,7 @@ async def cli(session, api_client, **params):
                 ).unsafe_ask_async()
                 if answer is not None:
                     [jobs.append(i) for i in answer]
-                
+
         else:
             logger.error(
                 f"Skip title {title}: Not found in library"
@@ -709,23 +733,27 @@ async def cli(session, api_client, **params):
                 odir.mkdir(parents=True)
 
         for item in items:
-            queue_job(
-                queue=queue,
-                get_cover=get_cover,
-                get_pdf=get_pdf,
-                get_annotation=get_annotation,
-                get_chapters=get_chapters,
-                get_aax=get_aax,
-                get_aaxc=get_aaxc,
-                client=client,
-                output_dir=odir,
-                filename_mode=filename_mode,
-                item=item,
-                cover_size=cover_size,
-                quality=quality,
-                overwrite_existing=overwrite_existing,
-                aax_fallback=aax_fallback
+            purchase_date = datetime_type.convert(
+                item.purchase_date, None, None
             )
+            if start_date <= purchase_date <= end_date:
+                queue_job(
+                    queue=queue,
+                    get_cover=get_cover,
+                    get_pdf=get_pdf,
+                    get_annotation=get_annotation,
+                    get_chapters=get_chapters,
+                    get_aax=get_aax,
+                    get_aaxc=get_aaxc,
+                    client=client,
+                    output_dir=odir,
+                    filename_mode=filename_mode,
+                    item=item,
+                    cover_size=cover_size,
+                    quality=quality,
+                    overwrite_existing=overwrite_existing,
+                    aax_fallback=aax_fallback
+                )
 
     try:
         # schedule the consumer
@@ -739,6 +767,6 @@ async def cli(session, api_client, **params):
         # the consumer is still awaiting an item, cancel it
         for consumer in consumers:
             consumer.cancel()
-    
+
         await asyncio.gather(*consumers, return_exceptions=True)
         display_counter()
