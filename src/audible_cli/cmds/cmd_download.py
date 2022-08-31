@@ -534,7 +534,7 @@ def display_counter():
 @click.option(
     "--start-date",
     type=datetime_type,
-    default="1900-1-1",
+    default="1970-1-1",
     help="Only considers books added to library on or after this UTC date."
 )
 @click.option(
