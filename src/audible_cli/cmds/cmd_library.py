@@ -1,6 +1,7 @@
 import asyncio
 import json
 import pathlib
+from datetime import datetime
 
 import click
 from click import echo
@@ -16,12 +17,20 @@ from ..models import Library
 from ..utils import export_to_csv
 
 
+datetime_type = click.DateTime([
+    "%Y-%m-%d",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%fZ"
+])
+
+
 @click.group("library")
 def cli():
     """interact with library"""
 
 
-async def _get_library(session, client):
+async def _get_library(session, client, purchased_after: str):
     bunch_size = session.params.get("bunch_size")
 
     return await Library.from_api_full_sync(
@@ -35,7 +44,8 @@ async def _get_library(session, client):
             "is_finished, is_returnable, origin_asin, pdf_url, "
             "percent_complete, provided_review"
         ),
-        bunch_size=bunch_size
+        bunch_size=bunch_size,
+        purchased_after=purchased_after
     )
 
 
@@ -61,6 +71,18 @@ async def _get_library(session, client):
     is_flag=True,
     help="Resolve podcasts to show all episodes"
 )
+@click.option(
+    "--start-date",
+    type=datetime_type,
+    default="1970-1-1",
+    help="Only considers books added to library on or after this UTC date."
+)
+@click.option(
+    "--end-date",
+    type=datetime_type,
+    default=datetime.utcnow(),
+    help="Only considers books added to library on or before this UTC date."
+)
 @pass_session
 @pass_client
 async def export_library(session, client, **params):
@@ -68,6 +90,12 @@ async def export_library(session, client, **params):
 
     @wrap_async
     def _prepare_item(item):
+        purchase_date = datetime_type.convert(
+            item.purchase_date, None, None
+        )
+        if not start_date <= purchase_date <= end_date:
+            return None
+
         data_row = {}
         for key in item:
             v = getattr(item, key)
@@ -105,7 +133,11 @@ async def export_library(session, client, **params):
         suffix = "." + output_format
         output_filename = output_filename.with_suffix(suffix)
 
-    library = await _get_library(session, client)
+    start_date = params.get("start_date")
+    purchased_after = start_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    end_date = params.get("end_date")
+
+    library = await _get_library(session, client, purchased_after)
     if params.get("resolve_podcasts"):
         await library.resolve_podcats()
 
@@ -117,6 +149,7 @@ async def export_library(session, client, **params):
     prepared_library = await asyncio.gather(
         *[_prepare_item(i) for i in library]
     )
+    prepared_library = [i for i in prepared_library if i is not None]
     prepared_library.sort(key=lambda x: x["asin"])
 
     if output_format in ("tsv", "csv"):
@@ -147,13 +180,31 @@ async def export_library(session, client, **params):
     is_flag=True,
     help="Resolve podcasts to show all episodes"
 )
+@click.option(
+    "--start-date",
+    type=datetime_type,
+    default="1970-1-1",
+    help="Only considers books added to library on or after this UTC date."
+)
+@click.option(
+    "--end-date",
+    type=datetime_type,
+    default=datetime.utcnow(),
+    help="Only considers books added to library on or before this UTC date."
+)
 @pass_session
 @pass_client
-async def list_library(session, client, resolve_podcasts=False):
+async def list_library(session, client, resolve_podcasts, start_date, end_date):
     """list titles in library"""
 
     @wrap_async
     def _prepare_item(item):
+        purchase_date = datetime_type.convert(
+            item.purchase_date, None, None
+        )
+        if not start_date <= purchase_date <= end_date:
+            return ""
+
         fields = [item.asin]
 
         authors = ", ".join(
@@ -171,7 +222,8 @@ async def list_library(session, client, resolve_podcasts=False):
         fields.append(item.title)
         return ": ".join(fields)
 
-    library = await _get_library(session, client)
+    purchased_after = start_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    library = await _get_library(session, client, purchased_after)
 
     if resolve_podcasts:
         await library.resolve_podcats()
@@ -179,6 +231,4 @@ async def list_library(session, client, resolve_podcasts=False):
     books = await asyncio.gather(
         *[_prepare_item(i) for i in library]
     )
-
-    for i in sorted(books):
-        echo(i)
+    [echo(i) for i in sorted(books) if len(i) > 0]
