@@ -11,7 +11,12 @@ from audible.aescipher import decrypt_voucher_from_licenserequest
 from audible.client import convert_response_content
 
 from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
-from .exceptions import AudibleCliException, NotDownloadableAsAAX
+from .exceptions import (
+    AudibleCliException,
+    LicenseDenied,
+    NoDownloadUrl,
+    NotDownloadableAsAAX
+)
 from .utils import full_response_callback, LongestSubString
 
 
@@ -311,8 +316,27 @@ class LibraryItem(BaseItem):
             f"content/{self.asin}/licenserequest",
             body=body
         )
-        voucher = decrypt_voucher_from_licenserequest(self._client.auth, lr)
-        lr["content_license"]["license_response"] = voucher
+
+        if lr["content_license"]["status_code"] == "Denied":
+            msg = lr["content_license"]["message"]
+            raise LicenseDenied(msg)
+
+        content_url = lr["content_license"]["content_metadata"]\
+            .get("content_url", {}).get("offline_url")
+        if content_url is None:
+            raise NoDownloadUrl(self.asin)
+
+        if "license_response" in lr["content_license"]:
+            try:
+                voucher = decrypt_voucher_from_licenserequest(
+                    self._client.auth, lr
+                )
+            except Exception:
+                logger.error(f"Decrypting voucher for  {self.asin} failed")
+            else:
+                lr["content_license"]["license_response"] = voucher
+        else:
+            logger.error(f"No voucher for {self.asin} found")
 
         return lr
 

@@ -41,3 +41,15 @@ class ProfileAlreadyExists(AudibleCliException):
     def __init__(self, name):
         message = f"Profile {name} already exist"
         super().__init__(message)
+
+
+class LicenseDenied(AudibleCliException):
+    """Raised if a license request is not granted"""
+
+
+class NoDownloadUrl(AudibleCliException):
+    """Raised if a license response does not contain a download url"""
+
+    def __init__(self, asin):
+        message = f"License response for {asin} does not contain a download url"
+        super().__init__(message)
