@@ -318,6 +318,17 @@ class LibraryItem(BaseItem):
         )
 
         if lr["content_license"]["status_code"] == "Denied":
+            if "license_denial_reasons" in lr["content_license"]:
+                for reason in lr["content_license"]["license_denial_reasons"]:
+                    message = reason.get("message", "UNKNOWN")
+                    rejection_reason = reason.get("rejectionReason", "UNKNOWN")
+                    validation_type = reason.get("validationType", "UNKNOWN")
+                    logger.error(
+                        f"License denied message for {self.asin}: {message}."
+                        f"Reason: {rejection_reason}."
+                        f"Type: {validation_type}"
+                    )
+
             msg = lr["content_license"]["message"]
             raise LicenseDenied(msg)
 
