@@ -323,7 +323,7 @@ class LibraryItem(BaseItem):
                     message = reason.get("message", "UNKNOWN")
                     rejection_reason = reason.get("rejectionReason", "UNKNOWN")
                     validation_type = reason.get("validationType", "UNKNOWN")
-                    logger.error(
+                    logger.debug(
                         f"License denied message for {self.asin}: {message}."
                         f"Reason: {rejection_reason}."
                         f"Type: {validation_type}"
