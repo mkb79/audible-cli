@@ -19,7 +19,11 @@ from ..decorators import (
     pass_client,
     pass_session
 )
-from ..exceptions import DirectoryDoesNotExists, NotDownloadableAsAAX
+from ..exceptions import (
+    AudibleCliException,
+    DirectoryDoesNotExists,
+    NotDownloadableAsAAX
+)
 from ..models import Library
 from ..utils import Downloader
 
@@ -33,7 +37,8 @@ datetime_type = click.DateTime([
     "%Y-%m-%d",
     "%Y-%m-%dT%H:%M:%S",
     "%Y-%m-%d %H:%M:%S",
-    "%Y-%m-%dT%H:%M:%S.%fZ"
+    "%Y-%m-%dT%H:%M:%S.%fZ",
+    "%Y-%m-%dT%H:%M:%SZ"
 ])
 
 
@@ -263,6 +268,51 @@ async def download_aax(
         counter.count_aax()
 
 
+async def _reuse_voucher(lr_file, item):
+    logger.info(f"Loading data from voucher file {lr_file}.")
+    async with aiofiles.open(lr_file, "r") as f:
+        lr = await f.read()
+    lr = json.loads(lr)
+    content_license = lr["content_license"]
+
+    assert content_license["status_code"] == "Granted", "License not granted"
+
+    # try to get the user id
+    user_id = None
+    if item._client is not None:
+        auth = item._client.auth
+        if auth.customer_info is not None:
+            user_id = auth.customer_info.get("user_id")
+
+    # Verification of allowed user
+    if user_id is None:
+        logger.debug("No user id found. Skip user verification.")
+    else:
+        if "allowed_users" in content_license:
+            allowed_users = content_license["allowed_users"]
+            if allowed_users and user_id not in allowed_users:
+                # Don't proceed here to prevent overwriting voucher file
+                msg = f"The current user is not entitled to use the voucher {lr_file}."
+                raise AudibleCliException(msg)
+        else:
+            logger.debug(f"{lr_file} does not contain allowed users key.")
+
+    # Verification of voucher validity
+    if "refresh_date" in content_license:        
+        refresh_date = content_license["refresh_date"]
+        refresh_date = datetime_type.convert(refresh_date, None, None)
+        if refresh_date < datetime.utcnow():
+            # TODO: refresh license automatically
+            msg = f"Voucher {lr_file} is expired. Please remove this file."
+            raise AudibleCliException(msg)
+
+    content_metadata = content_license["content_metadata"]
+    url = httpx.URL(content_metadata["content_url"]["offline_url"])
+    codec = content_metadata["content_reference"]["content_format"]
+
+    return lr, url, codec
+
+
 async def download_aaxc(
         client, output_dir, base_filename, item,
         quality, overwrite_existing
@@ -286,21 +336,10 @@ async def download_aaxc(
                         f"File {filepath} already exists. Skip download."
                     )
                     return
-                else:
-                    logger.info(
-                        f"Loading data from voucher file {lr_file}."
-                    )
-                    async with aiofiles.open(lr_file, "r") as f:
-                        lr = await f.read()
-                    lr = json.loads(lr)
-                    content_metadata = lr["content_license"][
-                        "content_metadata"]
-                    url = httpx.URL(
-                        content_metadata["content_url"]["offline_url"])
-                    codec = content_metadata["content_reference"][
-                        "content_format"]
 
-    if url is None or codec is None or lr is None:
+                lr, url, codec = await _reuse_voucher(lr_file, item)
+
+    if lr is None or url is None or codec is None:
         url, codec, lr = await item.get_aaxc_url(quality)
         counter.count_voucher()
 
