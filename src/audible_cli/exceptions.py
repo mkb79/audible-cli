@@ -53,3 +53,11 @@ class NoDownloadUrl(AudibleCliException):
     def __init__(self, asin):
         message = f"License response for {asin} does not contain a download url"
         super().__init__(message)
+
+
+class DownloadUrlExpired(AudibleCliException):
+    """Raised if a download url is expired"""
+
+    def __init__(self, lr_file):
+        message = f"Download url in {lr_file} is expired."
+        super().__init__(message)
