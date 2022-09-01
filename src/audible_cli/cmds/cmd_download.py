@@ -303,7 +303,14 @@ async def _reuse_voucher(lr_file, item):
         refresh_date = datetime_type.convert(refresh_date, None, None)
         if refresh_date < datetime.utcnow():
             # TODO: refresh license automatically
-            msg = f"Voucher {lr_file} is expired. Please remove this file."
+            msg = f"Voucher {lr_file} need a refresh. Please remove this file and try again."
+            raise AudibleCliException(msg)
+    elif "removal_date" in content_license:        
+        removal_date = content_license["removal_date"]
+        removal_date = datetime_type.convert(removal_date, None, None)
+        if removal_date < datetime.utcnow():
+            # TODO: refresh license automatically
+            msg = f"Voucher {lr_file} is expired. Please remove this file and try again."
             raise AudibleCliException(msg)
 
     content_metadata = content_license["content_metadata"]
