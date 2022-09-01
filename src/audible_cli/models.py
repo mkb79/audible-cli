@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import secrets
 import string
 import unicodedata
 from math import ceil
@@ -312,14 +313,24 @@ class LibraryItem(BaseItem):
             "response_groups": response_groups
         }
 
+        headers = {
+            "X-Amzn-RequestId": secrets.token_hex(20).upper(),
+            "X-ADP-SW": "37801821",
+            "X-ADP-Transport": "WIFI",
+            "X-ADP-LTO": "120",
+            "X-Device-Type-Id": "A2CZJZGLK2JJVM",
+            "device_idiom": "phone"
+        }
         lr = await self._client.post(
             f"content/{self.asin}/licenserequest",
-            body=body
+            body=body,
+            headers=headers
         )
+        content_license = lr["content_license"]
 
-        if lr["content_license"]["status_code"] == "Denied":
-            if "license_denial_reasons" in lr["content_license"]:
-                for reason in lr["content_license"]["license_denial_reasons"]:
+        if content_license["status_code"] == "Denied":
+            if "license_denial_reasons" in content_license:
+                for reason in content_license["license_denial_reasons"]:
                     message = reason.get("message", "UNKNOWN")
                     rejection_reason = reason.get("rejectionReason", "UNKNOWN")
                     validation_type = reason.get("validationType", "UNKNOWN")
@@ -329,15 +340,15 @@ class LibraryItem(BaseItem):
                         f"Type: {validation_type}"
                     )
 
-            msg = lr["content_license"]["message"]
+            msg = content_license["message"]
             raise LicenseDenied(msg)
 
-        content_url = lr["content_license"]["content_metadata"]\
+        content_url = content_license["content_metadata"]\
             .get("content_url", {}).get("offline_url")
         if content_url is None:
             raise NoDownloadUrl(self.asin)
 
-        if "license_response" in lr["content_license"]:
+        if "license_response" in content_license:
             try:
                 voucher = decrypt_voucher_from_licenserequest(
                     self._client.auth, lr
@@ -345,7 +356,7 @@ class LibraryItem(BaseItem):
             except Exception:
                 logger.error(f"Decrypting voucher for  {self.asin} failed")
             else:
-                lr["content_license"]["license_response"] = voucher
+                content_license["license_response"] = voucher
         else:
             logger.error(f"No voucher for {self.asin} found")
 
