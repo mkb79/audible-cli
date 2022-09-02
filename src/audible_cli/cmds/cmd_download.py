@@ -53,6 +53,8 @@ class DownloadCounter:
         self._pdf: int = 0
         self._voucher: int = 0
         self._voucher_saved: int = 0
+        self._aycl = 0
+        self._aycl_voucher = 0
 
     @property
     def aax(self):
@@ -69,6 +71,24 @@ class DownloadCounter:
     def count_aaxc(self):
         self._aaxc += 1
         logger.debug(f"Currently downloaded aaxc files: {self.aaxc}")
+
+    @property
+    def aycl(self):
+        return self._aycl
+
+    def count_aycl(self):
+        self._aycl += 1
+        # log as error to display this message in any cases
+        logger.error(f"Currently downloaded aycl files: {self.aycl}")
+
+    @property
+    def aycl_voucher(self):
+        return self._aycl_voucher
+
+    def count_aycl_voucher(self):
+        self._aycl_voucher += 1
+        # log as error to display this message in any cases
+        logger.error(f"Currently downloaded aycl voucher files: {self.aycl_voucher}")
 
     @property
     def annotation(self):
@@ -127,7 +147,9 @@ class DownloadCounter:
             "cover": self.cover,
             "pdf": self.pdf,
             "voucher": self.voucher,
-            "voucher_saved": self.voucher_saved
+            "voucher_saved": self.voucher_saved,
+            "aycl": self.aycl,
+            "aycl_voucher": self.aycl_voucher
         }
 
     def has_downloads(self):
@@ -351,9 +373,13 @@ async def download_aaxc(
                     logger.debug(f"Download url in {lr_file} is expired. Refreshing license")
                     overwrite_existing = True
 
+    is_aycl = item.benefit_id == "AYCL"
+
     if lr is None or url is None or codec is None:
         url, codec, lr = await item.get_aaxc_url(quality)
         counter.count_voucher()
+        if is_aycl:
+            counter.count_aycl_voucher()
 
     if codec.lower() == "mpeg":
         ext = "mp3"
@@ -389,6 +415,8 @@ async def download_aaxc(
 
     if downloaded:
         counter.count_aaxc()
+        if is_aycl:
+            counter.count_aycl()
 
 
 async def consume(queue):
@@ -501,6 +529,8 @@ def display_counter():
 
             if k == "voucher_saved":
                 k = "voucher"
+            elif k == "aycl_voucher":
+                k = "aycl voucher"
             elif k == "voucher":
                 diff = v - counter.voucher_saved
                 if diff > 0:
@@ -640,6 +670,7 @@ def display_counter():
 @pass_client(headers=CLIENT_HEADERS)
 async def cli(session, api_client, **params):
     """download audiobook(s) from library"""
+    click.secho("Using audible_cli with AYCL counter")
     client = api_client.session
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
 
