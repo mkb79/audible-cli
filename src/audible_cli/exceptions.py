@@ -61,3 +61,11 @@ class DownloadUrlExpired(AudibleCliException):
     def __init__(self, lr_file):
         message = f"Download url in {lr_file} is expired."
         super().__init__(message)
+
+
+class VoucherNeedRefresh(AudibleCliException):
+    """Raised if a voucher reached his refresh date"""
+
+    def __init__(self, lr_file):
+        message = f"Refresh date for voucher {lr_file} reached."
+        super().__init__(message)
