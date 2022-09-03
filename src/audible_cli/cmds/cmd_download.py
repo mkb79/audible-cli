@@ -393,14 +393,15 @@ async def download_aaxc(
         counter.count_aaxc()
 
 
-async def consume(queue):
+async def consume(queue, ignore_errors):
     while True:
         item = await queue.get()
         try:
             await item
         except Exception as e:
             logger.error(e)
-            raise
+            if not ignore_errors:
+                raise
         finally:
             queue.task_done()
 
@@ -811,7 +812,7 @@ async def cli(session, api_client, **params):
     try:
         # schedule the consumer
         consumers = [
-            asyncio.ensure_future(consume(queue)) for _ in range(sim_jobs)
+            asyncio.ensure_future(consume(queue, ignore_errors)) for _ in range(sim_jobs)
         ]
         # wait until the consumer has processed all items
         await queue.join()
