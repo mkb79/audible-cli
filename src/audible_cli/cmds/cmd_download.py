@@ -23,7 +23,8 @@ from ..exceptions import (
     AudibleCliException,
     DirectoryDoesNotExists,
     DownloadUrlExpired,
-    NotDownloadableAsAAX
+    NotDownloadableAsAAX,
+    VoucherNeedRefresh
 )
 from ..models import Library
 from ..utils import Downloader
@@ -303,9 +304,7 @@ async def _reuse_voucher(lr_file, item):
         refresh_date = content_license["refresh_date"]
         refresh_date = datetime_type.convert(refresh_date, None, None)
         if refresh_date < datetime.utcnow():
-            # TODO: refresh license automatically
-            msg = f"Voucher {lr_file} need a refresh. Please remove this file and try again."
-            raise AudibleCliException(msg)
+            raise VoucherNeedRefresh(lr_file)
 
     content_metadata = content_license["content_metadata"]
     url = httpx.URL(content_metadata["content_url"]["offline_url"])
@@ -348,7 +347,10 @@ async def download_aaxc(
                 try:
                     lr, url, codec = await _reuse_voucher(lr_file, item)
                 except DownloadUrlExpired:
-                    logger.debug(f"Download url in {lr_file} is expired. Refreshing license")
+                    logger.debug(f"Download url in {lr_file} is expired. Refreshing license.")
+                    overwrite_existing = True
+                except VoucherNeedRefresh:
+                    logger.debug(f"Refresh date for voucher {lr_file} reached. Refreshing license.")
                     overwrite_existing = True
 
     if lr is None or url is None or codec is None:
