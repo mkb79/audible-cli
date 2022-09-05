@@ -3,6 +3,7 @@ import logging
 import secrets
 import string
 import unicodedata
+from datetime import datetime
 from math import ceil
 from typing import List, Optional, Union
 
@@ -16,7 +17,8 @@ from .exceptions import (
     AudibleCliException,
     LicenseDenied,
     NoDownloadUrl,
-    NotDownloadableAsAAX
+    NotDownloadableAsAAX,
+    ItemNotPublished
 )
 from .utils import full_response_callback, LongestSubString
 
@@ -115,6 +117,9 @@ class BaseItem:
             return images[res]
 
     def get_pdf_url(self):
+        if not self.is_published():
+            raise ItemNotPublished(self.asin, self.publication_datetime)
+
         if self.pdf_url is not None:
             domain = self._client.auth.locale.domain
             return f"https://www.audible.{domain}/companion-file/{self.asin}"
@@ -124,6 +129,14 @@ class BaseItem:
             if (self.content_delivery_type in ("Periodical", "PodcastParent")
                     or self.content_type == "Podcast") and self.has_children:
                 return True
+
+    def is_published(self):
+        if self.publication_datetime is not None:
+            pub_date = datetime.strptime(
+                self.publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
+            )
+            now = datetime.utcnow()
+            return now > pub_date
 
 
 class LibraryItem(BaseItem):
@@ -222,6 +235,9 @@ class LibraryItem(BaseItem):
             return False
 
     async def get_aax_url_old(self, quality: str = "high"):
+        if not self.is_published():
+            raise ItemNotPublished(self.asin, self.publication_datetime)
+
         if not self.is_downloadable():
             raise AudibleCliException(
                 f"{self.full_title} is not downloadable."
@@ -258,6 +274,8 @@ class LibraryItem(BaseItem):
         return httpx.URL(link), codec_name
 
     async def get_aax_url(self, quality: str = "high"):
+        if not self.is_published():
+            raise ItemNotPublished(self.asin, self.publication_datetime)
 
         if not self.is_downloadable():
             raise AudibleCliException(
@@ -283,6 +301,9 @@ class LibraryItem(BaseItem):
             quality: str = "high",
             license_response_groups: Optional[str] = None
     ):
+        if not self.is_published():
+            raise ItemNotPublished(self.asin, self.publication_datetime)
+
         if not self.is_downloadable():
             raise AudibleCliException(
                 f"{self.full_title} is not downloadable."
