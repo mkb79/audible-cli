@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `start-date` and `end-date` option to `download` command
 - `start-date` and `end-date` option to `library export` and `library list` command
 - better error handling for license requests
+- verify that a download link is valid
+- extend `ignore-errors` flag of the download command
 
 ## [0.2.2] - 2022-08-09
 

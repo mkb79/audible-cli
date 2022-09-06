@@ -1,7 +1,9 @@
 import asyncio
 import logging
+import secrets
 import string
 import unicodedata
+from datetime import datetime
 from math import ceil
 from typing import List, Optional, Union
 
@@ -15,7 +17,8 @@ from .exceptions import (
     AudibleCliException,
     LicenseDenied,
     NoDownloadUrl,
-    NotDownloadableAsAAX
+    NotDownloadableAsAAX,
+    ItemNotPublished
 )
 from .utils import full_response_callback, LongestSubString
 
@@ -114,6 +117,9 @@ class BaseItem:
             return images[res]
 
     def get_pdf_url(self):
+        if not self.is_published():
+            raise ItemNotPublished(self.asin, self.publication_datetime)
+
         if self.pdf_url is not None:
             domain = self._client.auth.locale.domain
             return f"https://www.audible.{domain}/companion-file/{self.asin}"
@@ -123,6 +129,14 @@ class BaseItem:
             if (self.content_delivery_type in ("Periodical", "PodcastParent")
                     or self.content_type == "Podcast") and self.has_children:
                 return True
+
+    def is_published(self):
+        if self.publication_datetime is not None:
+            pub_date = datetime.strptime(
+                self.publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
+            )
+            now = datetime.utcnow()
+            return now > pub_date
 
 
 class LibraryItem(BaseItem):
@@ -221,6 +235,9 @@ class LibraryItem(BaseItem):
             return False
 
     async def get_aax_url_old(self, quality: str = "high"):
+        if not self.is_published():
+            raise ItemNotPublished(self.asin, self.publication_datetime)
+
         if not self.is_downloadable():
             raise AudibleCliException(
                 f"{self.full_title} is not downloadable."
@@ -257,6 +274,8 @@ class LibraryItem(BaseItem):
         return httpx.URL(link), codec_name
 
     async def get_aax_url(self, quality: str = "high"):
+        if not self.is_published():
+            raise ItemNotPublished(self.asin, self.publication_datetime)
 
         if not self.is_downloadable():
             raise AudibleCliException(
@@ -282,6 +301,9 @@ class LibraryItem(BaseItem):
             quality: str = "high",
             license_response_groups: Optional[str] = None
     ):
+        if not self.is_published():
+            raise ItemNotPublished(self.asin, self.publication_datetime)
+
         if not self.is_downloadable():
             raise AudibleCliException(
                 f"{self.full_title} is not downloadable."
@@ -312,14 +334,24 @@ class LibraryItem(BaseItem):
             "response_groups": response_groups
         }
 
+        headers = {
+            "X-Amzn-RequestId": secrets.token_hex(20).upper(),
+            "X-ADP-SW": "37801821",
+            "X-ADP-Transport": "WIFI",
+            "X-ADP-LTO": "120",
+            "X-Device-Type-Id": "A2CZJZGLK2JJVM",
+            "device_idiom": "phone"
+        }
         lr = await self._client.post(
             f"content/{self.asin}/licenserequest",
-            body=body
+            body=body,
+            headers=headers
         )
+        content_license = lr["content_license"]
 
-        if lr["content_license"]["status_code"] == "Denied":
-            if "license_denial_reasons" in lr["content_license"]:
-                for reason in lr["content_license"]["license_denial_reasons"]:
+        if content_license["status_code"] == "Denied":
+            if "license_denial_reasons" in content_license:
+                for reason in content_license["license_denial_reasons"]:
                     message = reason.get("message", "UNKNOWN")
                     rejection_reason = reason.get("rejectionReason", "UNKNOWN")
                     validation_type = reason.get("validationType", "UNKNOWN")
@@ -329,15 +361,15 @@ class LibraryItem(BaseItem):
                         f"Type: {validation_type}"
                     )
 
-            msg = lr["content_license"]["message"]
+            msg = content_license["message"]
             raise LicenseDenied(msg)
 
-        content_url = lr["content_license"]["content_metadata"]\
+        content_url = content_license["content_metadata"]\
             .get("content_url", {}).get("offline_url")
         if content_url is None:
             raise NoDownloadUrl(self.asin)
 
-        if "license_response" in lr["content_license"]:
+        if "license_response" in content_license:
             try:
                 voucher = decrypt_voucher_from_licenserequest(
                     self._client.auth, lr
@@ -345,7 +377,7 @@ class LibraryItem(BaseItem):
             except Exception:
                 logger.error(f"Decrypting voucher for  {self.asin} failed")
             else:
-                lr["content_license"]["license_response"] = voucher
+                content_license["license_response"] = voucher
         else:
             logger.error(f"No voucher for {self.asin} found")
 
