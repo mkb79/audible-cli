@@ -54,6 +54,8 @@ class DownloadCounter:
         self._pdf: int = 0
         self._voucher: int = 0
         self._voucher_saved: int = 0
+        self._aycl = 0
+        self._aycl_voucher = 0
 
     @property
     def aax(self):
@@ -70,6 +72,24 @@ class DownloadCounter:
     def count_aaxc(self):
         self._aaxc += 1
         logger.debug(f"Currently downloaded aaxc files: {self.aaxc}")
+
+    @property
+    def aycl(self):
+        return self._aycl
+
+    def count_aycl(self):
+        self._aycl += 1
+        # log as error to display this message in any cases
+        logger.debug(f"Currently downloaded aycl files: {self.aycl}")
+
+    @property
+    def aycl_voucher(self):
+        return self._aycl_voucher
+
+    def count_aycl_voucher(self):
+        self._aycl_voucher += 1
+        # log as error to display this message in any cases
+        logger.debug(f"Currently downloaded aycl voucher files: {self.aycl_voucher}")
 
     @property
     def annotation(self):
@@ -128,7 +148,9 @@ class DownloadCounter:
             "cover": self.cover,
             "pdf": self.pdf,
             "voucher": self.voucher,
-            "voucher_saved": self.voucher_saved
+            "voucher_saved": self.voucher_saved,
+            "aycl": self.aycl,
+            "aycl_voucher": self.aycl_voucher
         }
 
     def has_downloads(self):
@@ -300,7 +322,7 @@ async def _reuse_voucher(lr_file, item):
             logger.debug(f"{lr_file} does not contain allowed users key.")
 
     # Verification of voucher validity
-    if "refresh_date" in content_license:        
+    if "refresh_date" in content_license:
         refresh_date = content_license["refresh_date"]
         refresh_date = datetime_type.convert(refresh_date, None, None)
         if refresh_date < datetime.utcnow():
@@ -353,9 +375,13 @@ async def download_aaxc(
                     logger.debug(f"Refresh date for voucher {lr_file} reached. Refreshing license.")
                     overwrite_existing = True
 
+    is_aycl = item.benefit_id == "AYCL"
+
     if lr is None or url is None or codec is None:
         url, codec, lr = await item.get_aaxc_url(quality)
         counter.count_voucher()
+        if is_aycl:
+            counter.count_aycl_voucher()
 
     if codec.lower() == "mpeg":
         ext = "mp3"
@@ -391,6 +417,8 @@ async def download_aaxc(
 
     if downloaded:
         counter.count_aaxc()
+        if is_aycl:
+            counter.count_aycl()
 
 
 async def consume(queue, ignore_errors):
@@ -504,6 +532,8 @@ def display_counter():
 
             if k == "voucher_saved":
                 k = "voucher"
+            elif k == "aycl_voucher":
+                k = "aycl voucher"
             elif k == "voucher":
                 diff = v - counter.voucher_saved
                 if diff > 0:
