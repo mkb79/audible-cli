@@ -6,13 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+-
+
+## [0.2.3] - 2022-09-06
+
 ### Added
 
-- `start-date` and `end-date` option to `download` command
-- `start-date` and `end-date` option to `library export` and `library list` command
+- `--start-date` and `--end-date` option to `download` command
+- `--start-date` and `--end-date` option to `library export` and `library list` command
 - better error handling for license requests
 - verify that a download link is valid
-- extend `ignore-errors` flag of the download command
+- make sure an item is published before downloading the aax, aaxc or pdf file
+- `--ignore-errors` flag of the download command now continue, if an item failed to download
 
 ## [0.2.2] - 2022-08-09
 
