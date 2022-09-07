@@ -173,7 +173,7 @@ async def download_cover(
     url = item.get_cover_url(res)
     if url is None:
         logger.error(
-            f"No COVER found for {item.full_title} with given resolution"
+            f"No COVER with size {res} found for {item.full_title}"
         )
         return
 
@@ -446,7 +446,7 @@ def queue_job(
         output_dir,
         filename_mode,
         item,
-        cover_size,
+        cover_sizes,
         quality,
         overwrite_existing,
         aax_fallback
@@ -454,16 +454,17 @@ def queue_job(
     base_filename = item.create_base_filename(filename_mode)
 
     if get_cover:
-        queue.put_nowait(
-            download_cover(
-                client=client,
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                res=cover_size,
-                overwrite_existing=overwrite_existing
+        for cover_size in cover_sizes:
+            queue.put_nowait(
+                download_cover(
+                    client=client,
+                    output_dir=output_dir,
+                    base_filename=base_filename,
+                    item=item,
+                    res=cover_size,
+                    overwrite_existing=overwrite_existing
+                )
             )
-        )
 
     if get_pdf:
         queue.put_nowait(
@@ -602,8 +603,9 @@ def display_counter():
     "--cover-size",
     type=click.Choice(["252", "315", "360", "408", "500", "558", "570", "882",
                        "900", "1215"]),
-    default="500",
-    help="the cover pixel size"
+    default=["500"],
+    multiple=True,
+    help="The cover pixel size. This option can be provided multiple times."
 )
 @click.option(
     "--chapter",
@@ -709,7 +711,7 @@ async def cli(session, api_client, **params):
     # additional options
     sim_jobs = params.get("jobs")
     quality = params.get("quality")
-    cover_size = params.get("cover_size")
+    cover_sizes = list(set(params.get("cover_size")))
     overwrite_existing = params.get("overwrite")
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
@@ -736,7 +738,7 @@ async def cli(session, api_client, **params):
     # fetch the user library
     library = await Library.from_api_full_sync(
         api_client,
-        image_sizes="1215, 408, 360, 882, 315, 570, 252, 558, 900, 500",
+        image_sizes=", ".join(cover_sizes),
         bunch_size=bunch_size,
         response_groups=(
             "product_desc, media, product_attrs, relationships, "
@@ -833,7 +835,7 @@ async def cli(session, api_client, **params):
                     output_dir=odir,
                     filename_mode=filename_mode,
                     item=item,
-                    cover_size=cover_size,
+                    cover_sizes=cover_sizes,
                     quality=quality,
                     overwrite_existing=overwrite_existing,
                     aax_fallback=aax_fallback
