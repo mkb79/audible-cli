@@ -505,11 +505,15 @@ class Library(BaseList):
         titles = [i["title"] for i in resp_content["items"]]
         titles_count = len(titles)
         none_tiltes = [i for i in titles if i is None]
-        print(f"{none_tiltes} of {titles_count} are None")
+        none_tiltes_count = len(none_tiltes)
+        print(f"{none_tiltes_count} of {titles_count} are None")
 
-        # print out response groups for testing purposes
-        print(f"Requested response groups: {request_params['response_groups']}")
-        print(f"Responsed response groups: {resp_content['response_groups']}")
+        # print out missing response groups for testing purposes
+        requested = request_params["response_groups"].split(", ")
+        responsed = resp_content["response_groups"]
+        diff = list(set(requested) - set(responsed))
+        diff = ", ".join(diff)
+        print(f"Missing groups in response: {diff}")
 
         cls_instance = cls(resp_content, api_client=api_client)
 
