@@ -4,7 +4,7 @@ import secrets
 import string
 import unicodedata
 from datetime import datetime
-from math import ceil
+from math import ceil, floor
 from typing import List, Optional, Union
 
 import audible
@@ -497,11 +497,14 @@ class Library(BaseList):
             **request_params
         )
         resp_content = convert_response_content(resp)
-        total_count_header = resp.headers.get("total-count")
+        total_count = resp.headers.get("total-count")
+        if total_count:
+            total_count = int(total_count)
+
         cls_instance = cls(resp_content, api_client=api_client)
 
         if include_total_count_header:
-            return cls_instance, total_count_header
+            return cls_instance, total_count
         return cls_instance
 
     @classmethod
@@ -520,9 +523,22 @@ class Library(BaseList):
             include_total_count_header=True,
             **request_params
         )
-        pages = ceil(int(total_count) / bunch_size)
+
+        logger.debug(f"Library has {total_count} items.")
+
+        pages = ceil(total_count / bunch_size)
         if pages == 1:
             return library
+
+        max_allowed_pages = floor(10000 / bunch_size)
+        if pages > max_allowed_pages:
+            # make this a debug message when the code 
+            # to fetch the remaining items is finished
+            logger.error(
+                "Reduce the number of pages by not exceeding the "
+                "10,000 book limit")
+            logger.debug(f"Fetching {max_allowed_pages} out of {pages} pages.")
+            pages = max_allowed_pages
 
         additional_pages = []
         for page in range(2, pages+1):
@@ -538,6 +554,8 @@ class Library(BaseList):
 
         for p in additional_pages:
             library.data.extend(p.data)
+
+        # TODO: Get the remaining items when the book limit is reached
 
         return library
 
