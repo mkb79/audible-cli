@@ -507,6 +507,10 @@ class Library(BaseList):
         none_tiltes = [i for i in titles if i is None]
         print(f"{none_tiltes} of {titles_count} are None")
 
+        # print out response groups for testing purposes
+        print(f"Requested response groups: {request_params['response_groups']}")
+        print(f"Responsed response groups: {resp_content['response_groups']}")
+
         cls_instance = cls(resp_content, api_client=api_client)
 
         if include_total_count_header:
