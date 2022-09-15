@@ -21,6 +21,15 @@ from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
 logger = logging.getLogger("audible_cli.utils")
 
 
+datetime_type = click.DateTime([
+    "%Y-%m-%d",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%fZ",
+    "%Y-%m-%dT%H:%M:%SZ"
+])
+
+
 def prompt_captcha_callback(captcha_url: str) -> str:
     """Helper function for handling captcha."""
 

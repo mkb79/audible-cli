@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Allow download multiple cover sizes at once. Each cover size must be provided with the `--cover-size` option
 
+
+### Changed
+
+- Rework start_date and end_date option
+
+### Bugfix
+
+- In some cases, the purchase date is None. This results in an exception. Now check for purchase date or date added and skip, if date is missing
+
 ## [0.2.3] - 2022-09-06
 
 ### Added

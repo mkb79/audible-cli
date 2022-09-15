@@ -1,13 +1,14 @@
 import asyncio
 import json
 import pathlib
-from datetime import datetime
 
 import click
 from click import echo
 
 from ..decorators import (
     bunch_size_option,
+    end_date_option,
+    start_date_option,
     timeout_option,
     pass_client,
     pass_session,
@@ -17,23 +18,17 @@ from ..models import Library
 from ..utils import export_to_csv
 
 
-datetime_type = click.DateTime([
-    "%Y-%m-%d",
-    "%Y-%m-%dT%H:%M:%S",
-    "%Y-%m-%d %H:%M:%S",
-    "%Y-%m-%dT%H:%M:%S.%fZ"
-])
-
-
 @click.group("library")
 def cli():
     """interact with library"""
 
 
-async def _get_library(session, client, purchased_after: str):
+async def _get_library(session, client, resolve_podcasts):
     bunch_size = session.params.get("bunch_size")
+    start_date = session.params.get("start_date")
+    end_date = session.params.get("end_date")
 
-    return await Library.from_api_full_sync(
+    library = await Library.from_api_full_sync(
         client,
         response_groups=(
             "contributors, media, price, product_attrs, product_desc, "
@@ -45,8 +40,14 @@ async def _get_library(session, client, purchased_after: str):
             "percent_complete, provided_review"
         ),
         bunch_size=bunch_size,
-        purchased_after=purchased_after
+        start_date=start_date,
+        end_date=end_date
     )
+
+    if resolve_podcasts:
+        await library.resolve_podcats(start_date=start_date, end_date=end_date)
+
+    return library
 
 
 @cli.command("export")
@@ -71,18 +72,8 @@ async def _get_library(session, client, purchased_after: str):
     is_flag=True,
     help="Resolve podcasts to show all episodes"
 )
-@click.option(
-    "--start-date",
-    type=datetime_type,
-    default="1970-1-1",
-    help="Only considers books added to library on or after this UTC date."
-)
-@click.option(
-    "--end-date",
-    type=datetime_type,
-    default=datetime.utcnow(),
-    help="Only considers books added to library on or before this UTC date."
-)
+@start_date_option
+@end_date_option
 @pass_session
 @pass_client
 async def export_library(session, client, **params):
@@ -90,12 +81,6 @@ async def export_library(session, client, **params):
 
     @wrap_async
     def _prepare_item(item):
-        purchase_date = datetime_type.convert(
-            item.purchase_date, None, None
-        )
-        if not start_date <= purchase_date <= end_date:
-            return None
-
         data_row = {}
         for key in item:
             v = getattr(item, key)
@@ -133,13 +118,8 @@ async def export_library(session, client, **params):
         suffix = "." + output_format
         output_filename = output_filename.with_suffix(suffix)
 
-    start_date = params.get("start_date")
-    purchased_after = start_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-    end_date = params.get("end_date")
-
-    library = await _get_library(session, client, purchased_after)
-    if params.get("resolve_podcasts"):
-        await library.resolve_podcats()
+    resolve_podcasts = params.get("resolve_podcasts")
+    library = await _get_library(session, client, resolve_podcasts)
 
     keys_with_raw_values = (
         "asin", "title", "subtitle", "extended_product_description", "runtime_length_min", "is_finished",
@@ -180,31 +160,15 @@ async def export_library(session, client, **params):
     is_flag=True,
     help="Resolve podcasts to show all episodes"
 )
-@click.option(
-    "--start-date",
-    type=datetime_type,
-    default="1970-1-1",
-    help="Only considers books added to library on or after this UTC date."
-)
-@click.option(
-    "--end-date",
-    type=datetime_type,
-    default=datetime.utcnow(),
-    help="Only considers books added to library on or before this UTC date."
-)
+@start_date_option
+@end_date_option
 @pass_session
 @pass_client
-async def list_library(session, client, resolve_podcasts, start_date, end_date):
+async def list_library(session, client, resolve_podcasts):
     """list titles in library"""
 
     @wrap_async
     def _prepare_item(item):
-        purchase_date = datetime_type.convert(
-            item.purchase_date, None, None
-        )
-        if not start_date <= purchase_date <= end_date:
-            return ""
-
         fields = [item.asin]
 
         authors = ", ".join(
@@ -222,11 +186,7 @@ async def list_library(session, client, resolve_podcasts, start_date, end_date):
         fields.append(item.title)
         return ": ".join(fields)
 
-    purchased_after = start_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-    library = await _get_library(session, client, purchased_after)
-
-    if resolve_podcasts:
-        await library.resolve_podcats()
+    library = await _get_library(session, client, resolve_podcasts)
 
     books = await asyncio.gather(
         *[_prepare_item(i) for i in library]

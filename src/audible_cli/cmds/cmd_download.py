@@ -15,6 +15,8 @@ from click import echo
 
 from ..decorators import (
     bunch_size_option,
+    end_date_option,
+    start_date_option,
     timeout_option,
     pass_client,
     pass_session
@@ -27,7 +29,7 @@ from ..exceptions import (
     VoucherNeedRefresh
 )
 from ..models import Library
-from ..utils import Downloader
+from ..utils import datetime_type, Downloader
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_download")
@@ -35,13 +37,6 @@ logger = logging.getLogger("audible_cli.cmds.cmd_download")
 CLIENT_HEADERS = {
     "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
 }
-datetime_type = click.DateTime([
-    "%Y-%m-%d",
-    "%Y-%m-%dT%H:%M:%S",
-    "%Y-%m-%d %H:%M:%S",
-    "%Y-%m-%dT%H:%M:%S.%fZ",
-    "%Y-%m-%dT%H:%M:%SZ"
-])
 
 
 class DownloadCounter:
@@ -617,18 +612,8 @@ def display_counter():
     is_flag=True,
     help="saves the annotations (e.g. bookmarks, notes) as JSON file"
 )
-@click.option(
-    "--start-date",
-    type=datetime_type,
-    default="1970-1-1",
-    help="Only considers books added to library on or after this UTC date."
-)
-@click.option(
-    "--end-date",
-    type=datetime_type,
-    default=datetime.utcnow(),
-    help="Only considers books added to library on or before this UTC date."
-)
+@start_date_option
+@end_date_option
 @click.option(
     "--no-confirm", "-y",
     is_flag=True,
@@ -719,16 +704,20 @@ async def cli(session, api_client, **params):
     ignore_podcasts = params.get("ignore_podcasts")
     bunch_size = session.params.get("bunch_size")
 
-    start_date = params.get("start_date")
-    purchased_after = start_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-    end_date = params.get("end_date")
-    if start_date > end_date:
+    start_date = session.params.get("start_date")
+    end_date = session.params.get("end_date")
+    if all([start_date, end_date]) and start_date > end_date:
         logger.error("start date must be before or equal the end date")
         raise click.Abort()
 
-    logger.info(f"Selected start date: {purchased_after}")
-    logger.info(
-        f"Selected end   date: {end_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}")
+    if start_date is not None:
+        logger.info(
+            f"Selected start date: {start_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}"
+        )
+    if end_date is not None:
+        logger.info(
+            f"Selected end date: {end_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}"
+        )
 
     filename_mode = params.get("filename_mode")
     if filename_mode == "config":
@@ -744,12 +733,13 @@ async def cli(session, api_client, **params):
             "product_desc, media, product_attrs, relationships, "
             "series, customer_rights, pdf_url"
         ),
-        purchased_after=purchased_after,
+        start_date=start_date,
+        end_date=end_date,
         status="Active",
     )
 
     if resolve_podcats:
-        await library.resolve_podcats()
+        await library.resolve_podcats(start_date=start_date, end_date=end_date)
 
     # collect jobs
     jobs = []
@@ -807,7 +797,9 @@ async def cli(session, api_client, **params):
         if not ignore_podcasts and item.is_parent_podcast():
             items.remove(item)
             if item._children is None:
-                await item.get_child_items()
+                await item.get_child_items(
+                    start_date=start_date, end_date=end_date
+                )
 
             for i in item._children:
                 if i.asin not in jobs:
@@ -819,27 +811,23 @@ async def cli(session, api_client, **params):
                 odir.mkdir(parents=True)
 
         for item in items:
-            purchase_date = datetime_type.convert(
-                item.purchase_date, None, None
+            queue_job(
+                queue=queue,
+                get_cover=get_cover,
+                get_pdf=get_pdf,
+                get_annotation=get_annotation,
+                get_chapters=get_chapters,
+                get_aax=get_aax,
+                get_aaxc=get_aaxc,
+                client=client,
+                output_dir=odir,
+                filename_mode=filename_mode,
+                item=item,
+                cover_sizes=cover_sizes,
+                quality=quality,
+                overwrite_existing=overwrite_existing,
+                aax_fallback=aax_fallback
             )
-            if start_date <= purchase_date <= end_date:
-                queue_job(
-                    queue=queue,
-                    get_cover=get_cover,
-                    get_pdf=get_pdf,
-                    get_annotation=get_annotation,
-                    get_chapters=get_chapters,
-                    get_aax=get_aax,
-                    get_aaxc=get_aaxc,
-                    client=client,
-                    output_dir=odir,
-                    filename_mode=filename_mode,
-                    item=item,
-                    cover_sizes=cover_sizes,
-                    quality=quality,
-                    overwrite_existing=overwrite_existing,
-                    aax_fallback=aax_fallback
-                )
 
     try:
         # schedule the consumer
