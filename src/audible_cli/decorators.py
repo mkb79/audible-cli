@@ -7,6 +7,7 @@ import httpx
 from packaging.version import parse
 
 from .config import Session
+from .utils import datetime_type
 from ._logging import _normalize_logger
 from . import __version__
 
@@ -231,6 +232,40 @@ def bunch_size_option(func=None, **kwargs):
     kwargs.setdefault("expose_value", False)
 
     option = click.option("--bunch-size", **kwargs)
+
+    if callable(func):
+        return option(func)
+
+    return option
+
+
+def start_date_option(func=None, **kwargs):
+    kwargs.setdefault("type", datetime_type)
+    kwargs.setdefault(
+        "help",
+        "Only considers books added to library on or after this UTC date."
+    )
+    kwargs.setdefault("callback", add_param_to_session)
+    kwargs.setdefault("expose_value", False)
+
+    option = click.option("--start-date", **kwargs)
+
+    if callable(func):
+        return option(func)
+
+    return option
+
+
+def end_date_option(func=None, **kwargs):
+    kwargs.setdefault("type", datetime_type)
+    kwargs.setdefault(
+        "help",
+        "Only considers books added to library on or before this UTC date."
+    )
+    kwargs.setdefault("callback", add_param_to_session)
+    kwargs.setdefault("expose_value", False)
+
+    option = click.option("--end-date", **kwargs)
 
     if callable(func):
         return option(func)

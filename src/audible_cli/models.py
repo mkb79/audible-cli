@@ -476,8 +476,41 @@ class Library(BaseList):
             cls,
             api_client: audible.AsyncClient,
             include_total_count_header: bool = False,
+            start_date: Optional[datetime] = None,
+            end_date: Optional[datetime] = None,
             **request_params
     ):
+        def filter_by_date(item):
+            if item.purchase_date is not None:
+                date_added = datetime.strptime(
+                    item.purchase_date,
+                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                )
+            elif item.library_status.get("date_added") is not None:
+                date_added = datetime.strptime(
+                    item.library_status.get("date_added"),
+                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                )
+            else:
+                logger.info(
+                    f"{item.asin}: {item.full_title} can not determine date added."
+                )
+                return True
+
+            if start_date is not None and start_date > date_added:
+                return False
+            # If a new episode is added to a parent podcast, the purchase_date
+            # and date_added is set to this date. This can makes things 
+            # difficult to get older podcast episodes
+            # the end date will be filtered by the resolve_podcasts function later
+            if item.is_parent_podcast():
+                return True
+
+            if end_date is not None and end_date < date_added:
+                return False
+
+            return True
+
         if "response_groups" not in request_params:
             request_params["response_groups"] = (
                 "contributors, customer_rights, media, price, product_attrs, "
@@ -491,6 +524,14 @@ class Library(BaseList):
                 "periodicals, provided_review, product_details"
             )
 
+        if start_date is not None:
+            if "purchase_date" in request_params:
+                raise AudibleCliException(
+                    "Do not use purchase_date and start_date together"
+                )
+            request_params["purchased_after"] = start_date.strftime(
+                "%Y-%m-%dT%H:%M:%S.%fZ")
+
         resp: httpx.Response = await api_client.get(
             "library",
             response_callback=full_response_callback,
@@ -499,6 +540,9 @@ class Library(BaseList):
         resp_content = convert_response_content(resp)
         total_count_header = resp.headers.get("total-count")
         cls_instance = cls(resp_content, api_client=api_client)
+
+        if start_date is not None or end_date is not None:
+            cls_instance._data = list(filter(filter_by_date, cls_instance.data))
 
         if include_total_count_header:
             return cls_instance, total_count_header
@@ -541,9 +585,14 @@ class Library(BaseList):
 
         return library
 
-    async def resolve_podcats(self):
+    async def resolve_podcats(
+            self,
+            start_date: Optional[datetime] = None,
+            end_date: Optional[datetime] = None
+    ):
         podcast_items = await asyncio.gather(
-            *[i.get_child_items() for i in self if i.is_parent_podcast()]
+            *[i.get_child_items(start_date=start_date, end_date=end_date) 
+              for i in self if i.is_parent_podcast()]
         )
         for i in podcast_items:
             self.data.extend(i.data)
