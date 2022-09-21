@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+-
+
+## [0.2.4] - 2022-09-21
+
 ### Added
 
 - Allow download multiple cover sizes at once. Each cover size must be provided with the `--cover-size` option
