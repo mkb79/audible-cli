@@ -39,7 +39,7 @@ class DirectoryDoesNotExists(AudibleCliException):
 class ProfileAlreadyExists(AudibleCliException):
     """Raised if an item is not found"""
 
-    def __init__(self, name):
+    def __init__(self, name: str):
         message = f"Profile {name} already exist"
         super().__init__(message)
 
@@ -51,7 +51,7 @@ class LicenseDenied(AudibleCliException):
 class NoDownloadUrl(AudibleCliException):
     """Raised if a license response does not contain a download url"""
 
-    def __init__(self, asin):
+    def __init__(self, asin: str):
         message = f"License response for {asin} does not contain a download url"
         super().__init__(message)
 
@@ -59,7 +59,7 @@ class NoDownloadUrl(AudibleCliException):
 class DownloadUrlExpired(AudibleCliException):
     """Raised if a download url is expired"""
 
-    def __init__(self, lr_file):
+    def __init__(self, lr_file: str):
         message = f"Download url in {lr_file} is expired."
         super().__init__(message)
 
@@ -67,7 +67,7 @@ class DownloadUrlExpired(AudibleCliException):
 class VoucherNeedRefresh(AudibleCliException):
     """Raised if a voucher reached his refresh date"""
 
-    def __init__(self, lr_file):
+    def __init__(self, lr_file: str):
         message = f"Refresh date for voucher {lr_file} reached."
         super().__init__(message)
 
@@ -75,7 +75,7 @@ class VoucherNeedRefresh(AudibleCliException):
 class ItemNotPublished(AudibleCliException):
     """Raised if a voucher reached his refresh date"""
 
-    def __init__(self, asin: str, pub_date):
+    def __init__(self, asin: str, pub_date: str):
         pub_date = datetime.strptime(pub_date, "%Y-%m-%dT%H:%M:%SZ")
         now = datetime.utcnow()
         published_in = pub_date - now

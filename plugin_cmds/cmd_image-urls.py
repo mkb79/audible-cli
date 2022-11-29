@@ -1,4 +1,5 @@
 import click
+from audible import AsyncClient
 from audible_cli.decorators import pass_client, timeout_option
 
 
@@ -6,7 +7,7 @@ from audible_cli.decorators import pass_client, timeout_option
 @click.argument("asin")
 @timeout_option()
 @pass_client()
-async def cli(client, asin):
+async def cli(client: AsyncClient, asin: str):
     """Print out the image urls for different resolutions for a book"""
     r = await client.get(
         f"catalog/products/{asin}",

@@ -95,7 +95,7 @@ class BrokenCommand(click.Command):
     the plugin loader encountered.
     """
 
-    def __init__(self, name):
+    def __init__(self, name: str):
         """
         Define the special help messages after instantiating a `click.Command()`.
         """
@@ -117,7 +117,7 @@ class BrokenCommand(click.Command):
             icon + " Warning: could not load plugin. See `%s %s --help`."
             % (util_name, self.name))
 
-    def invoke(self, ctx):
+    def invoke(self, ctx: click.Context):
 
         """
         Print the traceback instead of doing nothing.
@@ -126,5 +126,5 @@ class BrokenCommand(click.Command):
         click.echo(self.help, color=ctx.color)
         ctx.exit(1)
 
-    def parse_args(self, ctx, args):
+    def parse_args(self, ctx: None, args: list[str]):
         return args

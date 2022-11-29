@@ -5,6 +5,7 @@ import pathlib
 from datetime import datetime
 
 import click
+from audible import AsyncClient
 from audible_cli.decorators import pass_client
 
 
@@ -13,14 +14,14 @@ logger = logging.getLogger("audible_cli.cmds.cmd_listening-stats")
 current_year = datetime.now().year
 
 
-def ms_to_hms(milliseconds):
+def ms_to_hms(milliseconds: int):
     seconds = int((milliseconds / 1000) % 60)
     minutes = int(((milliseconds / (1000*60)) % 60))
     hours = int(((milliseconds / (1000*60*60)) % 24))
     return {"hours": hours, "minutes": minutes, "seconds": seconds}
 
 
-async def _get_stats_year(client, year):
+async def _get_stats_year(client: AsyncClient, year: int) -> dict:
     stats_year = {}
     stats = await client.get(
         "stats/aggregates",
@@ -50,7 +51,7 @@ async def _get_stats_year(client, year):
     help="start year for collecting listening stats"
 )
 @pass_client
-async def cli(client, output, signup_year):
+async def cli(client: AsyncClient, output: pathlib.Path, signup_year: int):
     """get and analyse listening statistics"""
     year_range = [y for y in range(signup_year, current_year+1)]
 
