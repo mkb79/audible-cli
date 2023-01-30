@@ -794,21 +794,22 @@ async def cli(session, api_client, **params):
         items = [item]
         odir = pathlib.Path(output_dir)
 
-        if not ignore_podcasts and item.is_parent_podcast():
+        if item.is_parent_podcast():
             items.remove(item)
-            if item._children is None:
-                await item.get_child_items(
-                    start_date=start_date, end_date=end_date
-                )
-
-            for i in item._children:
-                if i.asin not in jobs:
-                    items.append(i)
-
-            podcast_dir = item.create_base_filename(filename_mode)
-            odir = output_dir / podcast_dir
-            if not odir.is_dir():
-                odir.mkdir(parents=True)
+            if not ignore_podcasts:
+                if item._children is None:
+                    await item.get_child_items(
+                        start_date=start_date, end_date=end_date
+                    )
+    
+                for i in item._children:
+                    if i.asin not in jobs:
+                        items.append(i)
+    
+                podcast_dir = item.create_base_filename(filename_mode)
+                odir = output_dir / podcast_dir
+                if not odir.is_dir():
+                    odir.mkdir(parents=True)
 
         for item in items:
             queue_job(
