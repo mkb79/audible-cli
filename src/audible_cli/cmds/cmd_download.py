@@ -700,7 +700,7 @@ async def cli(session, api_client, **params):
     overwrite_existing = params.get("overwrite")
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
-    resolve_podcats = params.get("resolve_podcasts")
+    resolve_podcasts = params.get("resolve_podcasts")
     ignore_podcasts = params.get("ignore_podcasts")
     bunch_size = session.params.get("bunch_size")
 
@@ -738,7 +738,7 @@ async def cli(session, api_client, **params):
         status="Active",
     )
 
-    if resolve_podcats:
+    if resolve_podcasts:
         await library.resolve_podcasts(start_date=start_date, end_date=end_date)
 
     # collect jobs

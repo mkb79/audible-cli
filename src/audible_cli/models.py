@@ -654,7 +654,7 @@ class Catalog(BaseList):
 
         return cls(resp, api_client=api_client)
 
-    async def resolve_podcats(self):
+    async def resolve_podcasts(self):
         podcast_items = await asyncio.gather(
             *[i.get_child_items() for i in self if i.is_parent_podcast()]
         )
