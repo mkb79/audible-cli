@@ -585,7 +585,7 @@ class Library(BaseList):
 
         return library
 
-    async def resolve_podcats(
+    async def resolve_podcasts(
             self,
             start_date: Optional[datetime] = None,
             end_date: Optional[datetime] = None

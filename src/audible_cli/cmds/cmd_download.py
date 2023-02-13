@@ -739,7 +739,7 @@ async def cli(session, api_client, **params):
     )
 
     if resolve_podcats:
-        await library.resolve_podcats(start_date=start_date, end_date=end_date)
+        await library.resolve_podcasts(start_date=start_date, end_date=end_date)
 
     # collect jobs
     jobs = []
