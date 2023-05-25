@@ -37,7 +37,7 @@ async def _get_library(session, client, resolve_podcasts):
             "relationships, review_attrs, categories, badge_types, "
             "category_ladders, claim_code_url, is_downloaded, "
             "is_finished, is_returnable, origin_asin, pdf_url, "
-            "percent_complete, provided_review"
+            "percent_complete, provided_review, customer_rights"
         ),
         bunch_size=bunch_size,
         start_date=start_date,
@@ -160,11 +160,16 @@ async def export_library(session, client, **params):
     is_flag=True,
     help="Resolve podcasts to show all episodes"
 )
+@click.option(
+    "--downloadable",
+    is_flag=True,
+    help="List only downloadable items"
+)
 @start_date_option
 @end_date_option
 @pass_session
 @pass_client
-async def list_library(session, client, resolve_podcasts):
+async def list_library(session, client, resolve_podcasts, downloadable):
     """list titles in library"""
 
     @wrap_async
@@ -189,6 +194,6 @@ async def list_library(session, client, resolve_podcasts):
     library = await _get_library(session, client, resolve_podcasts)
 
     books = await asyncio.gather(
-        *[_prepare_item(i) for i in library]
+        *[_prepare_item(i) for i in library if downloadable==False or i.is_downloadable()]
     )
     [echo(i) for i in sorted(books) if len(i) > 0]
