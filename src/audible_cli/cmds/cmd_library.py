@@ -152,6 +152,22 @@ async def export_library(session, client, **params):
         output_filename.write_text(data)
 
 
+def _intersects(filter_authors, item_authors):
+    for ia in item_authors:
+        if ia['name'] in filter_authors:
+            return True
+    return False
+
+
+def _get_authors_filter(filters):
+    authors = []
+    for f in filters:
+        if f.startswith('author='):
+            (_,author) = f.split('=',1)
+            authors.append(author)
+    return authors
+
+
 @cli.command("list")
 @timeout_option
 @bunch_size_option
@@ -161,15 +177,15 @@ async def export_library(session, client, **params):
     help="Resolve podcasts to show all episodes"
 )
 @click.option(
-    "--downloadable",
-    is_flag=True,
-    help="List only downloadable items"
+    "--filter",
+    multiple=True,
+    help="Filter library list: 'downloadable' 'not-downloadable' 'author=<Name>'"
 )
 @start_date_option
 @end_date_option
 @pass_session
 @pass_client
-async def list_library(session, client, resolve_podcasts, downloadable):
+async def list_library(session, client, resolve_podcasts, filter):
     """list titles in library"""
 
     @wrap_async
@@ -191,9 +207,19 @@ async def list_library(session, client, resolve_podcasts, downloadable):
         fields.append(item.title)
         return ": ".join(fields)
 
+    filters = {
+        'downloadable': 'downloadable' in filter,
+        'not downloadable': 'not downloadable' in filter,
+        'authors': _get_authors_filter(filter),
+    }
+
     library = await _get_library(session, client, resolve_podcasts)
 
     books = await asyncio.gather(
-        *[_prepare_item(i) for i in library if downloadable is False or i.is_downloadable()]
+        *[_prepare_item(i) for i in library if \
+            (filters['downloadable'] is False or i.is_downloadable() is True) and \
+            (filters['not downloadable'] is False or i.is_downloadable() is False) and \
+            (len(filters['authors']) == 0 or _intersects(filters['authors'], i.authors))
+         ]
     )
     [echo(i) for i in sorted(books) if len(i) > 0]
