@@ -194,6 +194,6 @@ async def list_library(session, client, resolve_podcasts, downloadable):
     library = await _get_library(session, client, resolve_podcasts)
 
     books = await asyncio.gather(
-        *[_prepare_item(i) for i in library if downloadable==False or i.is_downloadable()]
+        *[_prepare_item(i) for i in library if downloadable is False or i.is_downloadable()]
     )
     [echo(i) for i in sorted(books) if len(i) > 0]
