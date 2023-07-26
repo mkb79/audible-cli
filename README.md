@@ -199,6 +199,17 @@ At this time, there the following buildin subcommands:
     - `add`
     - `remove`
 
+## Example Usage
+
+To download all of your audiobooks in the aaxc format use:
+```shell
+audible download --all --aaxc
+```
+To download all of your audiobooks after the Date 2022-07-21 in aax format use: 
+```shell
+audible download --start-date "2022-07-21" --aax --all
+```
+
 ## Verbosity option
 
 There are 6 different verbosity levels:
