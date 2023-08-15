@@ -6,8 +6,10 @@ import pathlib
 import click
 import httpx
 import questionary
+from audible import AsyncClient
 from click import echo
 
+from ..config import Session
 from ..decorators import timeout_option, pass_client, wrap_async
 from ..models import Catalog, Wishlist
 from ..utils import export_to_csv
@@ -20,7 +22,7 @@ logger = logging.getLogger("audible_cli.cmds.cmd_wishlist")
 limits = httpx.Limits(max_keepalive_connections=1, max_connections=1)
 
 
-async def _get_wishlist(client):
+async def _get_wishlist(client: AsyncClient):
     wishlist = await Wishlist.from_api(
         client,
         response_groups=(
@@ -55,11 +57,11 @@ def cli():
     help="Output format"
 )
 @pass_client
-async def export_wishlist(client, **params):
+async def export_wishlist(client: Session, **params):
     """export wishlist"""
 
     @wrap_async
-    def _prepare_item(item):
+    def _prepare_item(item: dict):
         data_row = {}
         for key in item:
             v = getattr(item, key)
@@ -133,11 +135,11 @@ async def export_wishlist(client, **params):
 @cli.command("list")
 @timeout_option
 @pass_client
-async def list_wishlist(client):
+async def list_wishlist(client: AsyncClient):
     """list titles in wishlist"""
 
     @wrap_async
-    def _prepare_item(item):
+    def _prepare_item(item: dict):
         fields = [item.asin]
 
         authors = ", ".join(
@@ -184,7 +186,7 @@ async def add_wishlist(client, asin, title):
     Run the command without any option for interactive mode.
     """
 
-    async def add_asin(asin):
+    async def add_asin(asin: str):
         body = {"asin": asin}
         r = await client.post("wishlist", body=body)
         return r
@@ -261,13 +263,13 @@ async def add_wishlist(client, asin, title):
 )
 @timeout_option
 @pass_client(limits=limits)
-async def remove_wishlist(client, asin, title):
+async def remove_wishlist(client: AsyncClient, asin: str, title: str):
     """remove asin(s) from wishlist
 
     Run the command without any option for interactive mode.
     """
 
-    async def remove_asin(rasin):
+    async def remove_asin(rasin: str):
         r = await client.delete(f"wishlist/{rasin}")
         item = wishlist.get_item_by_asin(rasin)
         logger.info(f"{rasin} ({item.full_title}) removed from wishlist")

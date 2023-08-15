@@ -1,5 +1,6 @@
 import click
 
+from audible import AsyncClient
 from audible.exceptions import NotFoundError
 from audible_cli.decorators import pass_client
 
@@ -7,7 +8,7 @@ from audible_cli.decorators import pass_client
 @click.command("get-annotations")
 @click.argument("asin")
 @pass_client
-async def cli(client, asin):
+async def cli(client: AsyncClient, asin: str):
     url = f"https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/sidecar"
     params = {
         "type": "AUDI",

@@ -10,9 +10,11 @@ import aiofiles
 import click
 import httpx
 import questionary
+from audible import AsyncClient
 from audible.exceptions import NotFoundError
 from click import echo
 
+from ..config import Session
 from ..decorators import (
     bunch_size_option,
     end_date_option,
@@ -28,7 +30,7 @@ from ..exceptions import (
     NotDownloadableAsAAX,
     VoucherNeedRefresh
 )
-from ..models import Library
+from ..models import Library, LibraryItem
 from ..utils import datetime_type, Downloader
 
 
@@ -180,7 +182,11 @@ async def download_cover(
 
 
 async def download_pdf(
-        client, output_dir, base_filename, item, overwrite_existing
+    client: AsyncClient,
+    output_dir: str,
+    base_filename: str,
+    item: LibraryItem,
+    overwrite_existing: bool,
 ):
     url = item.get_pdf_url()
     if url is None:
@@ -200,8 +206,12 @@ async def download_pdf(
 
 
 async def download_chapters(
-        output_dir, base_filename, item, quality, overwrite_existing
-):
+        output_dir: str,
+        base_filename: str,
+        item: LibraryItem,
+        quality: str,
+        overwrite_existing: bool,
+) -> bool | None:
     if not output_dir.is_dir():
         raise DirectoryDoesNotExists(output_dir)
 
@@ -228,8 +238,11 @@ async def download_chapters(
 
 
 async def download_annotations(
-        output_dir, base_filename, item, overwrite_existing
-):
+        output_dir: str,
+        base_filename: str,
+        item: LibraryItem,
+        overwrite_existing: bool,
+) -> bool | None:
     if not output_dir.is_dir():
         raise DirectoryDoesNotExists(output_dir)
 
@@ -256,8 +269,13 @@ async def download_annotations(
 
 
 async def download_aax(
-        client, output_dir, base_filename, item, quality, overwrite_existing,
-        aax_fallback
+        client: AsyncClient,
+        output_dir: str,
+        base_filename: str,
+        item: LibraryItem,
+        quality: str,
+        overwrite_existing: bool,
+        aax_fallback: bool,
 ):
     # url, codec = await item.get_aax_url(quality)
     try:
@@ -658,7 +676,7 @@ def display_counter():
 @bunch_size_option
 @pass_session
 @pass_client(headers=CLIENT_HEADERS)
-async def cli(session, api_client, **params):
+async def cli(session: Session, api_client: AsyncClient, **params):
     """download audiobook(s) from library"""
     client = api_client.session
     output_dir = pathlib.Path(params.get("output_dir")).resolve()

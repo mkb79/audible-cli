@@ -7,7 +7,7 @@ from click import echo, secho, prompt
 from tabulate import tabulate
 
 from .. import __version__
-from ..config import ConfigFile
+from ..config import ConfigFile, Session
 from ..constants import CONFIG_FILE, DEFAULT_AUTH_FILE_EXTENSION
 from ..decorators import pass_session
 from ..utils import build_auth_file
@@ -140,7 +140,7 @@ an authentication to the audible server is necessary to register a new device.
 
 @click.command("quickstart")
 @pass_session
-def cli(session):
+def cli(session: Session):
     """Quick setup audible"""
     config_file: pathlib.Path = session.app_dir / CONFIG_FILE
     config = ConfigFile(config_file, file_exists=False)

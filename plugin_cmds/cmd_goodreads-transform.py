@@ -3,6 +3,7 @@ import pathlib
 from datetime import datetime, timezone
 
 import click
+from audible import AsyncClient
 from audible_cli.decorators import (
     bunch_size_option,
     timeout_option,
@@ -29,7 +30,7 @@ logger = logging.getLogger("audible_cli.cmds.cmd_goodreads-transform")
 @bunch_size_option
 @pass_session
 @pass_client
-async def cli(session, client, output):
+async def cli(session, client: AsyncClient, output: str):
     """YOUR COMMAND DESCRIPTION"""
 
     logger.debug("fetching library")
@@ -58,7 +59,7 @@ async def cli(session, client, output):
     logger.info(f"File saved to {output}")
 
 
-def _prepare_library_for_export(library):
+def _prepare_library_for_export(library: Library):
     prepared_library = []
 
     isbn_counter = 0

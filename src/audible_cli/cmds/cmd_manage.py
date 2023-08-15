@@ -6,6 +6,7 @@ from audible import Authenticator
 from click import echo, secho
 from tabulate import tabulate
 
+from ..config import Session
 from ..decorators import pass_session
 from ..utils import build_auth_file
 
@@ -35,14 +36,14 @@ def manage_auth_files():
 
 @manage_config.command("edit")
 @pass_session
-def config_editor(session):
+def config_editor(session: Session):
     """Open the config file with default editor"""
     click.edit(filename=session.config.filename)
 
 
 @manage_profiles.command("list")
 @pass_session
-def list_profiles(session):
+def list_profiles(session: Session):
     """List all profiles in the config file"""
     head = ["P", "Profile", "auth file", "cc"]
     config = session.config
@@ -89,7 +90,14 @@ def list_profiles(session):
 )
 @pass_session
 @click.pass_context
-def add_profile(ctx, session, profile, country_code, auth_file, is_primary):
+def add_profile(
+    ctx: None,
+    session: Session,
+    profile: pathlib.Path,
+    country_code: str,
+    auth_file: pathlib.Path,
+    is_primary: bool,
+):
     """Adds a profile to config file"""
     if not (session.config.dirname / auth_file).exists():
         logger.error("Auth file doesn't exists")
@@ -110,7 +118,7 @@ def add_profile(ctx, session, profile, country_code, auth_file, is_primary):
     help="The profile name to remove from config."
 )
 @pass_session
-def remove_profile(session, profile):
+def remove_profile(session: Session, profile: dict):
     """Remove one or multiple profile(s) from config file"""
     profiles = session.config.data.get("profile")
     for p in profile:
@@ -126,7 +134,12 @@ def remove_profile(session, profile):
 
 
 @pass_session
-def check_if_auth_file_not_exists(session, ctx, param, value):
+def check_if_auth_file_not_exists(
+    session: Session,
+    ctx: None,
+    param: None,
+    value: pathlib.Path,
+):
     value = session.config.dirname / value
     if pathlib.Path(value).exists():
         logger.error("The file already exists.")
@@ -176,8 +189,14 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
 )
 @pass_session
 def add_auth_file(
-        session, auth_file, password, audible_username,
-        audible_password, country_code, external_login, with_username
+        session: Session,
+        auth_file: pathlib.Path,
+        password: str | None,
+        audible_username: str | None,
+        audible_password: str | None,
+        country_code: str,
+        external_login: bool = False,
+        with_username: bool = False,
 ):
     """Register a new device and add an auth file to config dir"""
     build_auth_file(
@@ -192,7 +211,12 @@ def add_auth_file(
 
 
 @pass_session
-def check_if_auth_file_exists(session, ctx, param, value):
+def check_if_auth_file_exists(
+    session: Session,
+    ctx: None,
+    param: None,
+    value: pathlib.Path,
+):
     value = session.config.dirname / value
     if not pathlib.Path(value).exists():
         logger.error("The file doesn't exists.")
@@ -212,7 +236,7 @@ def check_if_auth_file_exists(session, ctx, param, value):
     "--password", "-p",
     help="The optional password for the auth file."
 )
-def remove_auth_file(auth_file, password):
+def remove_auth_file(auth_file: pathlib.Path, password: str | None):
     """Deregister a device and remove auth file from config dir"""
     auth = Authenticator.from_file(auth_file, password)
     device_name = auth.device_info["device_name"]

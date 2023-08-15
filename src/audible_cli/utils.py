@@ -10,7 +10,7 @@ import click
 import httpx
 import tqdm
 from PIL import Image
-from audible import Authenticator
+from audible import Authenticator, AsyncClient
 from audible.client import raise_for_status
 from audible.login import default_login_url_callback
 from click import echo, secho, prompt
@@ -147,7 +147,7 @@ class LongestSubString:
         return self._match.size / len(self._search_for) * 100
 
 
-def asin_in_library(asin, library):
+def asin_in_library(asin: str, library):
     items = library.get("items") or library
 
     try:
@@ -172,7 +172,7 @@ class Downloader:
             self,
             url: Union[httpx.URL, str],
             file: Union[pathlib.Path, str],
-            client,
+            client: AsyncClient,
             overwrite_existing: bool,
             content_type: Optional[Union[List[str], str]] = None
     ) -> None:
@@ -216,7 +216,13 @@ class Downloader:
 
         return True
 
-    def _postpare(self, elapsed, status_code, length, content_type):
+    def _postpare(
+        self,
+        elapsed,
+        status_code: int,
+        length: int,
+        content_type: str,
+    ):
         if not 200 <= status_code < 400:
             try:
                 msg = self._tmp_file.read_text()

@@ -6,6 +6,7 @@ from audible.activation_bytes import (
     fetch_activation_sign_auth
 )
 
+from ..config import Session
 from ..decorators import pass_session
 
 
@@ -18,7 +19,7 @@ logger = logging.getLogger("audible_cli.cmds.cmd_activation_bytes")
     is_flag=True,
     help="Reload activation bytes and save to auth file.")
 @pass_session
-def cli(session, **options):
+def cli(session: Session, **options):
     """Get activation bytes."""
     auth = session.auth
     if auth.activation_bytes is None or options.get("reload"):

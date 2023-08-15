@@ -37,10 +37,11 @@ import sys
 
 import click
 from click import echo
+from io import BufferedWriter
 
 
 class ApiMeta:
-    def __init__(self, api_meta_file):
+    def __init__(self, api_meta_file: str):
         self._meta_raw = pathlib.Path(api_meta_file).read_text("utf-8")
         self._meta_parsed = self._parse_meta()
 
@@ -71,7 +72,7 @@ class FFMeta:
     SECTION = re.compile(r"\[(?P<header>[^]]+)\]")
     OPTION = re.compile(r"(?P<option>.*?)\s*(?:(?P<vi>=)\s*(?P<value>.*))?$")
 
-    def __init__(self, ffmeta_file):
+    def __init__(self, ffmeta_file: str):
         self._ffmeta_raw = pathlib.Path(ffmeta_file).read_text("utf-8")
         self._ffmeta_parsed = self._parse_ffmeta()
 
@@ -101,13 +102,13 @@ class FFMeta:
     def count_chapters(self):
         return len(self._ffmeta_parsed["CHAPTER"])
 
-    def set_chapter_option(self, num, option, value):
+    def set_chapter_option(self, num: int, option: str, value):
         chapter = self._ffmeta_parsed["CHAPTER"][num]
         for chapter_option in chapter:
             if chapter_option == option:
                 chapter[chapter_option] = value
 
-    def write(self, filename):
+    def write(self, filename: str):
         fp = pathlib.Path(filename).open("w", encoding="utf-8")
         d = "="
 
@@ -124,7 +125,13 @@ class FFMeta:
                 self._write_section(fp, section, self._ffmeta_parsed[section],
                                     d)
 
-    def _write_section(self, fp, section_name, section_items, delimiter):
+    def _write_section(
+        self,
+        fp: BufferedWriter,
+        section_name: str,
+        section_items: dict,
+        delimiter: str,
+    ):
         """Write a single section to the specified `fp`."""
         if section_name is not None:
             fp.write(f"[{section_name}]\n")
@@ -135,7 +142,7 @@ class FFMeta:
             else:
                 fp.write(f"{key}{delimiter}{value}\n")
 
-    def update_title_from_api_meta(self, api_meta):
+    def update_title_from_api_meta(self, api_meta: str | ApiMeta):
         if not isinstance(api_meta, ApiMeta):
             api_meta = ApiMeta(api_meta)
 
@@ -150,7 +157,10 @@ class FFMeta:
                 if key == "title":
                     self.set_chapter_option(num_chap, "title", value)
 
-    def update_chapters_from_api_meta(self, api_meta, separate_branding=True):
+    def update_chapters_from_api_meta(
+        self, api_meta: str | ApiMeta,
+        separate_branding: bool = True,
+    ):
         """Replace all chapter data from api meta file.
         
         This replaces TIMEBASE, START, END and title. If api meta files contains
@@ -244,7 +254,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
     is_flag=True,
     help="Separate Intro and Outro branding into own chapters"
 )
-def cli(ffmeta, apimeta, outfile, separate_branding):
+def cli(ffmeta: str, apimeta: str, outfile: str, separate_branding: bool):
     ffmeta_class = FFMeta(ffmeta)
     if separate_branding:
         ffmeta_class.update_chapters_from_api_meta(apimeta)

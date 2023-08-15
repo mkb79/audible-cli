@@ -56,7 +56,7 @@ class BaseItem:
         return data
 
     @property
-    def full_title(self):
+    def full_title(self) -> str:
         title: str = self.title
         if self.subtitle is not None:
             title = f"{title}: {self.subtitle}"
@@ -67,7 +67,7 @@ class BaseItem:
         return title
 
     @property
-    def full_title_slugify(self):
+    def full_title_slugify(self) -> str:
         valid_chars = "-_.() " + string.ascii_letters + string.digits
         cleaned_title = unicodedata.normalize("NFKD", self.full_title or "")
         cleaned_title = cleaned_title.encode("ASCII", "ignore")
@@ -81,7 +81,7 @@ class BaseItem:
 
         return slug_title
 
-    def create_base_filename(self, mode: str):
+    def create_base_filename(self, mode: str) -> str:
         supported_modes = ("ascii", "asin_ascii", "unicode", "asin_unicode")
         if mode not in supported_modes:
             raise AudibleCliException(
@@ -102,21 +102,21 @@ class BaseItem:
 
         return base_filename
 
-    def substring_in_title_accuracy(self, substring):
+    def substring_in_title_accuracy(self, substring: str) -> int:
         match = LongestSubString(substring, self.full_title)
         return round(match.percentage, 2)
 
-    def substring_in_title(self, substring, p=100):
+    def substring_in_title(self, substring: str, p: int = 100) -> bool:
         accuracy = self.substring_in_title_accuracy(substring)
         return accuracy >= p
 
-    def get_cover_url(self, res: Union[str, int] = 500):
+    def get_cover_url(self, res: Union[str, int] = 500) -> str:
         images = self.product_images
         res = str(res)
         if images is not None and res in images:
             return images[res]
 
-    def get_pdf_url(self):
+    def get_pdf_url(self) -> str:
         if not self.is_published():
             raise ItemNotPublished(self.asin, self.publication_datetime)
 
@@ -124,13 +124,13 @@ class BaseItem:
             domain = self._client.auth.locale.domain
             return f"https://www.audible.{domain}/companion-file/{self.asin}"
 
-    def is_parent_podcast(self):
+    def is_parent_podcast(self) -> bool:
         if "content_delivery_type" in self and "content_type" in self:
             if (self.content_delivery_type in ("Periodical", "PodcastParent")
                     or self.content_type == "Podcast") and self.has_children:
                 return True
 
-    def is_published(self):
+    def is_published(self) -> bool:
         if self.publication_datetime is not None:
             pub_date = datetime.strptime(
                 self.publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
@@ -143,7 +143,7 @@ class LibraryItem(BaseItem):
     def _prepare_data(self, data: dict) -> dict:
         return data.get("item", data)
 
-    def _get_codec(self, quality: str):
+    def _get_codec(self, quality: str) -> tuple[str | None, int | None]:
         """If quality is not ``best``, ensures the given quality is present in
         them codecs list. Otherwise, will find the best aax quality available
         """
@@ -227,7 +227,7 @@ class LibraryItem(BaseItem):
 
         return children
 
-    def is_downloadable(self):
+    def is_downloadable(self) -> bool:
         # customer_rights must be in response_groups
         if self.customer_rights is not None:
             if self.customer_rights["is_consumable_offline"]:
@@ -436,16 +436,16 @@ class BaseList:
     def data(self):
         return self._data
 
-    def get_item_by_asin(self, asin):
+    def get_item_by_asin(self, asin: str) -> str | None:
         try:
             return next(i for i in self._data if asin == i.asin)
         except StopIteration:
             return None
 
-    def has_asin(self, asin):
+    def has_asin(self, asin: str) -> bool:
         return True if self.get_item_by_asin(asin) else False
 
-    def search_item_by_title(self, search_title, p=80):
+    def search_item_by_title(self, search_title: str, p: int = 80) -> list:
         match = []
         for i in self._data:
             accuracy = i.substring_in_title_accuracy(search_title)

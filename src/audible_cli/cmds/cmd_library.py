@@ -3,8 +3,10 @@ import json
 import pathlib
 
 import click
+from audible import AsyncClient
 from click import echo
 
+from ..config import Session
 from ..decorators import (
     bunch_size_option,
     end_date_option,
@@ -23,7 +25,11 @@ def cli():
     """interact with library"""
 
 
-async def _get_library(session, client, resolve_podcasts):
+async def _get_library(
+    session: Session,
+    client: AsyncClient,
+    resolve_podcasts: bool,
+):
     bunch_size = session.params.get("bunch_size")
     start_date = session.params.get("start_date")
     end_date = session.params.get("end_date")
@@ -76,11 +82,11 @@ async def _get_library(session, client, resolve_podcasts):
 @end_date_option
 @pass_session
 @pass_client
-async def export_library(session, client, **params):
+async def export_library(session: Session, client: AsyncClient, **params):
     """export library"""
 
     @wrap_async
-    def _prepare_item(item):
+    def _prepare_item(item: dict):
         data_row = {}
         for key in item:
             v = getattr(item, key)
@@ -164,11 +170,11 @@ async def export_library(session, client, **params):
 @end_date_option
 @pass_session
 @pass_client
-async def list_library(session, client, resolve_podcasts):
+async def list_library(session: Session, client: AsyncClient, resolve_podcasts: bool):
     """list titles in library"""
 
     @wrap_async
-    def _prepare_item(item):
+    def _prepare_item(item: dict):
         fields = [item.asin]
 
         authors = ", ".join(

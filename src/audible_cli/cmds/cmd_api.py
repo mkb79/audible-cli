@@ -6,6 +6,7 @@ import sys
 import click
 from audible import Client
 
+from ..config import Session
 from ..decorators import pass_session
 
 
@@ -61,7 +62,7 @@ logger = logging.getLogger("audible_cli.cmds.cmd_api")
          "the current profile is used."
 )
 @pass_session
-def cli(session, **options):
+def cli(session: Session, **options):
     """Send requests to an Audible API endpoint
 
     Take a look at 
