@@ -8,7 +8,11 @@ from tabulate import tabulate
 
 from .. import __version__
 from ..config import ConfigFile
-from ..constants import CONFIG_FILE, DEFAULT_AUTH_FILE_EXTENSION
+from ..constants import (
+    AVAILABLE_MARKETPLACES,
+    CONFIG_FILE,
+    DEFAULT_AUTH_FILE_EXTENSION
+)
 from ..decorators import pass_session
 from ..utils import build_auth_file
 
@@ -67,13 +71,11 @@ an authentication to the audible server is necessary to register a new device.
         "Please enter a name for your primary profile",
         default="audible")
 
-    available_country_codes = [
-        "us", "ca", "uk", "au", "fr", "de", "es", "jp", "it", "in"]
     echo()
     d["country_code"] = prompt(
         "Enter a country code for the profile",
         show_choices=False,
-        type=click.Choice(available_country_codes)
+        type=click.Choice(AVAILABLE_MARKETPLACES)
     )
 
     echo()
