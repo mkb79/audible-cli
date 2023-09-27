@@ -23,13 +23,6 @@ jobs:
         release_name: Release ${{ github.ref }}
         draft: false
         prerelease: false
-    - name: Print release url
-      run: echo ${{ steps.create-release.outputs.upload_url }}
-    - name: Print release url File
-      run: |
-        echo "${{ steps.create-release.outputs.upload_url }}" > release_url.txt
-        value=`cat release_url.txt`
-        echo $value
 
   build:
     name: Build packages
@@ -104,7 +97,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_URL: ${{ needs.createrelease.outputs.release_url }}
       with:
-        upload_url: $RELEASE_URL
+        upload_url: ${{ RELEASE_URL }}
         asset_path: ./dist/${{ matrix.OUT_FILE_NAME}}
         asset_name: ${{ matrix.OUT_FILE_NAME}}
         asset_content_type: ${{ matrix.ASSET_MIME}}
