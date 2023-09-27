@@ -23,6 +23,13 @@ jobs:
         release_name: Release ${{ github.ref }}
         draft: false
         prerelease: false
+    - name: Print release url
+      run: echo ${{ steps.create-release.outputs.upload_url }}
+    - name: Print release url File
+      run: |
+        echo "${{ steps.create-release.outputs.upload_url }}" > release_url.txt
+        value=`cat release_url.txt`
+        echo $value
 
   build:
     name: Build packages
