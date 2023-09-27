@@ -9,10 +9,12 @@ jobs:
 
   createrelease:
     name: Create Release
-    runs-on: [ubuntu-latest]
+    runs-on: ubuntu-latest
+    outputs:
+      release_url: ${{ steps.create-release.outputs.upload_url }}
     steps:
     - name: Create Release
-      id: create_release
+      id: create-release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -21,13 +23,6 @@ jobs:
         release_name: Release ${{ github.ref }}
         draft: false
         prerelease: false
-    - name: Output Release URL File
-      run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
-    - name: Save Release URL File for publish
-      uses: actions/upload-artifact@v2
-      with:
-        name: release_url
-        path: release_url.txt
 
   build:
     name: Build packages
@@ -44,13 +39,13 @@ jobs:
                 zip -r9 audible_linux_ubuntu_latest audible
             OUT_FILE_NAME: audible_linux_ubuntu_latest.zip
             ASSET_MIME: application/zip  # application/octet-stream
-          - os: ubuntu-18.04
+          - os: ubuntu-20.04
             TARGET: linux
             CMD_BUILD: >
                 pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
-                zip -r9 audible_linux_ubuntu_18_04 audible
-            OUT_FILE_NAME: audible_linux_ubuntu_18_04.zip
+                zip -r9 audible_linux_ubuntu_20_04 audible
+            OUT_FILE_NAME: audible_linux_ubuntu_20_04.zip
             ASSET_MIME: application/zip  # application/octet-stream
           - os: macos-latest
             TARGET: macos
@@ -85,34 +80,24 @@ jobs:
             OUT_FILE_NAME: audible_win.zip
             ASSET_MIME: application/zip
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v2
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.8'
+        python-version: 3.11
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip .[pyi] && pip list
     - name: Build with pyinstaller for ${{matrix.TARGET}}
       run: ${{matrix.CMD_BUILD}}
-    - name: Load Release URL File from release job
-      uses: actions/download-artifact@v2
-      with:
-        name: release_url
-        path: release_url
-    - name: Get Release File Name & Upload URL
-      id: get_release_info
-      shell: bash
-      run: |
-        value=`cat release_url/release_url.txt`
-        echo ::set-output name=upload_url::$value
     - name: Upload Release Asset
       id: upload-release-asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_URL: ${{ needs.createrelease.outputs.release_url }}
       with:
-        upload_url: ${{ steps.get_release_info.outputs.upload_url }}
+        upload_url: $RELEASE_URL
         asset_path: ./dist/${{ matrix.OUT_FILE_NAME}}
         asset_name: ${{ matrix.OUT_FILE_NAME}}
         asset_content_type: ${{ matrix.ASSET_MIME}}
