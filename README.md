@@ -49,9 +49,8 @@ page (including beta releases). At this moment Windows, Linux and macOS are supp
 ### Links
 
 1. Linux
-    - [debian 11 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_debian_11.zip)
     - [ubuntu latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_latest.zip)
-    - [ubuntu 18.04 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_18_04.zip)
+    - [ubuntu 20.04 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_20_04.zip)
 
 2. macOS
     - [macOS latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac.zip)
