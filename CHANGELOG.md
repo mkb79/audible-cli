@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Update marketplace choices in `manage auth-file add` command. Now all available marketplaces are listed.
 
+### Misc
+
+- add `freeze_support` to pyinstaller entry script (#78)
+
 ## [0.2.5] - 2022-09-26
 
 ### Added
