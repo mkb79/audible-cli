@@ -160,7 +160,7 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
 )
 @click.option(
     "--country-code", "-cc",
-    type=click.Choice(["us", "ca", "uk", "au", "fr", "de", "jp", "it", "in"]),
+    type=click.Choice(AVAILABLE_MARKETPLACES),
     prompt="Please enter the country code",
     help="The country code for the marketplace you want to authenticate."
 )
