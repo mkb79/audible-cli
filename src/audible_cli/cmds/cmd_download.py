@@ -29,7 +29,7 @@ from ..exceptions import (
     VoucherNeedRefresh
 )
 from ..models import Library
-from ..utils import datetime_type, Downloader
+from ..utils import datetime_type, Downloader, ResumeDownloader
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_download")
@@ -398,7 +398,7 @@ async def download_aaxc(
         logger.info(f"Voucher file saved to {lr_file}.")
         counter.count_voucher_saved()
 
-    dl = Downloader(
+    dl = ResumeDownloader(
         url,
         filepath,
         client,
@@ -406,7 +406,8 @@ async def download_aaxc(
         [
             "audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a",
             "audio/audible"
-        ]
+        ],
+        resume=True,
     )
     downloaded = await dl.run(pb=True)
 
