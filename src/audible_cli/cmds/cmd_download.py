@@ -418,9 +418,9 @@ async def download_aaxc(
 
 async def consume(queue, ignore_errors):
     while True:
-        item = await queue.get()
+        cmd, kwargs = await queue.get()
         try:
-            await item
+            await cmd(**kwargs)
         except Exception as e:
             logger.error(e)
             if not ignore_errors:
@@ -450,73 +450,73 @@ def queue_job(
 
     if get_cover:
         for cover_size in cover_sizes:
-            queue.put_nowait(
-                download_cover(
-                    client=client,
-                    output_dir=output_dir,
-                    base_filename=base_filename,
-                    item=item,
-                    res=cover_size,
-                    overwrite_existing=overwrite_existing
-                )
-            )
+            cmd = download_cover
+            kwargs = {
+                "client": client,
+                "output_dir": output_dir,
+                "base_filename": base_filename,
+                "item": item,
+                "res": cover_size,
+                "overwrite_existing": overwrite_existing
+            }
+            queue.put_nowait((cmd, kwargs))
 
     if get_pdf:
-        queue.put_nowait(
-            download_pdf(
-                client=client,
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                overwrite_existing=overwrite_existing
-            )
-        )
+        cmd = download_pdf
+        kwargs = {
+            "client": client,
+            "output_dir": output_dir,
+            "base_filename": base_filename,
+            "item": item,
+            "overwrite_existing": overwrite_existing
+        }
+        queue.put_nowait((cmd, kwargs))
 
     if get_chapters:
-        queue.put_nowait(
-            download_chapters(
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                quality=quality,
-                overwrite_existing=overwrite_existing
-            )
-        )
+        cmd = download_chapters
+        kwargs = {
+            "output_dir": output_dir,
+            "base_filename": base_filename,
+            "item": item,
+            "quality": quality,
+            "overwrite_existing": overwrite_existing
+        }
+        queue.put_nowait((cmd, kwargs))
 
     if get_annotation:
-        queue.put_nowait(
-            download_annotations(
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                overwrite_existing=overwrite_existing
-            )
-        )
+        cmd = download_annotations
+        kwargs = {
+            "output_dir": output_dir,
+            "base_filename": base_filename,
+            "item": item,
+            "overwrite_existing": overwrite_existing
+        }
+        queue.put_nowait((cmd, kwargs))
 
     if get_aax:
-        queue.put_nowait(
-            download_aax(
-                client=client,
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                quality=quality,
-                overwrite_existing=overwrite_existing,
-                aax_fallback=aax_fallback
-            )
-        )
+        cmd = download_aax
+        kwargs = {
+            "client": client,
+            "output_dir": output_dir,
+            "base_filename": base_filename,
+            "item": item,
+            "quality": quality,
+            "overwrite_existing": overwrite_existing,
+            "aax_fallback": aax_fallback
+        }
+        queue.put_nowait((cmd, kwargs))
 
     if get_aaxc:
-        queue.put_nowait(
-            download_aaxc(
-                client=client,
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                quality=quality,
-                overwrite_existing=overwrite_existing
-            )
-        )
+        cmd = download_aaxc
+        kwargs = {
+            "client": client,
+            "output_dir": output_dir,
+            "base_filename": base_filename,
+            "item": item,
+            "quality": quality,
+            "overwrite_existing": overwrite_existing
+        }
+        queue.put_nowait((cmd, kwargs))
 
 
 def display_counter():
