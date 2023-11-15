@@ -4,6 +4,7 @@ from typing import Optional, Union
 from warnings import warn
 
 import click
+from tqdm import tqdm
 
 
 audible_cli_logger = logging.getLogger("audible_cli")
@@ -100,10 +101,13 @@ class ClickHandler(logging.Handler):
         try:
             msg = self.format(record)
             level = record.levelname.lower()
-            if self.echo_kwargs.get(level):
-                click.echo(msg, **self.echo_kwargs[level])
-            else:
-                click.echo(msg)
+
+            # Avoid tqdm progress bar interruption by logger's output to console
+            with tqdm.external_write_mode():
+                if self.echo_kwargs.get(level):
+                    click.echo(msg, **self.echo_kwargs[level])
+                else:
+                    click.echo(msg)
         except Exception:
             self.handleError(record)
 
