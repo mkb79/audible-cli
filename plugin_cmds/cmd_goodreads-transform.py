@@ -45,9 +45,10 @@ async def cli(session, client, output):
     logger.debug("prepare library")
     library = _prepare_library_for_export(library)
 
-    logger.debug("write data rows to file")
-
     headers = ("isbn", "Date Added", "Date Read", "Title")
+    library = [dict(zip(headers, item)) for item in library]
+
+    logger.debug("write data rows to file")
     export_to_csv(
         file=output,
         data=library,
