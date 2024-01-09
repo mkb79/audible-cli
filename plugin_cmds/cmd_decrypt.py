@@ -487,12 +487,6 @@ class FfmpegFileDecrypter:
                 quote(self._credentials),
             ]    
         base_cmd.extend(credentials_cmd)
-        base_cmd.extend(
-            [
-                "-i",
-                quote(str(self._source)),
-            ]
-        )
 
         if self._rebuild_chapters:
             metafile = _get_ffmeta_file(self._source, self._tempdir)
@@ -510,12 +504,14 @@ class FfmpegFileDecrypter:
 
                     base_cmd.extend(
                         [
-                            "-i",
-                            quote(str(metafile)),
                             "-ss",
                             f"{start_new}ms",
                             "-t",
                             f"{duration_new}ms",
+                            "-i",
+                            quote(str(self._source)),
+                            "-i",
+                            quote(str(metafile)),
                             "-map_metadata",
                             "0",
                             "-map_chapters",
@@ -533,6 +529,13 @@ class FfmpegFileDecrypter:
                             "1",
                         ]
                     )
+        else:
+            base_cmd.extend(
+                [
+                    "-i",
+                    quote(str(self._source)),
+                ]
+            )
 
         base_cmd.extend(
             [
