@@ -325,6 +325,7 @@ class FfmpegFileDecrypter:
         target_dir: pathlib.Path,
         tempdir: pathlib.Path,
         activation_bytes: t.Optional[str],
+        overwrite: bool,
         rebuild_chapters: bool,
         force_rebuild_chapters: bool,
         skip_rebuild_chapters: bool,
@@ -348,6 +349,7 @@ class FfmpegFileDecrypter:
         self._credentials: t.Optional[t.Union[str, t.Tuple[str]]] = credentials
         self._target_dir = target_dir
         self._tempdir = tempdir
+        self._overwrite = overwrite
         self._rebuild_chapters = rebuild_chapters
         self._force_rebuild_chapters = force_rebuild_chapters
         self._skip_rebuild_chapters = skip_rebuild_chapters
@@ -420,8 +422,11 @@ class FfmpegFileDecrypter:
         outfile = self._target_dir / oname
 
         if outfile.exists():
-            secho(f"Skip {outfile}: already exists", fg="blue")
-            return
+            if self._overwrite:
+                secho(f"Overwrite {outfile}: already exists", fg="blue")
+            else:
+                secho(f"Skip {outfile}: already exists", fg="blue")
+                return
 
         base_cmd = [
             "ffmpeg",
@@ -429,6 +434,8 @@ class FfmpegFileDecrypter:
             "quiet",
             "-stats",
         ]
+        if self._overwrite:
+            base_cmd.append("-y")
         if isinstance(self._credentials, tuple):
             key, iv = self._credentials
             credentials_cmd = [
@@ -588,6 +595,7 @@ def cli(
                 target_dir=pathlib.Path(directory).resolve(),
                 tempdir=pathlib.Path(tempdir).resolve(),
                 activation_bytes=session.auth.activation_bytes,
+                overwrite=overwrite,
                 rebuild_chapters=rebuild_chapters,
                 force_rebuild_chapters=force_rebuild_chapters,
                 skip_rebuild_chapters=skip_rebuild_chapters,
