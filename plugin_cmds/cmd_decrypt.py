@@ -278,8 +278,11 @@ class FFMeta:
             echo("Metadata from API is not accurate. Skip.")
             return
 
-        if not force_rebuild_chapters and chapter_info.count_chapters() != self.count_chapters():
-            raise ChapterError("Chapter mismatch")
+        if chapter_info.count_chapters() != self.count_chapters():
+            if force_rebuild_chapters:
+                echo("Force rebuild chapters due to chapter mismatch.")
+            else:
+                raise ChapterError("Chapter mismatch")
 
         echo(f"Found {chapter_info.count_chapters()} chapters to prepare.")
 
@@ -453,7 +456,9 @@ class FfmpegFileDecrypter:
                 self.rebuild_chapters()
                 self.ffmeta.write(metafile)
             except ChapterError:
-                if not self._skip_rebuild_chapters:
+                if self._skip_rebuild_chapters:
+                    echo("Skip rebuild chapters due to chapter mismatch.")
+                else:
                     raise
             else:
                 base_cmd.extend(
