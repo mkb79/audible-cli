@@ -467,7 +467,6 @@ class FfmpegFileDecrypter:
             metafile = _get_ffmeta_file(self._source, self._tempdir)
             try:
                 self.rebuild_chapters()
-                self.ffmeta.write(metafile)
             except ChapterError:
                 if self._skip_rebuild_chapters:
                     echo("Skip rebuild chapters due to chapter mismatch.")
@@ -492,6 +491,8 @@ class FfmpegFileDecrypter:
                 quote(str(outfile)),
             ]
         )
+
+        self.ffmeta.write(metafile)
 
         subprocess.check_output(base_cmd, text=True)  # noqa: S603
 
