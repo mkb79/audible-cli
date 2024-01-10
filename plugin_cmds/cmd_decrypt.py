@@ -227,7 +227,13 @@ class FFMeta:
                     cursec = parsed_dict[sec_name] = {}
             else:
                 match = self.OPTION.match(line)
-                cursec.update({match.group("option"): match.group("value")})
+                option = match.group("option")
+                value = match.group("value")
+                # manually fix badly encoded characters
+                if option == "copyright":
+                    value = re.sub(r'&\\#169\\;(null )?', '©', value)
+                    value = re.sub(r'\s*\\;\(P\)', ' (P)', value)
+                cursec.update({option: value})
 
         return parsed_dict
 
