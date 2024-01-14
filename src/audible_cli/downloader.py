@@ -1,7 +1,6 @@
 import logging
 import pathlib
 import re
-import sys
 from enum import Enum, auto
 from typing import Dict, List, NamedTuple, Optional, Union
 
@@ -158,6 +157,7 @@ class DownloadResult(NamedTuple):
     destination: File
     head_response: Optional[ResponseInfo]
     response: Optional[ResponseInfo]
+    message: Optional[str]
 
 
 class DummyProgressBar:
@@ -370,7 +370,8 @@ class Downloader:
                 status=status,
                 destination=target_file,
                 head_response=head_response,
-                response=response
+                response=response,
+                message=await tmp_file.read_text_content()
             )
 
         status = await self._check_status_code(
@@ -381,7 +382,8 @@ class Downloader:
                 status=status,
                 destination=target_file,
                 head_response=head_response,
-                response=response
+                response=response,
+                message=await tmp_file.read_text_content()
             )
 
         status = await self._check_content_type(
@@ -392,7 +394,8 @@ class Downloader:
                 status=status,
                 destination=target_file,
                 head_response=head_response,
-                response=response
+                response=response,
+                message=await tmp_file.read_text_content()
             )
 
         await self._rename_file(
@@ -406,7 +409,8 @@ class Downloader:
             status=Status.Success,
             destination=target_file,
             head_response=head_response,
-            response=response
+            response=response,
+            message=None
         )
 
     async def _stream_load(
@@ -478,6 +482,7 @@ class Downloader:
                 destination=target_file,
                 head_response=None,
                 response=None,
+                message=None
             )
 
         head_response = await self.get_head_response()

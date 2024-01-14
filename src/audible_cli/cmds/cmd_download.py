@@ -278,14 +278,27 @@ async def download_aax(
 
     filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
-    dl = Downloader(
-        url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
-    )
-    downloaded = await dl.run(pb=True)
 
-    if downloaded:
+    dl = NewDownloader(
+        source=url,
+        client=client,
+        expected_types=[
+            "audio/aax", "audio/vnd.audible.aax", "audio/audible"
+        ]
+    )
+    downloaded = await dl.run(target=filepath, force_reload=overwrite_existing)
+
+    if downloaded.status == Status.Success:
         counter.count_aax()
+    elif (
+            "This title is not supported for full audio file download, please download "
+            "individual parts"
+    ) in downloaded.message:
+        # TODO: Add parts to download queue
+        logger.error(
+            f"Item {filepath} must be downloaded in parts. This feature will be added "
+            f"in the future."
+        )
 
 
 async def _reuse_voucher(lr_file, item):
@@ -413,6 +426,15 @@ async def download_aaxc(
         counter.count_aaxc()
         if is_aycl:
             counter.count_aycl()
+    elif (
+        "This title is not supported for full audio file download, please download "
+        "individual parts"
+    ) in downloaded.message:
+        # TODO: Add parts to download queue
+        logger.error(
+            f"Item {filepath} must be downloaded in parts. This feature will be added "
+            f"in the future."
+        )
 
 
 async def consume(queue, ignore_errors):
