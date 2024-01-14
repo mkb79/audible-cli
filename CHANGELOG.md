@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+-
+
+## [0.2.6] - 2023-11-16
+
 ### Added
 
 - Update marketplace choices in `manage auth-file add` command. Now all available marketplaces are listed.
@@ -13,13 +17,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Bugfix
 
 - Avoid tqdm progress bar interruption by logger’s output to console.
-- Fixing an issue with unawaited coroutines when the download command exited abnormal. 
+- Fixing an issue with unawaited coroutines when the download command exited abnormal.
+
+### Changed
+
+- Update httpx version range to >=0.23.3 and <0.26.0. 
  
 ### Misc
 
 - add `freeze_support` to pyinstaller entry script (#78)
 
-## [0.2.5] - 2022-09-26
+## [0.2.5] - 2023-09-26
 
 ### Added
 
