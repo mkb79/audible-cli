@@ -21,6 +21,7 @@ from ..decorators import (
     pass_client,
     pass_session
 )
+from ..downloader import Downloader as NewDownloader, Status
 from ..exceptions import (
     AudibleCliException,
     DirectoryDoesNotExists,
@@ -29,7 +30,7 @@ from ..exceptions import (
     VoucherNeedRefresh
 )
 from ..models import Library
-from ..utils import datetime_type, Downloader, ResumeDownloader
+from ..utils import datetime_type, Downloader
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_download")
@@ -398,20 +399,17 @@ async def download_aaxc(
         logger.info(f"Voucher file saved to {lr_file}.")
         counter.count_voucher_saved()
 
-    dl = ResumeDownloader(
-        url,
-        filepath,
-        client,
-        overwrite_existing,
-        [
+    dl = NewDownloader(
+        source=url,
+        client=client,
+        expected_types=[
             "audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a",
             "audio/audible"
         ],
-        resume=True,
     )
-    downloaded = await dl.run(pb=True)
+    downloaded = await dl.run(target=filepath, force_reload=overwrite_existing)
 
-    if downloaded:
+    if downloaded.status == Status.Success:
         counter.count_aaxc()
         if is_aycl:
             counter.count_aycl()
