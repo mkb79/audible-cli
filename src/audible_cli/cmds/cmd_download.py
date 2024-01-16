@@ -290,10 +290,7 @@ async def download_aax(
 
     if downloaded.status == Status.Success:
         counter.count_aax()
-    elif (
-            "This title is not supported for full audio file download, please download "
-            "individual parts"
-    ) in downloaded.message:
+    elif downloaded.status == Status.DownloadIndividualParts:
         # TODO: Add parts to download queue
         logger.error(
             f"Item {filepath} must be downloaded in parts. This feature will be added "
@@ -426,10 +423,7 @@ async def download_aaxc(
         counter.count_aaxc()
         if is_aycl:
             counter.count_aycl()
-    elif (
-        "This title is not supported for full audio file download, please download "
-        "individual parts"
-    ) in downloaded.message:
+    elif downloaded.status == Status.DownloadIndividualParts:
         # TODO: Add parts to download queue
         logger.error(
             f"Item {filepath} must be downloaded in parts. This feature will be added "

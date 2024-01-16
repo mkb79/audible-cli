@@ -2,7 +2,7 @@ import logging
 import pathlib
 import re
 from enum import Enum, auto
-from typing import Dict, List, NamedTuple, Optional, Union
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Union
 
 import aiofiles
 import click
@@ -148,8 +148,101 @@ class Status(Enum):
     DownloadErrorStatusCode = auto()
     DownloadSizeMismatch = auto()
     DownloadContentTypeMismatch = auto()
+    DownloadIndividualParts = auto()
     SourceDoesNotSupportResume = auto()
     StatusCode = auto()
+
+
+async def check_target_file_status(
+    target_file: File, force_reload: bool, **kwargs: Any
+) -> Status:
+    if not await target_file.directory_exists():
+        logger.error(
+            f"Folder {target_file.path} does not exists! Skip download."
+        )
+        return Status.DestinationFolderNotExists
+
+    if await target_file.exists() and not await target_file.is_file():
+        logger.error(
+            f"Object {target_file.path} exists but is not a file. Skip download."
+        )
+        return Status.DestinationNotAFile
+
+    if await target_file.is_file() and not force_reload:
+        logger.info(
+            f"File {target_file.path} already exists. Skip download."
+        )
+        return Status.DestinationAlreadyExists
+
+    return Status.Success
+
+
+async def check_download_size(
+    tmp_file: File, target_file: File, head_response: ResponseInfo, **kwargs: Any
+) -> Status:
+    tmp_file_size = await tmp_file.get_size()
+    content_length = head_response.content_length
+
+    if tmp_file_size is not None and content_length is not None:
+        if tmp_file_size != content_length:
+            logger.error(
+                f"Error downloading {target_file.path}. File size missmatch. "
+                f"Expected size: {content_length}; Downloaded: {tmp_file_size}"
+            )
+        return Status.DownloadSizeMismatch
+
+    return Status.Success
+
+
+async def check_status_code(
+    response: ResponseInfo, tmp_file: File, target_file: File, **kwargs: Any
+) -> Status:
+    if not 200 <= response.status_code < 400:
+        content = await tmp_file.read_text_content()
+        logger.error(
+            f"Error downloading {target_file.path}. Message: {content}"
+        )
+        return Status.StatusCode
+
+    return Status.Success
+
+
+async def check_content_type(
+    response: ResponseInfo, target_file: File, tmp_file: File,
+    expected_types: List[str], **kwargs: Any
+) -> Status:
+    if not expected_types:
+        return Status.Success
+
+    if response.content_type not in expected_types:
+        content = await tmp_file.read_text_content()
+        logger.error(
+            f"Error downloading {target_file.path}. Wrong content type. "
+            f"Expected type(s): {expected_types}; "
+            f"Got: {response.content_type}; Message: {content}"
+        )
+        return Status.DownloadContentTypeMismatch
+
+    return Status.Success
+
+
+def _status_for_message(message: str) -> Status:
+    if "please download individual parts" in message:
+        return Status.DownloadIndividualParts
+    return Status.Success
+
+
+async def check_status_for_message(
+    response: ResponseInfo, tmp_file: File, **kwargs: Any
+) -> Status:
+    if (
+        response.content_length and response.content_type
+        and response.content_length <= MAX_FILE_READ_SIZE
+        and "text" in response.content_type
+    ):
+        message = await tmp_file.read_text_content()
+        return _status_for_message(message)
+    return Status.Success
 
 
 class DownloadResult(NamedTuple):
@@ -248,84 +341,8 @@ class Downloader:
         tmp_file = pathlib.Path(target_file.path).with_suffix(self.TMP_SUFFIX)
         return File(tmp_file)
 
-    @staticmethod
-    async def _check_target_file_status(
-        target_file: File,
-        force_reload: bool
-    ) -> Status:
-        if not await target_file.directory_exists():
-            logger.error(
-                f"Folder {target_file.path} does not exists! Skip download."
-            )
-            return Status.DestinationFolderNotExists
-
-        if await target_file.exists() and not await target_file.is_file():
-            logger.error(
-                f"Object {target_file.path} exists but is not a file. Skip download."
-            )
-            return Status.DestinationNotAFile
-
-        if await target_file.is_file() and not force_reload:
-            logger.info(
-                f"File {target_file.path} already exists. Skip download."
-            )
-            return Status.DestinationAlreadyExists
-
-        return Status.Success
-
-    async def _check_download_size(self, tmp_file: File, target_file: File) -> Status:
-        tmp_file_size = await tmp_file.get_size()
-        head_response = await self.get_head_response()
-        content_length = head_response.content_length
-
-        if tmp_file_size is not None and content_length is not None:
-            if tmp_file_size != content_length:
-                logger.error(
-                    f"Error downloading {target_file.path}. File size missmatch. "
-                    f"Expected size: {content_length}; Downloaded: {tmp_file_size}"
-                )
-            return Status.DownloadSizeMismatch
-
-        return Status.Success
-
-    @staticmethod
-    async def _check_status_code(
-        response: ResponseInfo, tmp_file: File, target_file: File
-    ) -> Status:
-        if not 200 <= response.status_code < 400:
-            content = await tmp_file.read_text_content()
-            logger.error(
-                f"Error downloading {target_file.path}. Message: {content}"
-            )
-            return Status.StatusCode
-
-        return Status.Success
-
-    async def _check_content_type(
-        self,
-        response: ResponseInfo,
-        target_file: File,
-        tmp_file: File
-    ) -> Status:
-        if not self._expected_types:
-            return Status.Success
-
-        if response.content_type not in self._expected_types:
-            content = await tmp_file.read_text_content()
-            logger.error(
-                f"Error downloading {target_file.path}. Wrong content type. "
-                f"Expected type(s): {self._expected_types}; "
-                f"Got: {response.content_type}; Message: {content}"
-            )
-            return Status.DownloadContentTypeMismatch
-
-        return Status.Success
-
     async def _handle_tmp_file(
-        self,
-        tmp_file: File,
-        supports_resume: bool,
-        response: ResponseInfo
+        self, tmp_file: File, supports_resume: bool, response: ResponseInfo
     ) -> None:
         tmp_file_size = await tmp_file.get_size()
         expected_size = response.content_length
@@ -356,53 +373,57 @@ class Downloader:
         )
         return Status.Success
 
+    @staticmethod
+    async def _check_and_return_download_result(
+        status_check_func: Callable,
+        tmp_file: File,
+        target_file: File,
+        response: ResponseInfo,
+        head_response: ResponseInfo,
+        expected_types: List[str]
+    ) -> Optional[DownloadResult]:
+        status = await status_check_func(
+            response=response,
+            tmp_file=tmp_file,
+            target_file=target_file,
+            expected_types=expected_types
+        )
+        if status != Status.Success:
+            message = await tmp_file.read_text_content()
+            return DownloadResult(
+                status=status,
+                destination=target_file,
+                head_response=head_response,
+                response=response,
+                message=message
+            )
+        return None
+
     async def _postprocessing(
         self, tmp_file: File, target_file: File, response: ResponseInfo,
         force_reload: bool
     ) -> DownloadResult:
         head_response = await self.get_head_response()
 
-        status = await self._check_status_code(
-            response=response, tmp_file=tmp_file, target_file=target_file
-        )
-        if status != Status.Success:
-            return DownloadResult(
-                status=status,
-                destination=target_file,
-                head_response=head_response,
-                response=response,
-                message=await tmp_file.read_text_content()
+        status_checks = [
+            check_status_for_message,
+            check_status_code,
+            check_status_code,
+            check_content_type
+        ]
+        for check in status_checks:
+            result = await self._check_and_return_download_result(
+                check, tmp_file, target_file, response,
+                head_response, self._expected_types
             )
-
-        status = await self._check_status_code(
-            tmp_file=tmp_file, target_file=target_file, response=response
-        )
-        if status != Status.Success:
-            return DownloadResult(
-                status=status,
-                destination=target_file,
-                head_response=head_response,
-                response=response,
-                message=await tmp_file.read_text_content()
-            )
-
-        status = await self._check_content_type(
-            tmp_file=tmp_file, target_file=target_file, response=response
-        )
-        if status != Status.Success:
-            return DownloadResult(
-                status=status,
-                destination=target_file,
-                head_response=head_response,
-                response=response,
-                message=await tmp_file.read_text_content()
-            )
+            if result:
+                return result
 
         await self._rename_file(
             tmp_file=tmp_file,
             target_file=target_file,
             force_reload=force_reload,
-            response=response
+            response=response,
         )
 
         return DownloadResult(
@@ -413,7 +434,7 @@ class Downloader:
             message=None
         )
 
-    async def _stream_load(
+    async def _stream_download(
         self,
         tmp_file: File,
         target_file: File,
@@ -444,7 +465,7 @@ class Downloader:
                 force_reload=force_reload
             )
 
-    async def _load(
+    async def _download(
         self, tmp_file: File, target_file: File, start: int, force_reload: bool
     ) -> DownloadResult:
         headers = self._additional_headers.copy()
@@ -473,7 +494,7 @@ class Downloader:
         force_reload: bool = False
     ) -> DownloadResult:
         target_file = File(target)
-        destination_status = await self._check_target_file_status(
+        destination_status = await check_target_file_status(
             target_file, force_reload
         )
         if destination_status != Status.Success:
@@ -508,7 +529,7 @@ class Downloader:
 
         try:
             if should_stream:
-                return await self._stream_load(
+                return await self._stream_download(
                     tmp_file=tmp_file,
                     target_file=target_file,
                     start=start,
@@ -516,7 +537,7 @@ class Downloader:
                     force_reload=force_reload
                 )
             else:
-                return await self._load(
+                return await self._download(
                     tmp_file=tmp_file,
                     target_file=target_file,
                     start=start,
