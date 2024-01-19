@@ -21,6 +21,7 @@ from ..decorators import (
     pass_client,
     pass_session
 )
+from ..downloader import Downloader as NewDownloader, Status
 from ..exceptions import (
     AudibleCliException,
     DirectoryDoesNotExists,
@@ -277,14 +278,24 @@ async def download_aax(
 
     filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
-    dl = Downloader(
-        url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
-    )
-    downloaded = await dl.run(pb=True)
 
-    if downloaded:
+    dl = NewDownloader(
+        source=url,
+        client=client,
+        expected_types=[
+            "audio/aax", "audio/vnd.audible.aax", "audio/audible"
+        ]
+    )
+    downloaded = await dl.run(target=filepath, force_reload=overwrite_existing)
+
+    if downloaded.status == Status.Success:
         counter.count_aax()
+    elif downloaded.status == Status.DownloadIndividualParts:
+        # TODO: Add parts to download queue
+        logger.error(
+            f"Item {filepath} must be downloaded in parts. This feature will be added "
+            f"in the future."
+        )
 
 
 async def _reuse_voucher(lr_file, item):
@@ -398,22 +409,26 @@ async def download_aaxc(
         logger.info(f"Voucher file saved to {lr_file}.")
         counter.count_voucher_saved()
 
-    dl = Downloader(
-        url,
-        filepath,
-        client,
-        overwrite_existing,
-        [
+    dl = NewDownloader(
+        source=url,
+        client=client,
+        expected_types=[
             "audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a",
             "audio/audible"
-        ]
+        ],
     )
-    downloaded = await dl.run(pb=True)
+    downloaded = await dl.run(target=filepath, force_reload=overwrite_existing)
 
-    if downloaded:
+    if downloaded.status == Status.Success:
         counter.count_aaxc()
         if is_aycl:
             counter.count_aycl()
+    elif downloaded.status == Status.DownloadIndividualParts:
+        # TODO: Add parts to download queue
+        logger.error(
+            f"Item {filepath} must be downloaded in parts. This feature will be added "
+            f"in the future."
+        )
 
 
 async def consume(queue, ignore_errors):
