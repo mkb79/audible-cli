@@ -350,8 +350,8 @@ async def download_aax(
             item=item,
             quality=quality,
             overwrite_existing=overwrite_existing,
-            download_mode="aaxc",
-            aax_fallback=False,
+            download_mode="aax",
+            aax_fallback=aax_fallback,
         )
 
 
@@ -492,7 +492,7 @@ async def download_aaxc(
             quality=quality,
             overwrite_existing=overwrite_existing,
             aax_fallback=False,
-            download_mode="aax"
+            download_mode="aaxc"
         )
 
 
