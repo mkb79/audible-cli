@@ -40,6 +40,14 @@ pip install .
 
 ```
 
+or as the best solution using [pipx](https://pipx.pypa.io/stable/)
+
+```shell
+
+pipx install audible-cli
+
+```
+
 ## Standalone executables
 
 If you don't want to install `Python` and `audible-cli` on your machine, you can
