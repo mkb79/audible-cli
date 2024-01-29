@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Added a resume feature when downloading aaxc files.
 - New `downlaoder` module which contains a rework of the Downloader class.
+- If necessary, large audiobooks are now downloaded in parts.
 
 ## [0.2.6] - 2023-11-16
 

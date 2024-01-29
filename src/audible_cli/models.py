@@ -131,9 +131,17 @@ class BaseItem:
                 return True
 
     def is_published(self):
-        if self.publication_datetime is not None:
+        if (
+            self.content_delivery_type and self.content_delivery_type == "AudioPart"
+            and self._parent
+        ):
+            publication_datetime = self._parent.publication_datetime
+        else:
+            publication_datetime = self.publication_datetime
+
+        if publication_datetime is not None:
             pub_date = datetime.strptime(
-                self.publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
+                publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
             )
             now = datetime.utcnow()
             return now > pub_date
