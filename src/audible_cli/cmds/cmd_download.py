@@ -869,6 +869,10 @@ async def cli(session, api_client, **params):
                 f"Skip title {title}: Not found in library"
             )
 
+    # set queue
+    global QUEUE
+    QUEUE = asyncio.Queue()
+
     for job in jobs:
         item = library.get_item_by_asin(job)
         items = [item]
@@ -907,10 +911,6 @@ async def cli(session, api_client, **params):
                 overwrite_existing=overwrite_existing,
                 aax_fallback=aax_fallback
             )
-
-    # set queue
-    global QUEUE
-    QUEUE = asyncio.Queue()
 
     # schedule the consumer
     consumers = [
