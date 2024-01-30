@@ -39,7 +39,7 @@ CLIENT_HEADERS = {
     "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
 }
 
-QUEUE = asyncio.Queue()
+QUEUE = None
 
 
 class DownloadCounter:
@@ -907,6 +907,10 @@ async def cli(session, api_client, **params):
                 overwrite_existing=overwrite_existing,
                 aax_fallback=aax_fallback
             )
+
+    # set queue
+    global QUEUE
+    QUEUE = asyncio.Queue()
 
     # schedule the consumer
     consumers = [
