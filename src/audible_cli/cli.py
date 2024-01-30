@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 from pkg_resources import iter_entry_points
@@ -61,6 +62,9 @@ def main(*args, **kwargs):
     except click.Abort:
         logger.error("Aborted")
         sys.exit(1)
+    except asyncio.CancelledError:
+        logger.error("Aborted with Asyncio CancelledError")
+        sys.exit(2)
     except AudibleCliException as e:
         logger.error(e)
         sys.exit(2)

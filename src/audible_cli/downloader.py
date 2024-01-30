@@ -235,13 +235,12 @@ def _status_for_message(message: str) -> Status:
 async def check_status_for_message(
     response: ResponseInfo, tmp_file: File, **kwargs: Any
 ) -> Status:
-    if (
-        response.content_length and response.content_type
-        and response.content_length <= MAX_FILE_READ_SIZE
-        and "text" in response.content_type
-    ):
-        message = await tmp_file.read_text_content()
-        return _status_for_message(message)
+    if response.content_type and "text" in response.content_type:
+        length = response.content_length or await tmp_file.get_size()
+        if length <= MAX_FILE_READ_SIZE:
+            message = await tmp_file.read_text_content()
+            return _status_for_message(message)
+        
     return Status.Success
 
 
