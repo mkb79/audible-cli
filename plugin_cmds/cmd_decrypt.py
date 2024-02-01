@@ -227,7 +227,13 @@ class FFMeta:
                     cursec = parsed_dict[sec_name] = {}
             else:
                 match = self.OPTION.match(line)
-                cursec.update({match.group("option"): match.group("value")})
+                option = match.group("option")
+                value = match.group("value")
+                # manually fix badly encoded characters
+                if option == "copyright":
+                    value = re.sub(r'&\\#169\\;(null )?', '©', value)
+                    value = re.sub(r'\s*\\;\(P\)', ' (P)', value)
+                cursec.update({option: value})
 
         return parsed_dict
 
@@ -461,7 +467,6 @@ class FfmpegFileDecrypter:
             metafile = _get_ffmeta_file(self._source, self._tempdir)
             try:
                 self.rebuild_chapters()
-                self.ffmeta.write(metafile)
             except ChapterError:
                 if self._skip_rebuild_chapters:
                     echo("Skip rebuild chapters due to chapter mismatch.")
@@ -486,6 +491,8 @@ class FfmpegFileDecrypter:
                 quote(str(outfile)),
             ]
         )
+
+        self.ffmeta.write(metafile)
 
         subprocess.check_output(base_cmd, text=True)  # noqa: S603
 
