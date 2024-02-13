@@ -824,7 +824,7 @@ async def cli(session, api_client, **params):
         image_sizes=", ".join(cover_sizes),
         bunch_size=bunch_size,
         response_groups=(
-            "product_desc, media, product_attrs, relationships, "
+            "product_desc, media, product_attrs, relationships, contributors, "
             "series, customer_rights, pdf_url"
         ),
         start_date=start_date,
