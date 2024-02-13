@@ -110,6 +110,26 @@ class BaseItem:
         accuracy = self.substring_in_title_accuracy(substring)
         return accuracy >= p
 
+    def substring_in_authors_accuracy(self, substring):
+        max_accuracy = 0
+        authors = self.authors or []
+        for author in authors:
+            name = author["name"]
+            match = LongestSubString(substring, name)
+            max_accuracy = max(max_accuracy, match.percentage)
+        
+        return round(max_accuracy, 2)
+
+    def substring_in_series_accuracy(self, substring):
+        max_accuracy = 0
+        seriesList = self.series or []
+        for series in seriesList:
+            name = series["title"]
+            match = LongestSubString(substring, name)
+            max_accuracy = max(max_accuracy, match.percentage)
+        
+        return round(max_accuracy, 2)
+
     def get_cover_url(self, res: Union[str, int] = 500):
         images = self.product_images
         res = str(res)
@@ -457,6 +477,20 @@ class BaseList:
         match = []
         for i in self._data:
             accuracy = i.substring_in_title_accuracy(search_title)
+            match.append([i, accuracy]) if accuracy >= p else ""
+
+        return match
+    def search_item_by_author(self, search_author, p=80):
+        match = []
+        for i in self._data:
+            accuracy = i.substring_in_authors_accuracy(search_author)
+            match.append([i, accuracy]) if accuracy >= p else ""
+
+        return match
+    def search_item_by_series(self, search_series, p=80):
+        match = []
+        for i in self._data:
+            accuracy = i.substring_in_series_accuracy(search_series)
             match.append([i, accuracy]) if accuracy >= p else ""
 
         return match
