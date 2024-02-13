@@ -895,7 +895,7 @@ async def cli(session, api_client, **params):
                     a = i[0].asin
                     t = i[0].full_title
                     l = ", ".join(a["name"] for a in i[0].authors)
-                    c = questionary.Choice(title=f"{a} # {t} by {l}", value=l)
+                    c = questionary.Choice(title=f"{a} # {t} by {l}", value=a)
                     choices.append(c)
 
                 answer = await questionary.checkbox(
@@ -923,7 +923,7 @@ async def cli(session, api_client, **params):
                     a = i[0].asin
                     t = i[0].full_title
                     l = ", ".join(s["title"] for s in i[0].series)
-                    c = questionary.Choice(title=f"{a} # {t} in {l}", value=l)
+                    c = questionary.Choice(title=f"{a} # {t} in {l}", value=a)
                     choices.append(c)
 
                 answer = await questionary.checkbox(
