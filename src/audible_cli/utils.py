@@ -146,6 +146,13 @@ class LongestSubString:
     def percentage(self):
         return self._match.size / len(self._search_for) * 100
 
+    def rounded_percentage(self, digits: int = 2):
+        return round(self.percentage, digits)
+
+
+def substring_in_list_accuracy(s: str, l: List[str], d: int = 2) -> float:
+    return max(map(lambda x: LongestSubString(s, x).rounded_percentage(d), l))
+
 
 def asin_in_library(asin, library):
     items = library.get("items") or library
