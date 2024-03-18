@@ -28,39 +28,49 @@ def from_folder(plugin_dir: Union[str, pathlib.Path]):
     """
     def decorator(group):
         if not isinstance(group, click.Group):
-            raise TypeError("Plugins can only be attached to an instance of "
-                            "click.Group()")
+            raise TypeError(
+                "Plugins can only be attached to an instance of click.Group()"
+            )
 
-        pdir = pathlib.Path(plugin_dir)
-        cmds = [x for x in pdir.glob("cmd_*.py")]
-        sys.path.insert(0, str(pdir.resolve()))
+        plugin_path = pathlib.Path(plugin_dir).resolve()
+        sys.path.insert(0, str(plugin_path))
 
-        for cmd in cmds:
-            mod_name = cmd.stem
+        for cmd_path in plugin_path.glob("cmd_*.py"):
+            cmd_path_stem = cmd_path.stem
             try:
-                mod = import_module(mod_name)
-                name = mod_name[4:] if mod.cli.name == "cli" else mod.cli.name
-                group.add_command(mod.cli, name=name)
+                mod = import_module(cmd_path_stem)
+                cmd = mod.cli
+                if cmd.name == "cli":
+                    # if no name given to the command, use the filename
+                    # excl. starting cmd_ as name
+                    cmd.name = cmd_path_stem[4:]
+                group.add_command(cmd)
+
+                orig_help = cmd.help or ""
+                new_help = (
+                    f"(P) {orig_help}\n\nPlugin loaded from file: {str(cmd_path)}"
+                )
+                cmd.help = new_help
             except Exception:  # noqa
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
                 # other than explain the error.
-                group.add_command(BrokenCommand(mod_name[4:]))
+                group.add_command(BrokenCommand(cmd_path_stem[4:]))
 
         return group
 
     return decorator
 
 
-def from_entry_point(entry_point_group: str):
+def from_entry_point(entry_point_group):
     """
     A decorator to register external CLI commands to an instance of
     `click.Group()`.
 
     Parameters
     ----------
-    entry_point_group : iter
-        An iterable producing one `pkg_resources.EntryPoint()` per iteration.
+    entry_point_group : list
+        A list producing one `pkg_resources.EntryPoint()` per iteration.
 
     Returns
     -------
@@ -68,13 +78,23 @@ def from_entry_point(entry_point_group: str):
     """
     def decorator(group):
         if not isinstance(group, click.Group):
-            print(type(group))
-            raise TypeError("Plugins can only be attached to an instance of "
-                            "click.Group()")
+            raise TypeError(
+                "Plugins can only be attached to an instance of click.Group()"
+            )
 
         for entry_point in entry_point_group or ():
             try:
-                group.add_command(entry_point.load())
+                cmd = entry_point.load()
+                dist_name = entry_point.dist.name
+                if cmd.name == "cli":
+                    # if no name given to the command, use the filename
+                    # excl. starting cmd_ as name
+                    cmd.name = dist_name
+                group.add_command(cmd)
+
+                orig_help = cmd.help or ""
+                new_help = f"(P) {orig_help}\n\nPlugin loaded from package: {dist_name}"
+                cmd.help = new_help
             except Exception:  # noqa
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
