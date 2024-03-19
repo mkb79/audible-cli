@@ -11,6 +11,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added a resume feature when downloading aaxc files.
 - New `downlaoder` module which contains a rework of the Downloader class.
 - If necessary, large audiobooks are now downloaded in parts.
+- Plugin command help page now contains additional information about the source of 
+  the plugin.
+- Command help text now starts with ´(P)` for plugin commands.
+
+### Changed
+
+- Rework plugin module
+- using importlib.metadata over setuptools (pkg_resources) to get entrypoints
 
 ## [0.2.6] - 2023-11-16
 
