@@ -45,7 +45,7 @@ async def _get_library(session, client, resolve_podcasts):
     )
 
     if resolve_podcasts:
-        await library.resolve_podcats(start_date=start_date, end_date=end_date)
+        await library.resolve_podcasts(start_date=start_date, end_date=end_date)
 
     return library
 
