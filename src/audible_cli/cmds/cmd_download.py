@@ -878,6 +878,9 @@ async def cli(session, api_client, **params):
         items = [item]
         odir = pathlib.Path(output_dir)
 
+        if ignore_podcasts and item.is_parent_podcast():
+            continue
+
         if not ignore_podcasts and item.is_parent_podcast():
             items.remove(item)
             if item._children is None:
