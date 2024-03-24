@@ -6,7 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
--
+### Changed
+
+- Improved podcast ignore feature in download command
+- make `--ignore-podcasts` and `--resolve-podcasts` options of download command mutual 
+  exclusive
 
 ## [0.3.1] - 2024-03-19
 
