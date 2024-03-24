@@ -11,6 +11,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Improved podcast ignore feature in download command
 - make `--ignore-podcasts` and `--resolve-podcasts` options of download command mutual 
   exclusive
+- Switched from a HEAD to a GET request without loading the body in the downloader 
+  class. This change improves the program's speed, as the HEAD request was taking 
+  considerably longer than a GET request on some Audible pages.
 
 ## [0.3.1] - 2024-03-19
 
