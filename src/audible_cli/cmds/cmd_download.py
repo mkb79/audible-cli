@@ -203,7 +203,7 @@ async def download_pdf(
 
 
 async def download_chapters(
-        output_dir, base_filename, item, quality, overwrite_existing
+        output_dir, base_filename, item, quality, overwrite_existing, chapter_type
 ):
     if not output_dir.is_dir():
         raise DirectoryDoesNotExists(output_dir)
@@ -217,7 +217,7 @@ async def download_chapters(
         return True
 
     try:
-        metadata = await item.get_content_metadata(quality)
+        metadata = await item.get_content_metadata(quality, chapter_type=chapter_type)
     except NotFoundError:
         logger.info(
             f"No chapters found for {item.full_title}."
@@ -521,6 +521,7 @@ def queue_job(
         filename_mode,
         item,
         cover_sizes,
+        chapter_type,
         quality,
         overwrite_existing,
         aax_fallback
@@ -558,7 +559,8 @@ def queue_job(
             "base_filename": base_filename,
             "item": item,
             "quality": quality,
-            "overwrite_existing": overwrite_existing
+            "overwrite_existing": overwrite_existing,
+            "chapter_type": chapter_type
         }
         QUEUE.put_nowait((cmd, kwargs))
 
@@ -689,6 +691,12 @@ def display_counter():
     help="saves chapter metadata as JSON file"
 )
 @click.option(
+    "--chapter-type",
+    default="Tree",
+    type=click.Choice(["Flat", "Tree"], case_sensitive=False),
+    help="The chapter type."
+)
+@click.option(
     "--annotation",
     is_flag=True,
     help="saves the annotations (e.g. bookmarks, notes) as JSON file"
@@ -780,6 +788,7 @@ async def cli(session, api_client, **params):
     cover_sizes = list(set(params.get("cover_size")))
     overwrite_existing = params.get("overwrite")
     ignore_errors = params.get("ignore_errors")
+    chapter_type = params.get("chapter_type")
     no_confirm = params.get("no_confirm")
     resolve_podcats = params.get("resolve_podcasts")
     ignore_podcasts = params.get("ignore_podcasts")
@@ -914,6 +923,7 @@ async def cli(session, api_client, **params):
                 filename_mode=filename_mode,
                 item=item,
                 cover_sizes=cover_sizes,
+                chapter_type=chapter_type,
                 quality=quality,
                 overwrite_existing=overwrite_existing,
                 aax_fallback=aax_fallback

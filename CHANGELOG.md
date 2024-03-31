@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+### Added
+
+- The `--chapter-type` option is added to the download command. Chapter can now be 
+  downloaded as `flat` or `tree` type. `tree` is the default.
+
 ### Changed
 
 - Improved podcast ignore feature in download command
@@ -14,6 +19,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Switched from a HEAD to a GET request without loading the body in the downloader 
   class. This change improves the program's speed, as the HEAD request was taking 
   considerably longer than a GET request on some Audible pages.
+- `models.LibraryItem.get_content_metadatata` now accept a `chapter_type` argument. 
+  Additional keyword arguments to this method are now passed through the metadata 
+  request.
 
 ## [0.3.1] - 2024-03-19
 
