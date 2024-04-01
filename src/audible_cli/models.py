@@ -394,6 +394,7 @@ class LibraryItem(BaseItem):
     async def get_content_metadata(
         self, quality: str = "high", chapter_type: str = "Tree", **request_kwargs
     ):
+        chapter_type = chapter_type.capitalize()
         assert quality in ("best", "high", "normal",)
         assert chapter_type in ("Flat", "Tree")
 
