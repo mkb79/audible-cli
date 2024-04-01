@@ -9,7 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - The `--chapter-type` option is added to the download command. Chapter can now be 
-  downloaded as `flat` or `tree` type. `tree` is the default.
+  downloaded as `flat` or `tree` type. `tree` is the default. A default chapter type 
+  can be set in the config file.
 
 ### Changed
 
