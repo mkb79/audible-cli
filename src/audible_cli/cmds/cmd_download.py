@@ -226,7 +226,7 @@ async def download_chapters(
     metadata = json.dumps(metadata, indent=4)
     async with aiofiles.open(file, "w") as f:
         await f.write(metadata)
-    logger.info(f"Chapter file saved to {file}.")
+    logger.info(f"Chapter file saved in style '{chapter_type.upper()}' to {file}.")
     counter.count_chapter()
 
 
@@ -291,6 +291,7 @@ async def _add_audioparts_to_queue(
             get_pdf=None,
             get_annotation=None,
             get_chapters=None,
+            chapter_type=None,
             get_aax=get_aax,
             get_aaxc=get_aaxc,
             client=client,
@@ -688,12 +689,12 @@ def display_counter():
 @click.option(
     "--chapter",
     is_flag=True,
-    help="saves chapter metadata as JSON file"
+    help="Saves chapter metadata as JSON file."
 )
 @click.option(
     "--chapter-type",
-    default="Tree",
-    type=click.Choice(["Flat", "Tree"], case_sensitive=False),
+    default="config",
+    type=click.Choice(["Flat", "Tree", "config"], case_sensitive=False),
     help="The chapter type."
 )
 @click.option(
@@ -788,7 +789,6 @@ async def cli(session, api_client, **params):
     cover_sizes = list(set(params.get("cover_size")))
     overwrite_existing = params.get("overwrite")
     ignore_errors = params.get("ignore_errors")
-    chapter_type = params.get("chapter_type")
     no_confirm = params.get("no_confirm")
     resolve_podcats = params.get("resolve_podcasts")
     ignore_podcasts = params.get("ignore_podcasts")
@@ -811,6 +811,11 @@ async def cli(session, api_client, **params):
         logger.info(
             f"Selected end date: {end_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}"
         )
+
+    chapter_type = params.get("chapter_type")
+    if chapter_type == "config":
+        chapter_type = session.config.get_profile_option(
+            session.selected_profile, "chapter_type") or "Tree"
 
     filename_mode = params.get("filename_mode")
     if filename_mode == "config":
