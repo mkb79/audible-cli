@@ -19,7 +19,6 @@ import typing as t
 from enum import Enum
 from functools import reduce
 from glob import glob
-from shlex import quote
 from shutil import which
 
 import click
@@ -385,20 +384,20 @@ class FfmpegFileDecrypter:
                 key, iv = self._credentials
                 credentials_cmd = [
                     "-audible_key",
-                    quote(key),
+                    key,
                     "-audible_iv",
-                    quote(iv),
+                    iv,
                 ]
             else:
                 credentials_cmd = [
                     "-activation_bytes",
-                    quote(self._credentials),
+                    self._credentials,
                 ]    
             base_cmd.extend(credentials_cmd)
     
             extract_cmd = [
                 "-i",
-                quote(str(self._source)),
+                str(self._source),
                 "-f",
                 "ffmetadata",
                 str(metafile),
@@ -440,20 +439,20 @@ class FfmpegFileDecrypter:
             key, iv = self._credentials
             credentials_cmd = [
                 "-audible_key",
-                quote(key),
+                key,
                 "-audible_iv",
-                quote(iv),
+                iv,
             ]
         else:
             credentials_cmd = [
                 "-activation_bytes",
-                quote(self._credentials),
+                self._credentials,
             ]    
         base_cmd.extend(credentials_cmd)
         base_cmd.extend(
             [
                 "-i",
-                quote(str(self._source)),
+                str(self._source),
             ]
         )
 
@@ -471,7 +470,7 @@ class FfmpegFileDecrypter:
                 base_cmd.extend(
                     [
                         "-i",
-                        quote(str(metafile)),
+                        str(metafile),
                         "-map_metadata",
                         "0",
                         "-map_chapters",
@@ -483,7 +482,7 @@ class FfmpegFileDecrypter:
             [
                 "-c",
                 "copy",
-                quote(str(outfile)),
+                str(outfile),
             ]
         )
 
