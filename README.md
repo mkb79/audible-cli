@@ -154,7 +154,11 @@ The APP section supports the following options:
 - primary_profile: The profile to use, if no other is specified
 - filename_mode: When using the `download` command, a filename mode can be 
   specified here. If not present, "ascii" will be used as default. To override
-  these option, you can provide a mode with the `filename-mode` option of the
+  these option, you can provide a mode with the `--filename-mode` option of the
+  download command.
+- chapter_type: When using the `download` command, a chapter type can be specified 
+  here. If not present, "tree" will be used as default. To override
+  these option, you can provide a type with the `--chapter-type` option of the
   download command.
 
 #### Profile section
@@ -162,6 +166,7 @@ The APP section supports the following options:
 - auth_file: The auth file for this profile
 - country_code: The marketplace for this profile
 - filename_mode: See APP section above. Will override the option in APP section.
+- chapter_type: See APP section above. Will override the option in APP section.
 
 ## Getting started
 

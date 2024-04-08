@@ -55,7 +55,8 @@ setup(
         "tabulate",
         "toml",
         "tqdm",
-        "questionary"
+        "questionary",
+        "importlib-metadata; python_version<'3.10'",
     ],
     extras_require={
         'pyi': [

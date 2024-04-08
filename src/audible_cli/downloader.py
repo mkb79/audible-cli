@@ -322,10 +322,16 @@ class Downloader:
 
     async def get_head_response(self, force_recreate: bool = False) -> ResponseInfo:
         if self._head_request is None or force_recreate:
-            head_response = await self._client.head(
-                self._source, headers=self._additional_headers, follow_redirects=True,
-            )
-            self._head_request = ResponseInfo(head_response)
+            # switched from HEAD to GET request without loading the body
+            # HEAD request to cds.audible.de will responded in 1 - 2 minutes
+            # a GET request to the same URI will take ~4-6 seconds
+            async with self._client.stream(
+                "GET", self._source, headers=self._additional_headers,
+                follow_redirects=True,
+            ) as head_response:
+                if head_response.request.url != self._source:
+                    self._source = head_response.request.url
+                self._head_request = ResponseInfo(head_response)
 
         return self._head_request
 
