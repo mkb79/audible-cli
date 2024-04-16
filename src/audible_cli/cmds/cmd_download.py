@@ -792,7 +792,7 @@ async def cli(session, api_client, **params):
     no_confirm = params.get("no_confirm")
     resolve_podcasts = params.get("resolve_podcasts")
     ignore_podcasts = params.get("ignore_podcasts")
-    if all([resolve_podcats, ignore_podcasts]):
+    if all([resolve_podcasts, ignore_podcasts]):
         logger.error("Do not mix *ignore-podcasts* with *resolve-podcasts* option.")
         raise click.Abort()
     bunch_size = session.params.get("bunch_size")
