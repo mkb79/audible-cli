@@ -63,7 +63,7 @@ def _get_input_files(
             and '*' not in filename
             and not SupportedFiles.is_supported_file(filename)
         ):
-            raise(click.BadParameter("{filename}: file not found or supported."))
+            raise click.BadParameter("{filename}: file not found or supported.")
 
         expanded_filter = filter(
             lambda x: SupportedFiles.is_supported_file(x), expanded
@@ -637,24 +637,28 @@ def cli(
 
     if (force_rebuild_chapters or skip_rebuild_chapters or separate_intro_outro or remove_intro_outro) and not rebuild_chapters:
         raise click.BadOptionUsage(
-            "`--force-rebuild-chapters`, `--skip-rebuild-chapters`, `--separate-intro-outro` and `--remove-intro-outro` can "
-            "only be used together with `--rebuild-chapters`"
+            "",
+            "`--force-rebuild-chapters`, `--skip-rebuild-chapters`, `--separate-intro-outro` "
+            "and `--remove-intro-outro` can only be used together with `--rebuild-chapters`"
         )
 
     if force_rebuild_chapters and skip_rebuild_chapters:
         raise click.BadOptionUsage(
+            "",
             "`--force-rebuild-chapters` and `--skip-rebuild-chapters` can "
             "not be used together"
         )
 
     if separate_intro_outro and remove_intro_outro:
         raise click.BadOptionUsage(
+            "",
             "`--separate-intro-outro` and `--remove-intro-outro` can not be used together"
         )
 
     if all_:
         if files:
             raise click.BadOptionUsage(
+                "",
                 "If using `--all`, no FILES arguments can be used."
             )
         files = [f"*{suffix}" for suffix in SupportedFiles.get_supported_list()]
