@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+### Changed
+
+- Update httpx version range to >=0.23.3 and <0.28.0. 
+
 ### Added
 
 - The `--chapter-type` option is added to the download command. Chapter can now be 
