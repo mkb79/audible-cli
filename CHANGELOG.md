@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Bugfix
 
-- Fixing `[Errno 18] Invalid cross-device link` when downloading files using the `--output-dir` option. This error is fixed by creating the resume file on the same location as the target file. 
+- Fixing `[Errno 18] Invalid cross-device link` when downloading files using the `--output-dir` option. This error is fixed by creating the resume file on the same location as the target file.
 
 ### Added
 
@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `models.LibraryItem.get_content_metadatata` now accept a `chapter_type` argument. 
   Additional keyword arguments to this method are now passed through the metadata 
   request.
+- Update httpx version range to >=0.23.3 and <0.28.0.
 
 ## [0.3.1] - 2024-03-19
 
