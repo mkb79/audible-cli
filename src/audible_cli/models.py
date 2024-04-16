@@ -131,9 +131,17 @@ class BaseItem:
                 return True
 
     def is_published(self):
-        if self.publication_datetime is not None:
+        if (
+            self.content_delivery_type and self.content_delivery_type == "AudioPart"
+            and self._parent
+        ):
+            publication_datetime = self._parent.publication_datetime
+        else:
+            publication_datetime = self.publication_datetime
+
+        if publication_datetime is not None:
             pub_date = datetime.strptime(
-                self.publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
+                publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
             )
             now = datetime.utcnow()
             return now > pub_date
@@ -383,15 +391,21 @@ class LibraryItem(BaseItem):
 
         return lr
 
-    async def get_content_metadata(self, quality: str = "high"):
+    async def get_content_metadata(
+        self, quality: str = "high", chapter_type: str = "Tree", **request_kwargs
+    ):
+        chapter_type = chapter_type.capitalize()
         assert quality in ("best", "high", "normal",)
+        assert chapter_type in ("Flat", "Tree")
 
         url = f"content/{self.asin}/metadata"
         params = {
             "response_groups": "last_position_heard, content_reference, "
                                "chapter_info",
             "quality": "High" if quality in ("best", "high") else "Normal",
-            "drm_type": "Adrm"
+            "drm_type": "Adrm",
+            "chapter_titles_type": chapter_type,
+            **request_kwargs
         }
 
         metadata = await self._client.get(url, params=params)

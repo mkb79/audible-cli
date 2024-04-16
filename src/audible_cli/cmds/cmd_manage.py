@@ -6,6 +6,7 @@ from audible import Authenticator
 from click import echo, secho
 from tabulate import tabulate
 
+from ..constants import AVAILABLE_MARKETPLACES
 from ..decorators import pass_session
 from ..utils import build_auth_file
 
@@ -72,8 +73,7 @@ def list_profiles(session):
 @click.option(
     "--country-code", "-cc",
     prompt="Please enter the country code",
-    type=click.Choice([
-        "us", "ca", "uk", "au", "fr", "de", "jp", "it", "in"]),
+    type=click.Choice(AVAILABLE_MARKETPLACES),
     help="The country code for the profile."
 )
 @click.option(
@@ -160,7 +160,7 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
 )
 @click.option(
     "--country-code", "-cc",
-    type=click.Choice(["us", "ca", "uk", "au", "fr", "de", "jp", "it", "in"]),
+    type=click.Choice(AVAILABLE_MARKETPLACES),
     prompt="Please enter the country code",
     help="The country code for the marketplace you want to authenticate."
 )

@@ -40,6 +40,14 @@ pip install .
 
 ```
 
+or as the best solution using [pipx](https://pipx.pypa.io/stable/)
+
+```shell
+
+pipx install audible-cli
+
+```
+
 ## Standalone executables
 
 If you don't want to install `Python` and `audible-cli` on your machine, you can
@@ -49,9 +57,8 @@ page (including beta releases). At this moment Windows, Linux and macOS are supp
 ### Links
 
 1. Linux
-    - [debian 11 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_debian_11.zip)
     - [ubuntu latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_latest.zip)
-    - [ubuntu 18.04 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_18_04.zip)
+    - [ubuntu 20.04 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_20_04.zip)
 
 2. macOS
     - [macOS latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac.zip)
@@ -147,7 +154,11 @@ The APP section supports the following options:
 - primary_profile: The profile to use, if no other is specified
 - filename_mode: When using the `download` command, a filename mode can be 
   specified here. If not present, "ascii" will be used as default. To override
-  these option, you can provide a mode with the `filename-mode` option of the
+  these option, you can provide a mode with the `--filename-mode` option of the
+  download command.
+- chapter_type: When using the `download` command, a chapter type can be specified 
+  here. If not present, "tree" will be used as default. To override
+  these option, you can provide a type with the `--chapter-type` option of the
   download command.
 
 #### Profile section
@@ -155,6 +166,7 @@ The APP section supports the following options:
 - auth_file: The auth file for this profile
 - country_code: The marketplace for this profile
 - filename_mode: See APP section above. Will override the option in APP section.
+- chapter_type: See APP section above. Will override the option in APP section.
 
 ## Getting started
 
@@ -198,6 +210,17 @@ At this time, there the following buildin subcommands:
     - `list`
     - `add`
     - `remove`
+
+## Example Usage
+
+To download all of your audiobooks in the aaxc format use:
+```shell
+audible download --all --aaxc
+```
+To download all of your audiobooks after the Date 2022-07-21 in aax format use: 
+```shell
+audible download --start-date "2022-07-21" --aax --all
+```
 
 ## Verbosity option
 

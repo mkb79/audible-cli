@@ -1,5 +1,7 @@
 from typing import Dict
 
+from audible.localization import LOCALE_TEMPLATES
+
 
 APP_NAME: str = "Audible"
 CONFIG_FILE: str = "config.toml"
@@ -16,3 +18,7 @@ DEFAULT_CONFIG_DATA: Dict[str, str] = {
 }
 CODEC_HIGH_QUALITY: str = "AAX_44_128"
 CODEC_NORMAL_QUALITY: str = "AAX_44_64"
+
+AVAILABLE_MARKETPLACES = [
+    market["country_code"] for market in LOCALE_TEMPLATES.values()
+]

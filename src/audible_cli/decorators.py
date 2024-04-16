@@ -201,7 +201,7 @@ def timeout_option(func=None, **kwargs):
         return value
 
     kwargs.setdefault("type", click.INT)
-    kwargs.setdefault("default", 10)
+    kwargs.setdefault("default", 30)
     kwargs.setdefault("show_default", True)
     kwargs.setdefault(
         "help", ("Increase the timeout time if you got any TimeoutErrors. "
