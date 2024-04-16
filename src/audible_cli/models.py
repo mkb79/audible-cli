@@ -6,6 +6,7 @@ import unicodedata
 from datetime import datetime
 from math import ceil
 from typing import List, Optional, Union
+from warnings import warn
 
 import audible
 import httpx
@@ -598,6 +599,18 @@ class Library(BaseList):
             library.data.extend(p.data)
 
         return library
+
+    async def resolve_podcats(
+            self,
+            start_date: Optional[datetime] = None,
+            end_date: Optional[datetime] = None
+    ):
+        warn(
+            "resolve_podcats is deprecated, use resolve_podcasts instead",
+             DeprecationWarning,
+            stacklevel=2
+        )
+        return self.resolve_podcasts(start_date, end_date)
 
     async def resolve_podcasts(
             self,
