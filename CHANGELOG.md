@@ -28,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   Additional keyword arguments to this method are now passed through the metadata 
   request.
 - Update httpx version range to >=0.23.3 and <0.28.0.
+- fix typo from `resolve_podcats` to `resolve_podcasts`
+- `models.Library.resolve_podcats` is now deprecated and will be removed in a future version
 
 ## [0.3.1] - 2024-03-19
 
@@ -118,7 +120,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - by default a licenserequest (voucher) will not include chapter information by default
 - moved licenserequest part from `models.LibraryItem.get_aaxc_url` to its own `models.LibraryItem.get_license` function
-- allow book tiltes with hyphens (#96)
+- allow book titles with hyphens (#96)
 - if there is no title fallback to an empty string (#98)
 - reduce `response_groups` for the download command to speed up fetching the library (#109)
 
@@ -126,7 +128,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - `Extreme` quality is not supported by the Audible API anymore (#107)
 - download command continued execution after error (#104)
-- Currently paths with dots will break the decryption (#97)
+- Currently, paths with dots will break the decryption (#97)
 - `models.Library.from_api_full_sync` called `models.Library.from_api` with incorrect keyword arguments
 
 ### Misc
@@ -189,7 +191,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - the `--version` option now checks if an update for `audible-cli` is available
-- build macOS releases in onedir mode
+- build macOS releases in `onedir` mode
 
 ### Bugfix
 
