@@ -6,6 +6,7 @@ import unicodedata
 from datetime import datetime
 from math import ceil
 from typing import List, Optional, Union
+from warnings import warn
 
 import audible
 import httpx
@@ -604,6 +605,18 @@ class Library(BaseList):
             start_date: Optional[datetime] = None,
             end_date: Optional[datetime] = None
     ):
+        warn(
+            "resolve_podcats is deprecated, use resolve_podcasts instead",
+             DeprecationWarning,
+            stacklevel=2
+        )
+        return self.resolve_podcasts(start_date, end_date)
+
+    async def resolve_podcasts(
+            self,
+            start_date: Optional[datetime] = None,
+            end_date: Optional[datetime] = None
+    ):
         podcast_items = await asyncio.gather(
             *[i.get_child_items(start_date=start_date, end_date=end_date) 
               for i in self if i.is_parent_podcast()]
@@ -668,7 +681,7 @@ class Catalog(BaseList):
 
         return cls(resp, api_client=api_client)
 
-    async def resolve_podcats(self):
+    async def resolve_podcasts(self):
         podcast_items = await asyncio.gather(
             *[i.get_child_items() for i in self if i.is_parent_podcast()]
         )

@@ -790,9 +790,9 @@ async def cli(session, api_client, **params):
     overwrite_existing = params.get("overwrite")
     ignore_errors = params.get("ignore_errors")
     no_confirm = params.get("no_confirm")
-    resolve_podcats = params.get("resolve_podcasts")
+    resolve_podcasts = params.get("resolve_podcasts")
     ignore_podcasts = params.get("ignore_podcasts")
-    if all([resolve_podcats, ignore_podcasts]):
+    if all([resolve_podcasts, ignore_podcasts]):
         logger.error("Do not mix *ignore-podcasts* with *resolve-podcasts* option.")
         raise click.Abort()
     bunch_size = session.params.get("bunch_size")
@@ -836,8 +836,8 @@ async def cli(session, api_client, **params):
         status="Active",
     )
 
-    if resolve_podcats:
-        await library.resolve_podcats(start_date=start_date, end_date=end_date)
+    if resolve_podcasts:
+        await library.resolve_podcasts(start_date=start_date, end_date=end_date)
         [library.data.remove(i) for i in library if i.is_parent_podcast()]
 
     # collect jobs
