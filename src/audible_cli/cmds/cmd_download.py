@@ -758,8 +758,10 @@ async def cli(session, api_client, **params):
     asins = params.get("asin")
     titles = params.get("title")
     if get_all and (asins or titles):
-        logger.error("Do not mix *asin* or *title* option with *all* option.")
-        click.Abort()
+        raise click.BadOptionUsage(
+            "--all",
+            "`--all` can not be used together with `--asin` or `--title`"
+        )
 
     # what to download
     get_aax = params.get("aax")
@@ -780,8 +782,10 @@ async def cli(session, api_client, **params):
     if not any(
         [get_aax, get_aaxc, get_annotation, get_chapters, get_cover, get_pdf]
     ):
-        logger.error("Please select an option what you want download.")
-        raise click.Abort()
+        raise click.BadOptionUsage(
+            "",
+            "Please select an option what you want download."
+        )
 
     # additional options
     sim_jobs = params.get("jobs")
@@ -793,15 +797,19 @@ async def cli(session, api_client, **params):
     resolve_podcasts = params.get("resolve_podcasts")
     ignore_podcasts = params.get("ignore_podcasts")
     if all([resolve_podcasts, ignore_podcasts]):
-        logger.error("Do not mix *ignore-podcasts* with *resolve-podcasts* option.")
-        raise click.Abort()
+        raise click.BadOptionUsage(
+            "",
+            "Do not mix *ignore-podcasts* with *resolve-podcasts* option."
+        )
     bunch_size = session.params.get("bunch_size")
 
     start_date = session.params.get("start_date")
     end_date = session.params.get("end_date")
     if all([start_date, end_date]) and start_date > end_date:
-        logger.error("start date must be before or equal the end date")
-        raise click.Abort()
+        raise click.BadOptionUsage(
+            "",
+            "start date must be before or equal the end date"
+        )
 
     if start_date is not None:
         logger.info(
@@ -855,7 +863,7 @@ async def cli(session, api_client, **params):
         else:
             if not ignore_errors:
                 logger.error(f"Asin {asin} not found in library.")
-                click.Abort()
+                raise click.Abort()
             logger.error(
                 f"Skip asin {asin}: Not found in library"
             )
