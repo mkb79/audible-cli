@@ -404,15 +404,21 @@ class LibraryItem(BaseItem):
 
         return lr
 
-    async def get_content_metadata(self, quality: str = "high"):
+    async def get_content_metadata(
+        self, quality: str = "high", chapter_type: str = "Tree", **request_kwargs
+    ):
+        chapter_type = chapter_type.capitalize()
         assert quality in ("best", "high", "normal",)
+        assert chapter_type in ("Flat", "Tree")
 
         url = f"content/{self.asin}/metadata"
         params = {
             "response_groups": "last_position_heard, content_reference, "
                                "chapter_info",
             "quality": "High" if quality in ("best", "high") else "Normal",
-            "drm_type": "Adrm"
+            "drm_type": "Adrm",
+            "chapter_titles_type": chapter_type,
+            **request_kwargs
         }
 
         metadata = await self._client.get(url, params=params)

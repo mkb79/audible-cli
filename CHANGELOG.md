@@ -6,11 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+### Bugfix
+
+- Fixing `[Errno 18] Invalid cross-device link` when downloading files using the `--output-dir` option. This error is fixed by creating the resume file on the same location as the target file.
+
+### Added
+
+- The `--chapter-type` option is added to the download command. Chapter can now be 
+  downloaded as `flat` or `tree` type. `tree` is the default. A default chapter type 
+  can be set in the config file.
+
+### Changed
+
+- Improved podcast ignore feature in download command
+- make `--ignore-podcasts` and `--resolve-podcasts` options of download command mutual 
+  exclusive
+- Switched from a HEAD to a GET request without loading the body in the downloader 
+  class. This change improves the program's speed, as the HEAD request was taking 
+  considerably longer than a GET request on some Audible pages.
+- `models.LibraryItem.get_content_metadatata` now accept a `chapter_type` argument. 
+  Additional keyword arguments to this method are now passed through the metadata 
+  request.
+- Update httpx version range to >=0.23.3 and <0.28.0.
+
+## [0.3.1] - 2024-03-19
+
+### Bugfix
+
+- fix a `TypeError` on some Python versions when calling `importlib.metadata.entry_points` with group argument
+
+## [0.3.0] - 2024-03-19
+
 ### Added
 
 - Added a resume feature when downloading aaxc files.
 - New `downlaoder` module which contains a rework of the Downloader class.
 - If necessary, large audiobooks are now downloaded in parts.
+- Plugin command help page now contains additional information about the source of 
+  the plugin.
+- Command help text now starts with ´(P)` for plugin commands.
+
+### Changed
+
+- Rework plugin module
+- using importlib.metadata over setuptools (pkg_resources) to get entrypoints
 
 ## [0.2.6] - 2023-11-16
 

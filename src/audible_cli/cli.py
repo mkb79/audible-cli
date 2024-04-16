@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import sys
-from pkg_resources import iter_entry_points
 
 import click
 
@@ -18,6 +17,11 @@ from .exceptions import AudibleCliException
 from ._logging import click_basic_config
 from . import plugins
 
+if sys.version_info >= (3, 10):
+    from importlib.metadata import entry_points
+else:  # Python < 3.10 (backport)
+    from importlib_metadata import entry_points
+
 
 logger = logging.getLogger("audible_cli")
 click_basic_config(logger)
@@ -26,7 +30,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
 @plugins.from_folder(get_plugin_dir())
-@plugins.from_entry_point(iter_entry_points(PLUGIN_ENTRY_POINT))
+@plugins.from_entry_point(entry_points(group=PLUGIN_ENTRY_POINT))
 @build_in_cmds
 @click.group(context_settings=CONTEXT_SETTINGS)
 @profile_option

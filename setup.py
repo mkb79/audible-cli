@@ -49,13 +49,14 @@ setup(
         "audible>=0.8.2",
         "click>=8",
         "colorama; platform_system=='Windows'",
-        "httpx>=0.23.3,<0.26.0",
+        "httpx>=0.23.3,<0.28.0",
         "packaging",
         "Pillow",
         "tabulate",
         "toml",
         "tqdm",
-        "questionary"
+        "questionary",
+        "importlib-metadata; python_version<'3.10'",
     ],
     extras_require={
         'pyi': [

@@ -203,7 +203,7 @@ async def download_pdf(
 
 
 async def download_chapters(
-        output_dir, base_filename, item, quality, overwrite_existing
+        output_dir, base_filename, item, quality, overwrite_existing, chapter_type
 ):
     if not output_dir.is_dir():
         raise DirectoryDoesNotExists(output_dir)
@@ -217,7 +217,7 @@ async def download_chapters(
         return True
 
     try:
-        metadata = await item.get_content_metadata(quality)
+        metadata = await item.get_content_metadata(quality, chapter_type=chapter_type)
     except NotFoundError:
         logger.info(
             f"No chapters found for {item.full_title}."
@@ -226,7 +226,7 @@ async def download_chapters(
     metadata = json.dumps(metadata, indent=4)
     async with aiofiles.open(file, "w") as f:
         await f.write(metadata)
-    logger.info(f"Chapter file saved to {file}.")
+    logger.info(f"Chapter file saved in style '{chapter_type.upper()}' to {file}.")
     counter.count_chapter()
 
 
@@ -291,6 +291,7 @@ async def _add_audioparts_to_queue(
             get_pdf=None,
             get_annotation=None,
             get_chapters=None,
+            chapter_type=None,
             get_aax=get_aax,
             get_aaxc=get_aaxc,
             client=client,
@@ -521,6 +522,7 @@ def queue_job(
         filename_mode,
         item,
         cover_sizes,
+        chapter_type,
         quality,
         overwrite_existing,
         aax_fallback
@@ -558,7 +560,8 @@ def queue_job(
             "base_filename": base_filename,
             "item": item,
             "quality": quality,
-            "overwrite_existing": overwrite_existing
+            "overwrite_existing": overwrite_existing,
+            "chapter_type": chapter_type
         }
         QUEUE.put_nowait((cmd, kwargs))
 
@@ -696,7 +699,13 @@ def display_counter():
 @click.option(
     "--chapter",
     is_flag=True,
-    help="saves chapter metadata as JSON file"
+    help="Saves chapter metadata as JSON file."
+)
+@click.option(
+    "--chapter-type",
+    default="config",
+    type=click.Choice(["Flat", "Tree", "config"], case_sensitive=False),
+    help="The chapter type."
 )
 @click.option(
     "--annotation",
@@ -796,6 +805,9 @@ async def cli(session, api_client, **params):
     no_confirm = params.get("no_confirm")
     resolve_podcats = params.get("resolve_podcasts")
     ignore_podcasts = params.get("ignore_podcasts")
+    if all([resolve_podcats, ignore_podcasts]):
+        logger.error("Do not mix *ignore-podcasts* with *resolve-podcasts* option.")
+        raise click.Abort()
     bunch_size = session.params.get("bunch_size")
 
     start_date = session.params.get("start_date")
@@ -812,6 +824,11 @@ async def cli(session, api_client, **params):
         logger.info(
             f"Selected end date: {end_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}"
         )
+
+    chapter_type = params.get("chapter_type")
+    if chapter_type == "config":
+        chapter_type = session.config.get_profile_option(
+            session.selected_profile, "chapter_type") or "Tree"
 
     filename_mode = params.get("filename_mode")
     if filename_mode == "config":
@@ -834,6 +851,7 @@ async def cli(session, api_client, **params):
 
     if resolve_podcats:
         await library.resolve_podcats(start_date=start_date, end_date=end_date)
+        [library.data.remove(i) for i in library if i.is_parent_podcast()]
 
     # collect jobs
     jobs = []
@@ -947,7 +965,10 @@ async def cli(session, api_client, **params):
         items = [item]
         odir = pathlib.Path(output_dir)
 
-        if not ignore_podcasts and item.is_parent_podcast():
+        if item.is_parent_podcast():
+            if ignore_podcasts:
+                continue
+
             items.remove(item)
             if item._children is None:
                 await item.get_child_items(
@@ -976,6 +997,7 @@ async def cli(session, api_client, **params):
                 filename_mode=filename_mode,
                 item=item,
                 cover_sizes=cover_sizes,
+                chapter_type=chapter_type,
                 quality=quality,
                 overwrite_existing=overwrite_existing,
                 aax_fallback=aax_fallback

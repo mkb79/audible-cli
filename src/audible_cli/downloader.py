@@ -322,18 +322,31 @@ class Downloader:
 
     async def get_head_response(self, force_recreate: bool = False) -> ResponseInfo:
         if self._head_request is None or force_recreate:
-            head_response = await self._client.head(
-                self._source, headers=self._additional_headers, follow_redirects=True,
-            )
-            self._head_request = ResponseInfo(head_response)
+            # switched from HEAD to GET request without loading the body
+            # HEAD request to cds.audible.de will responded in 1 - 2 minutes
+            # a GET request to the same URI will take ~4-6 seconds
+            async with self._client.stream(
+                "GET", self._source, headers=self._additional_headers,
+                follow_redirects=True,
+            ) as head_response:
+                if head_response.request.url != self._source:
+                    self._source = head_response.request.url
+                self._head_request = ResponseInfo(head_response)
 
         return self._head_request
 
     async def _determine_resume_file(self, target_file: File) -> File:
         head_response = await self.get_head_response()
         etag = head_response.etag
-        resume_name = target_file.path if etag is None else etag.parsed_etag
-        resume_file = pathlib.Path(resume_name).with_suffix(self.RESUME_SUFFIX)
+
+        if etag is None:
+            resume_name = target_file.path
+        else:
+            parsed_etag = etag.parsed_etag
+            resume_name = target_file.path.with_name(parsed_etag)
+
+        resume_file = resume_name.with_suffix(self.RESUME_SUFFIX)
+
         return File(resume_file)
 
     def _determine_tmp_file(self, target_file: File) -> File:
