@@ -21,6 +21,7 @@ from ..decorators import (
     pass_client,
     pass_session
 )
+from ..downloader import Downloader as NewDownloader, Status
 from ..exceptions import (
     AudibleCliException,
     DirectoryDoesNotExists,
@@ -37,6 +38,8 @@ logger = logging.getLogger("audible_cli.cmds.cmd_download")
 CLIENT_HEADERS = {
     "User-Agent": "Audible/671 CFNetwork/1240.0.4 Darwin/20.6.0"
 }
+
+QUEUE = None
 
 
 class DownloadCounter:
@@ -200,7 +203,7 @@ async def download_pdf(
 
 
 async def download_chapters(
-        output_dir, base_filename, item, quality, overwrite_existing
+        output_dir, base_filename, item, quality, overwrite_existing, chapter_type
 ):
     if not output_dir.is_dir():
         raise DirectoryDoesNotExists(output_dir)
@@ -214,7 +217,7 @@ async def download_chapters(
         return True
 
     try:
-        metadata = await item.get_content_metadata(quality)
+        metadata = await item.get_content_metadata(quality, chapter_type=chapter_type)
     except NotFoundError:
         logger.info(
             f"No chapters found for {item.full_title}."
@@ -223,7 +226,7 @@ async def download_chapters(
     metadata = json.dumps(metadata, indent=4)
     async with aiofiles.open(file, "w") as f:
         await f.write(metadata)
-    logger.info(f"Chapter file saved to {file}.")
+    logger.info(f"Chapter file saved in style '{chapter_type.upper()}' to {file}.")
     counter.count_chapter()
 
 
@@ -255,9 +258,56 @@ async def download_annotations(
     counter.count_annotation()
 
 
+async def _get_audioparts(item):
+    parts = []
+    child_library: Library = await item.get_child_items()
+    if child_library is not None:
+        for child in child_library:
+            if (
+                child.content_delivery_type is not None
+                and child.content_delivery_type == "AudioPart"
+            ):
+                parts.append(child)
+
+    return parts
+
+
+async def _add_audioparts_to_queue(
+    client, output_dir, filename_mode, item, quality, overwrite_existing,
+    aax_fallback, download_mode
+):
+    parts = await _get_audioparts(item)
+
+    if download_mode == "aax":
+        get_aax = True
+        get_aaxc = False
+    else:
+        get_aax = False
+        get_aaxc = True
+
+    for part in parts:
+        queue_job(
+            get_cover=None,
+            get_pdf=None,
+            get_annotation=None,
+            get_chapters=None,
+            chapter_type=None,
+            get_aax=get_aax,
+            get_aaxc=get_aaxc,
+            client=client,
+            output_dir=output_dir,
+            filename_mode=filename_mode,
+            item=part,
+            cover_sizes=None,
+            quality=quality,
+            overwrite_existing=overwrite_existing,
+            aax_fallback=aax_fallback
+        )
+
+
 async def download_aax(
         client, output_dir, base_filename, item, quality, overwrite_existing,
-        aax_fallback
+        aax_fallback, filename_mode
 ):
     # url, codec = await item.get_aax_url(quality)
     try:
@@ -271,20 +321,39 @@ async def download_aax(
                 base_filename=base_filename,
                 item=item,
                 quality=quality,
-                overwrite_existing=overwrite_existing
+                overwrite_existing=overwrite_existing,
+                filename_mode=filename_mode
             )
         raise
 
     filename = base_filename + f"-{codec}.aax"
     filepath = output_dir / filename
-    dl = Downloader(
-        url, filepath, client, overwrite_existing,
-        ["audio/aax", "audio/vnd.audible.aax", "audio/audible"]
-    )
-    downloaded = await dl.run(pb=True)
 
-    if downloaded:
+    dl = NewDownloader(
+        source=url,
+        client=client,
+        expected_types=[
+            "audio/aax", "audio/vnd.audible.aax", "audio/audible"
+        ]
+    )
+    downloaded = await dl.run(target=filepath, force_reload=overwrite_existing)
+
+    if downloaded.status == Status.Success:
         counter.count_aax()
+    elif downloaded.status == Status.DownloadIndividualParts:
+        logger.info(
+            f"Item {filepath} must be downloaded in parts. Adding parts to queue"
+        )
+        await _add_audioparts_to_queue(
+            client=client,
+            output_dir=output_dir,
+            filename_mode=filename_mode,
+            item=item,
+            quality=quality,
+            overwrite_existing=overwrite_existing,
+            download_mode="aax",
+            aax_fallback=aax_fallback,
+        )
 
 
 async def _reuse_voucher(lr_file, item):
@@ -338,8 +407,8 @@ async def _reuse_voucher(lr_file, item):
 
 
 async def download_aaxc(
-        client, output_dir, base_filename, item,
-        quality, overwrite_existing
+    client, output_dir, base_filename, item, quality, overwrite_existing,
+    filename_mode
 ):
     lr, url, codec = None, None, None
 
@@ -398,39 +467,50 @@ async def download_aaxc(
         logger.info(f"Voucher file saved to {lr_file}.")
         counter.count_voucher_saved()
 
-    dl = Downloader(
-        url,
-        filepath,
-        client,
-        overwrite_existing,
-        [
+    dl = NewDownloader(
+        source=url,
+        client=client,
+        expected_types=[
             "audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a",
             "audio/audible"
-        ]
+        ],
     )
-    downloaded = await dl.run(pb=True)
+    downloaded = await dl.run(target=filepath, force_reload=overwrite_existing)
 
-    if downloaded:
+    if downloaded.status == Status.Success:
         counter.count_aaxc()
         if is_aycl:
             counter.count_aycl()
+    elif downloaded.status == Status.DownloadIndividualParts:
+        logger.info(
+            f"Item {filepath} must be downloaded in parts. Adding parts to queue"
+        )
+        await _add_audioparts_to_queue(
+            client=client,
+            output_dir=output_dir,
+            filename_mode=filename_mode,
+            item=item,
+            quality=quality,
+            overwrite_existing=overwrite_existing,
+            aax_fallback=False,
+            download_mode="aaxc"
+        )
 
 
-async def consume(queue, ignore_errors):
+async def consume(ignore_errors):
     while True:
-        item = await queue.get()
+        cmd, kwargs = await QUEUE.get()
         try:
-            await item
+            await cmd(**kwargs)
         except Exception as e:
             logger.error(e)
             if not ignore_errors:
                 raise
         finally:
-            queue.task_done()
+            QUEUE.task_done()
 
 
 def queue_job(
-        queue,
         get_cover,
         get_pdf,
         get_annotation,
@@ -442,6 +522,7 @@ def queue_job(
         filename_mode,
         item,
         cover_sizes,
+        chapter_type,
         quality,
         overwrite_existing,
         aax_fallback
@@ -450,73 +531,76 @@ def queue_job(
 
     if get_cover:
         for cover_size in cover_sizes:
-            queue.put_nowait(
-                download_cover(
-                    client=client,
-                    output_dir=output_dir,
-                    base_filename=base_filename,
-                    item=item,
-                    res=cover_size,
-                    overwrite_existing=overwrite_existing
-                )
-            )
+            cmd = download_cover
+            kwargs = {
+                "client": client,
+                "output_dir": output_dir,
+                "base_filename": base_filename,
+                "item": item,
+                "res": cover_size,
+                "overwrite_existing": overwrite_existing
+            }
+            QUEUE.put_nowait((cmd, kwargs))
 
     if get_pdf:
-        queue.put_nowait(
-            download_pdf(
-                client=client,
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                overwrite_existing=overwrite_existing
-            )
-        )
+        cmd = download_pdf
+        kwargs = {
+            "client": client,
+            "output_dir": output_dir,
+            "base_filename": base_filename,
+            "item": item,
+            "overwrite_existing": overwrite_existing
+        }
+        QUEUE.put_nowait((cmd, kwargs))
 
     if get_chapters:
-        queue.put_nowait(
-            download_chapters(
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                quality=quality,
-                overwrite_existing=overwrite_existing
-            )
-        )
+        cmd = download_chapters
+        kwargs = {
+            "output_dir": output_dir,
+            "base_filename": base_filename,
+            "item": item,
+            "quality": quality,
+            "overwrite_existing": overwrite_existing,
+            "chapter_type": chapter_type
+        }
+        QUEUE.put_nowait((cmd, kwargs))
 
     if get_annotation:
-        queue.put_nowait(
-            download_annotations(
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                overwrite_existing=overwrite_existing
-            )
-        )
+        cmd = download_annotations
+        kwargs = {
+            "output_dir": output_dir,
+            "base_filename": base_filename,
+            "item": item,
+            "overwrite_existing": overwrite_existing
+        }
+        QUEUE.put_nowait((cmd, kwargs))
 
     if get_aax:
-        queue.put_nowait(
-            download_aax(
-                client=client,
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                quality=quality,
-                overwrite_existing=overwrite_existing,
-                aax_fallback=aax_fallback
-            )
-        )
+        cmd = download_aax
+        kwargs = {
+            "client": client,
+            "output_dir": output_dir,
+            "base_filename": base_filename,
+            "item": item,
+            "quality": quality,
+            "overwrite_existing": overwrite_existing,
+            "aax_fallback": aax_fallback,
+            "filename_mode": filename_mode
+        }
+        QUEUE.put_nowait((cmd, kwargs))
 
     if get_aaxc:
-        queue.put_nowait(
-            download_aaxc(
-                client=client,
-                output_dir=output_dir,
-                base_filename=base_filename,
-                item=item,
-                quality=quality,
-                overwrite_existing=overwrite_existing
-            )
-        )
+        cmd = download_aaxc
+        kwargs = {
+            "client": client,
+            "output_dir": output_dir,
+            "base_filename": base_filename,
+            "item": item,
+            "quality": quality,
+            "overwrite_existing": overwrite_existing,
+            "filename_mode": filename_mode
+        }
+        QUEUE.put_nowait((cmd, kwargs))
 
 
 def display_counter():
@@ -605,7 +689,13 @@ def display_counter():
 @click.option(
     "--chapter",
     is_flag=True,
-    help="saves chapter metadata as JSON file"
+    help="Saves chapter metadata as JSON file."
+)
+@click.option(
+    "--chapter-type",
+    default="config",
+    type=click.Choice(["Flat", "Tree", "config"], case_sensitive=False),
+    help="The chapter type."
 )
 @click.option(
     "--annotation",
@@ -668,7 +758,7 @@ async def cli(session, api_client, **params):
     asins = params.get("asin")
     titles = params.get("title")
     if get_all and (asins or titles):
-        logger.error(f"Do not mix *asin* or *title* option with *all* option.")
+        logger.error("Do not mix *asin* or *title* option with *all* option.")
         click.Abort()
 
     # what to download
@@ -702,6 +792,9 @@ async def cli(session, api_client, **params):
     no_confirm = params.get("no_confirm")
     resolve_podcats = params.get("resolve_podcasts")
     ignore_podcasts = params.get("ignore_podcasts")
+    if all([resolve_podcats, ignore_podcasts]):
+        logger.error("Do not mix *ignore-podcasts* with *resolve-podcasts* option.")
+        raise click.Abort()
     bunch_size = session.params.get("bunch_size")
 
     start_date = session.params.get("start_date")
@@ -718,6 +811,11 @@ async def cli(session, api_client, **params):
         logger.info(
             f"Selected end date: {end_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}"
         )
+
+    chapter_type = params.get("chapter_type")
+    if chapter_type == "config":
+        chapter_type = session.config.get_profile_option(
+            session.selected_profile, "chapter_type") or "Tree"
 
     filename_mode = params.get("filename_mode")
     if filename_mode == "config":
@@ -740,6 +838,7 @@ async def cli(session, api_client, **params):
 
     if resolve_podcats:
         await library.resolve_podcats(start_date=start_date, end_date=end_date)
+        [library.data.remove(i) for i in library if i.is_parent_podcast()]
 
     # collect jobs
     jobs = []
@@ -788,13 +887,19 @@ async def cli(session, api_client, **params):
                 f"Skip title {title}: Not found in library"
             )
 
-    queue = asyncio.Queue()
+    # set queue
+    global QUEUE
+    QUEUE = asyncio.Queue()
+
     for job in jobs:
         item = library.get_item_by_asin(job)
         items = [item]
         odir = pathlib.Path(output_dir)
 
-        if not ignore_podcasts and item.is_parent_podcast():
+        if item.is_parent_podcast():
+            if ignore_podcasts:
+                continue
+
             items.remove(item)
             if item._children is None:
                 await item.get_child_items(
@@ -812,7 +917,6 @@ async def cli(session, api_client, **params):
 
         for item in items:
             queue_job(
-                queue=queue,
                 get_cover=get_cover,
                 get_pdf=get_pdf,
                 get_annotation=get_annotation,
@@ -824,19 +928,19 @@ async def cli(session, api_client, **params):
                 filename_mode=filename_mode,
                 item=item,
                 cover_sizes=cover_sizes,
+                chapter_type=chapter_type,
                 quality=quality,
                 overwrite_existing=overwrite_existing,
                 aax_fallback=aax_fallback
             )
 
+    # schedule the consumer
+    consumers = [
+        asyncio.ensure_future(consume(ignore_errors)) for _ in range(sim_jobs)
+    ]
     try:
-        # schedule the consumer
-        consumers = [
-            asyncio.ensure_future(consume(queue, ignore_errors)) for _ in range(sim_jobs)
-        ]
         # wait until the consumer has processed all items
-        await queue.join()
-
+        await QUEUE.join()
     finally:
         # the consumer is still awaiting an item, cancel it
         for consumer in consumers:

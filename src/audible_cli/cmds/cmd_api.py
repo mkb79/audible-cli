@@ -6,6 +6,7 @@ import sys
 import click
 from audible import Client
 
+from ..constants import AVAILABLE_MARKETPLACES
 from ..decorators import pass_session
 
 
@@ -54,9 +55,7 @@ logger = logging.getLogger("audible_cli.cmds.cmd_api")
 )
 @click.option(
     "--country-code", "-c",
-    type=click.Choice(
-        ["us", "ca", "uk", "au", "fr", "de", "es", "jp", "it", "in"]
-    ),
+    type=click.Choice(AVAILABLE_MARKETPLACES),
     help="Requested Audible marketplace. If not set, the country code for "
          "the current profile is used."
 )
