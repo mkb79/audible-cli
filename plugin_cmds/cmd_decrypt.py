@@ -521,6 +521,8 @@ class FfmpegFileDecrypter:
                     base_cmd.extend(
                         [
                             "-i",
+                            str(self._source),
+                            "-i",
                             str(metafile),
                             "-map_metadata",
                             "0",
