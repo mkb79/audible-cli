@@ -21,7 +21,7 @@ from .exceptions import (
     NotDownloadableAsAAX,
     ItemNotPublished
 )
-from .utils import full_response_callback, LongestSubString
+from .utils import full_response_callback, substring_in_list_accuracy
 
 
 logger = logging.getLogger("audible_cli.models")
@@ -104,12 +104,25 @@ class BaseItem:
         return base_filename
 
     def substring_in_title_accuracy(self, substring):
-        match = LongestSubString(substring, self.full_title)
-        return round(match.percentage, 2)
+        return substring_in_list_accuracy(substring, [self.full_title])
 
     def substring_in_title(self, substring, p=100):
         accuracy = self.substring_in_title_accuracy(substring)
         return accuracy >= p
+
+    def substring_in_authors_accuracy(self, substring):
+        if not self.authors:
+            return 0
+
+        authors = [author["name"] for author in self.authors]
+        return substring_in_list_accuracy(substring, authors)
+
+    def substring_in_series_accuracy(self, substring):
+        if not self.series:
+            return 0
+
+        series = [serie["title"] for serie in self.series]
+        return substring_in_list_accuracy(substring, series)
 
     def get_cover_url(self, res: Union[str, int] = 500):
         images = self.product_images
@@ -464,6 +477,22 @@ class BaseList:
         match = []
         for i in self._data:
             accuracy = i.substring_in_title_accuracy(search_title)
+            match.append([i, accuracy]) if accuracy >= p else ""
+
+        return match
+
+    def search_item_by_author(self, search_author, p=80):
+        match = []
+        for i in self._data:
+            accuracy = i.substring_in_authors_accuracy(search_author)
+            match.append([i, accuracy]) if accuracy >= p else ""
+
+        return match
+
+    def search_item_by_series(self, search_series, p=80):
+        match = []
+        for i in self._data:
+            accuracy = i.substring_in_series_accuracy(search_series)
             match.append([i, accuracy]) if accuracy >= p else ""
 
         return match
