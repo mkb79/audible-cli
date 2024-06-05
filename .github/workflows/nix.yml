@@ -1,0 +1,36 @@
+name: Nix-Test
+
+on:
+  - push
+  - pull_request
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run `nix fmt`
+        run: nix fmt -- --check *
+      - name: Run `flake checks`
+        run: nix flake check -L
+      - name: Create AppImage
+        run: nix build .#audible-cli-AppImage
+      - name: Test appimage
+        run: ./result decrypt --help
+      - name: Rename AppImage
+        if: startsWith(github.ref, 'refs/tags/')
+        run: cp ./result audible-cli.AppImage
+      - name: Release-AppImage
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: audible-cli.AppImage
+      # FUTURE: Push the docker container to an image registry
+      # see: https://github.com/containers/skopeo
+      # and usage in: https://github.com/seanrmurphy/nix-container-build-gha/blob/main/scripts/build_and_push_image.sh
