@@ -49,6 +49,15 @@
         };
       };
       default = audible-cli-full;
+      docker-pusher = pkgs.writeShellApplication {
+        name = "docker-pusher";
+        runtimeInputs = [pkgs.skopeo];
+        text = ''
+          nix build .#audible-cli-docker
+          DOCKER_REPOSITORY="docker://ghcr.io/mkb79/audible-cli"
+          skopeo --insecure-policy copy "docker-archive:result" "$DOCKER_REPOSITORY"
+        '';
+      };
     });
   };
 }
