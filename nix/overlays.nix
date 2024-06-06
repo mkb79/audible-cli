@@ -10,9 +10,12 @@
 in {
   default = final: prev: let
     date = mkDate (inputs.self.lastModifiedDate or "19700101");
+    # Take advantage of the 'accidentally' TOML-compatible file structure
+    _versionPy = builtins.fromTOML (builtins.readFile ../src/audible_cli/_version.py);
+    version = _versionPy.__version__;
   in {
     audible-cli = final.callPackage ./default.nix {
-      version = "0.3.2b3+date=${date}_${inputs.self.shortRev or "dirty"}";
+      version = "${version}+date=${date}_${inputs.self.shortRev or "dirty"}";
       nix-filter = inputs.nix-filter.lib;
       enable-plugin-decrypt = false;
       enable-plugin-goodreads-transform = false;
@@ -21,7 +24,7 @@ in {
       enable-plugin-listening-stats = false;
     };
     audible-cli-full = final.callPackage ./default.nix {
-      version = "0.3.2b3+date=${date}_${inputs.self.shortRev or "dirty"}";
+      version = "${version}+date=${date}_${inputs.self.shortRev or "dirty"}";
       nix-filter = inputs.nix-filter.lib;
     };
     python3Packages =
