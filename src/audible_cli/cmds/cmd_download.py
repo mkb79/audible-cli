@@ -729,7 +729,7 @@ def display_counter():
 @click.option(
     "--filename-mode", "-f",
     type=click.Choice(
-        ["config", "ascii", "asin_ascii", "unicode", "asin_unicode"]
+        ["config", "ascii", "asin_ascii", "unicode", "asin_unicode", "asin_only"]
     ),
     default="config",
     help="Filename mode to use. [default: config]"
