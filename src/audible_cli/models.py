@@ -83,7 +83,7 @@ class BaseItem:
         return slug_title
 
     def create_base_filename(self, mode: str):
-        supported_modes = ("ascii", "asin_ascii", "unicode", "asin_unicode")
+        supported_modes = ("ascii", "asin_ascii", "unicode", "asin_unicode", "asin_only")
         if mode not in supported_modes:
             raise AudibleCliException(
                 f"Unsupported mode {mode} for name creation"
@@ -95,13 +95,18 @@ class BaseItem:
         elif "unicode" in mode:
             base_filename = unicodedata.normalize("NFKD", self.full_title or "")
 
+        # asin_only
         else:
             base_filename = self.asin
 
-        if "asin" in mode:
+        if "asin" in mode and not "asin_only" == mode:
             base_filename = self.asin + "_" + base_filename
 
-        return base_filename
+        encoded = base_filename.encode('utf-8')
+        
+        # limiting 230 bytes, so that a suffix (e.g. -annotations.json) can be added easily
+        limited_bytes = encoded[:230]
+        return limited_bytes.decode('utf-8', errors='ignore')
 
     def substring_in_title_accuracy(self, substring):
         match = LongestSubString(substring, self.full_title)
