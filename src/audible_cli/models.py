@@ -82,31 +82,27 @@ class BaseItem:
 
         return slug_title
 
-    def create_base_filename(self, mode: str):
+    def create_base_filename(self, mode: str, max_length: int = 230) -> str:
         supported_modes = ("ascii", "asin_ascii", "unicode", "asin_unicode", "asin_only")
         if mode not in supported_modes:
-            raise AudibleCliException(
-                f"Unsupported mode {mode} for name creation"
-            )
+            raise AudibleCliException(f"Unsupported mode {mode} for name creation")
+
+        if mode == "asin_only":
+            return self.asin
 
         if "ascii" in mode:
             base_filename = self.full_title_slugify
-
         elif "unicode" in mode:
             base_filename = unicodedata.normalize("NFKD", self.full_title or "")
-
-        # asin_only
         else:
-            base_filename = self.asin
+            base_filename = ""
 
-        if "asin" in mode and not "asin_only" == mode:
+        if "asin" in mode:
             base_filename = self.asin + "_" + base_filename
-
-        encoded = base_filename.encode('utf-8')
         
         # limiting 230 bytes, so that a suffix (e.g. -annotations.json) can be added easily
-        limited_bytes = encoded[:230]
-        return limited_bytes.decode('utf-8', errors='ignore')
+        truncated_name = base_filename[:max_length]
+        return truncated_name
 
     def substring_in_title_accuracy(self, substring):
         match = LongestSubString(substring, self.full_title)
