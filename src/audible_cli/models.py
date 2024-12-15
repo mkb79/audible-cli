@@ -99,10 +99,14 @@ class BaseItem:
 
         if "asin" in mode:
             base_filename = self.asin + "_" + base_filename
-        
+
+        # most filesystems are limited to byte numbers, not chars.
+        # UTF-8 characters might need up to 4 bytes (think chinese characters)
+        encoded = base_filename.encode("utf-8")
+
         # limiting 230 bytes, so that a suffix (e.g. -annotations.json) can be added easily
-        truncated_name = base_filename[:max_length]
-        return truncated_name
+        limited_bytes = encoded[:max_length]
+        return limited_bytes.decode("utf-8", errors="ignore")
 
     def substring_in_title_accuracy(self, substring):
         match = LongestSubString(substring, self.full_title)
