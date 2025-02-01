@@ -41,7 +41,7 @@ def cli():
 @cli.command("export")
 @click.option(
     "--output", "-o",
-    type=click.Path(),
+    type=click.Path(path_type=pathlib.Path),
     default=pathlib.Path().cwd() / r"wishlist.{format}",
     show_default=True,
     help="output file"
