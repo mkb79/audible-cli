@@ -6,6 +6,7 @@ import unicodedata
 from datetime import datetime
 from math import ceil
 from typing import List, Optional, Union
+from warnings import warn
 
 import audible
 import httpx
@@ -131,9 +132,17 @@ class BaseItem:
                 return True
 
     def is_published(self):
-        if self.publication_datetime is not None:
+        if (
+            self.content_delivery_type and self.content_delivery_type == "AudioPart"
+            and self._parent
+        ):
+            publication_datetime = self._parent.publication_datetime
+        else:
+            publication_datetime = self.publication_datetime
+
+        if publication_datetime is not None:
             pub_date = datetime.strptime(
-                self.publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
+                publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
             )
             now = datetime.utcnow()
             return now > pub_date
@@ -383,15 +392,21 @@ class LibraryItem(BaseItem):
 
         return lr
 
-    async def get_content_metadata(self, quality: str = "high"):
+    async def get_content_metadata(
+        self, quality: str = "high", chapter_type: str = "Tree", **request_kwargs
+    ):
+        chapter_type = chapter_type.capitalize()
         assert quality in ("best", "high", "normal",)
+        assert chapter_type in ("Flat", "Tree")
 
         url = f"content/{self.asin}/metadata"
         params = {
             "response_groups": "last_position_heard, content_reference, "
                                "chapter_info",
             "quality": "High" if quality in ("best", "high") else "Normal",
-            "drm_type": "Adrm"
+            "drm_type": "Adrm",
+            "chapter_titles_type": chapter_type,
+            **request_kwargs
         }
 
         metadata = await self._client.get(url, params=params)
@@ -590,6 +605,18 @@ class Library(BaseList):
             start_date: Optional[datetime] = None,
             end_date: Optional[datetime] = None
     ):
+        warn(
+            "resolve_podcats is deprecated, use resolve_podcasts instead",
+             DeprecationWarning,
+            stacklevel=2
+        )
+        return self.resolve_podcasts(start_date, end_date)
+
+    async def resolve_podcasts(
+            self,
+            start_date: Optional[datetime] = None,
+            end_date: Optional[datetime] = None
+    ):
         podcast_items = await asyncio.gather(
             *[i.get_child_items(start_date=start_date, end_date=end_date) 
               for i in self if i.is_parent_podcast()]
@@ -654,7 +681,7 @@ class Catalog(BaseList):
 
         return cls(resp, api_client=api_client)
 
-    async def resolve_podcats(self):
+    async def resolve_podcasts(self):
         podcast_items = await asyncio.gather(
             *[i.get_child_items() for i in self if i.is_parent_podcast()]
         )

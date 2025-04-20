@@ -6,7 +6,77 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
--
+### Bugfix
+
+- Fixing `[Errno 18] Invalid cross-device link` when downloading files using the `--output-dir` option. This error is fixed by creating the resume file on the same location as the target file.
+
+### Added
+
+- The `--chapter-type` option is added to the download command. Chapter can now be 
+  downloaded as `flat` or `tree` type. `tree` is the default. A default chapter type 
+  can be set in the config file.
+
+### Changed
+
+- Improved podcast ignore feature in download command
+- make `--ignore-podcasts` and `--resolve-podcasts` options of download command mutual 
+  exclusive
+- Switched from a HEAD to a GET request without loading the body in the downloader 
+  class. This change improves the program's speed, as the HEAD request was taking 
+  considerably longer than a GET request on some Audible pages.
+- `models.LibraryItem.get_content_metadatata` now accept a `chapter_type` argument. 
+  Additional keyword arguments to this method are now passed through the metadata 
+  request.
+- Update httpx version range to >=0.23.3 and <0.28.0.
+- fix typo from `resolve_podcats` to `resolve_podcasts`
+- `models.Library.resolve_podcats` is now deprecated and will be removed in a future version
+
+## [0.3.1] - 2024-03-19
+
+### Bugfix
+
+- fix a `TypeError` on some Python versions when calling `importlib.metadata.entry_points` with group argument
+
+## [0.3.0] - 2024-03-19
+
+### Added
+
+- Added a resume feature when downloading aaxc files.
+- New `downlaoder` module which contains a rework of the Downloader class.
+- If necessary, large audiobooks are now downloaded in parts.
+- Plugin command help page now contains additional information about the source of 
+  the plugin.
+- Command help text now starts with ´(P)` for plugin commands.
+
+### Changed
+
+- Rework plugin module
+- using importlib.metadata over setuptools (pkg_resources) to get entrypoints
+
+## [0.2.6] - 2023-11-16
+
+### Added
+
+- Update marketplace choices in `manage auth-file add` command. Now all available marketplaces are listed.
+
+### Bugfix
+
+- Avoid tqdm progress bar interruption by logger’s output to console.
+- Fixing an issue with unawaited coroutines when the download command exited abnormal.
+
+### Changed
+
+- Update httpx version range to >=0.23.3 and <0.26.0. 
+ 
+### Misc
+
+- add `freeze_support` to pyinstaller entry script (#78)
+
+## [0.2.5] - 2023-09-26
+
+### Added
+
+- Dynamically load available marketplaces from the `audible package`. Allows to implement a new marketplace without updating `audible-cli`.
 
 ## [0.2.4] - 2022-09-21
 
@@ -50,7 +120,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - by default a licenserequest (voucher) will not include chapter information by default
 - moved licenserequest part from `models.LibraryItem.get_aaxc_url` to its own `models.LibraryItem.get_license` function
-- allow book tiltes with hyphens (#96)
+- allow book titles with hyphens (#96)
 - if there is no title fallback to an empty string (#98)
 - reduce `response_groups` for the download command to speed up fetching the library (#109)
 
@@ -58,7 +128,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - `Extreme` quality is not supported by the Audible API anymore (#107)
 - download command continued execution after error (#104)
-- Currently paths with dots will break the decryption (#97)
+- Currently, paths with dots will break the decryption (#97)
 - `models.Library.from_api_full_sync` called `models.Library.from_api` with incorrect keyword arguments
 
 ### Misc
@@ -121,7 +191,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - the `--version` option now checks if an update for `audible-cli` is available
-- build macOS releases in onedir mode
+- build macOS releases in `onedir` mode
 
 ### Bugfix
 

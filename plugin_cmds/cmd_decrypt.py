@@ -19,7 +19,6 @@ import typing as t
 from enum import Enum
 from functools import reduce
 from glob import glob
-from shlex import quote
 from shutil import which
 
 import click
@@ -64,7 +63,7 @@ def _get_input_files(
             and '*' not in filename
             and not SupportedFiles.is_supported_file(filename)
         ):
-            raise(click.BadParameter("{filename}: file not found or supported."))
+            raise click.BadParameter("{filename}: file not found or supported.")
 
         expanded_filter = filter(
             lambda x: SupportedFiles.is_supported_file(x), expanded
@@ -131,7 +130,7 @@ class ApiChapterInfo:
     def count_chapters(self):
         return len(self.get_chapters())
 
-    def get_chapters(self, separate_intro_outro=False):
+    def get_chapters(self, separate_intro_outro=False, remove_intro_outro=False):
         def extract_chapters(initial, current):
             if "chapters" in current:
                 return initial + [current] + current["chapters"]
@@ -148,6 +147,8 @@ class ApiChapterInfo:
 
         if separate_intro_outro:
             return self._separate_intro_outro(chapters)
+        elif remove_intro_outro:
+            return self._remove_intro_outro(chapters)
 
         return chapters
 
@@ -199,6 +200,24 @@ class ApiChapterInfo:
     
         return chapters
 
+    def _remove_intro_outro(self, chapters):
+        echo("Delete Audible Brand Intro and Outro.")
+        chapters.sort(key=operator.itemgetter("start_offset_ms"))
+    
+        intro_dur_ms = self.get_intro_duration_ms()
+        outro_dur_ms = self.get_outro_duration_ms()
+
+        first = chapters[0]
+        first["length_ms"] -= intro_dur_ms
+
+        for chapter in chapters[1:]:
+            chapter["start_offset_ms"] -= intro_dur_ms
+            chapter["start_offset_sec"] -= round(chapter["start_offset_ms"] / 1000)
+
+        last = chapters[-1]
+        last["length_ms"] -= outro_dur_ms
+    
+        return chapters
 
 class FFMeta:
     SECTION = re.compile(r"\[(?P<header>[^]]+)\]")
@@ -271,18 +290,23 @@ class FFMeta:
     def update_chapters_from_chapter_info(
         self,
         chapter_info: ApiChapterInfo,
-        separate_intro_outro: bool = False
+        force_rebuild_chapters: bool = False,
+        separate_intro_outro: bool = False,
+        remove_intro_outro: bool = False
     ) -> None:
         if not chapter_info.is_accurate():
             echo("Metadata from API is not accurate. Skip.")
             return
 
         if chapter_info.count_chapters() != self.count_chapters():
-            raise ChapterError("Chapter mismatch")
+            if force_rebuild_chapters:
+                echo("Force rebuild chapters due to chapter mismatch.")
+            else:
+                raise ChapterError("Chapter mismatch")
 
-        echo(f"Found {self.count_chapters()} chapters to prepare.")
+        echo(f"Found {chapter_info.count_chapters()} chapters to prepare.")
 
-        api_chapters = chapter_info.get_chapters(separate_intro_outro)
+        api_chapters = chapter_info.get_chapters(separate_intro_outro, remove_intro_outro)
 
         num_chap = 0
         new_chapters = {}
@@ -297,6 +321,20 @@ class FFMeta:
                 "title": chapter["title"],
             }
         self._ffmeta_parsed["CHAPTER"] = new_chapters
+    
+    def get_start_end_without_intro_outro(
+        self,
+        chapter_info: ApiChapterInfo,
+    ):
+        intro_dur_ms = chapter_info.get_intro_duration_ms()
+        outro_dur_ms = chapter_info.get_outro_duration_ms()
+        total_runtime_ms = chapter_info.get_runtime_length_ms()
+
+        start_new = intro_dur_ms
+        duration_new = total_runtime_ms - intro_dur_ms - outro_dur_ms
+
+        return start_new, duration_new
+
 
 
 def _get_voucher_filename(file: pathlib.Path) -> pathlib.Path:
@@ -321,9 +359,12 @@ class FfmpegFileDecrypter:
         target_dir: pathlib.Path,
         tempdir: pathlib.Path,
         activation_bytes: t.Optional[str],
+        overwrite: bool,
         rebuild_chapters: bool,
-        ignore_missing_chapters: bool,
-        separate_intro_outro: bool
+        force_rebuild_chapters: bool,
+        skip_rebuild_chapters: bool,
+        separate_intro_outro: bool,
+        remove_intro_outro: bool
     ) -> None:
         file_type = SupportedFiles(file.suffix)
 
@@ -343,9 +384,12 @@ class FfmpegFileDecrypter:
         self._credentials: t.Optional[t.Union[str, t.Tuple[str]]] = credentials
         self._target_dir = target_dir
         self._tempdir = tempdir
+        self._overwrite = overwrite
         self._rebuild_chapters = rebuild_chapters
-        self._ignore_missing_chapters = ignore_missing_chapters
+        self._force_rebuild_chapters = force_rebuild_chapters
+        self._skip_rebuild_chapters = skip_rebuild_chapters
         self._separate_intro_outro = separate_intro_outro
+        self._remove_intro_outro = remove_intro_outro
         self._api_chapter: t.Optional[ApiChapterInfo] = None
         self._ffmeta: t.Optional[FFMeta] = None
         self._is_rebuilded: bool = False
@@ -377,20 +421,20 @@ class FfmpegFileDecrypter:
                 key, iv = self._credentials
                 credentials_cmd = [
                     "-audible_key",
-                    quote(key),
+                    key,
                     "-audible_iv",
-                    quote(iv),
+                    iv,
                 ]
             else:
                 credentials_cmd = [
                     "-activation_bytes",
-                    quote(self._credentials),
+                    self._credentials,
                 ]    
             base_cmd.extend(credentials_cmd)
     
             extract_cmd = [
                 "-i",
-                quote(str(self._source)),
+                str(self._source),
                 "-f",
                 "ffmetadata",
                 str(metafile),
@@ -405,7 +449,7 @@ class FfmpegFileDecrypter:
     def rebuild_chapters(self) -> None:
         if not self._is_rebuilded:
             self.ffmeta.update_chapters_from_chapter_info(
-                self.api_chapter, self._separate_intro_outro
+                self.api_chapter, self._force_rebuild_chapters, self._separate_intro_outro, self._remove_intro_outro
             )
             self._is_rebuilded = True
 
@@ -414,8 +458,11 @@ class FfmpegFileDecrypter:
         outfile = self._target_dir / oname
 
         if outfile.exists():
-            secho(f"Skip {outfile}: already exists", fg="blue")
-            return
+            if self._overwrite:
+                secho(f"Overwrite {outfile}: already exists", fg="blue")
+            else:
+                secho(f"Skip {outfile}: already exists", fg="blue")
+                return
 
         base_cmd = [
             "ffmpeg",
@@ -423,26 +470,22 @@ class FfmpegFileDecrypter:
             "quiet",
             "-stats",
         ]
+        if self._overwrite:
+            base_cmd.append("-y")
         if isinstance(self._credentials, tuple):
             key, iv = self._credentials
             credentials_cmd = [
                 "-audible_key",
-                quote(key),
+                key,
                 "-audible_iv",
-                quote(iv),
+                iv,
             ]
         else:
             credentials_cmd = [
                 "-activation_bytes",
-                quote(self._credentials),
+                self._credentials,
             ]    
         base_cmd.extend(credentials_cmd)
-        base_cmd.extend(
-            [
-                "-i",
-                quote(str(self._source)),
-            ]
-        )
 
         if self._rebuild_chapters:
             metafile = _get_ffmeta_file(self._source, self._tempdir)
@@ -450,25 +493,56 @@ class FfmpegFileDecrypter:
                 self.rebuild_chapters()
                 self.ffmeta.write(metafile)
             except ChapterError:
-                if not self._ignore_missing_chapters:
+                if self._skip_rebuild_chapters:
+                    echo("Skip rebuild chapters due to chapter mismatch.")
+                else:
                     raise
             else:
-                base_cmd.extend(
-                    [
-                        "-i",
-                        quote(str(metafile)),
-                        "-map_metadata",
-                        "0",
-                        "-map_chapters",
-                        "1",
-                    ]
-                )
+                if self._remove_intro_outro:
+                    start_new, duration_new = self.ffmeta.get_start_end_without_intro_outro(self.api_chapter)
+
+                    base_cmd.extend(
+                        [
+                            "-ss",
+                            f"{start_new}ms",
+                            "-t",
+                            f"{duration_new}ms",
+                            "-i",
+                            str(self._source),
+                            "-i",
+                            str(metafile),
+                            "-map_metadata",
+                            "0",
+                            "-map_chapters",
+                            "1",
+                        ]
+                    )
+                else:
+                    base_cmd.extend(
+                        [
+                            "-i",
+                            str(self._source),
+                            "-i",
+                            str(metafile),
+                            "-map_metadata",
+                            "0",
+                            "-map_chapters",
+                            "1",
+                        ]
+                    )
+        else:
+            base_cmd.extend(
+                [
+                    "-i",
+                    str(self._source),
+                ]
+            )
 
         base_cmd.extend(
             [
                 "-c",
                 "copy",
-                quote(str(outfile)),
+                str(outfile),
             ]
         )
 
@@ -502,6 +576,25 @@ class FfmpegFileDecrypter:
     help="Rebuild chapters with chapters from voucher or chapter file."
 )
 @click.option(
+    "--force-rebuild-chapters",
+    "-f",
+    is_flag=True,
+    help=(
+        "Force rebuild chapters with chapters from voucher or chapter file "
+        "if the built-in chapters in the audio file mismatch. "
+        "Only use with `--rebuild-chapters`."
+    ),
+)
+@click.option(
+    "--skip-rebuild-chapters",
+    "-t",
+    is_flag=True,
+    help=(
+        "Decrypt without rebuilding chapters when chapters mismatch. "
+        "Only use with `--rebuild-chapters`."
+    ),
+)
+@click.option(
     "--separate-intro-outro",
     "-s",
     is_flag=True,
@@ -511,12 +604,11 @@ class FfmpegFileDecrypter:
     ),
 )
 @click.option(
-    "--ignore-missing-chapters",
-    "-t",
+    "--remove-intro-outro",
+    "-c",
     is_flag=True,
     help=(
-        "Decrypt without rebuilding chapters when chapters are not present. "
-        "Otherwise an item is skipped when this option is not provided. "
+        "Remove Audible Brand Intro and Outro. "
         "Only use with `--rebuild-chapters`."
     ),
 )
@@ -528,8 +620,10 @@ def cli(
     all_: bool,
     overwrite: bool,
     rebuild_chapters: bool,
+    force_rebuild_chapters: bool,
+    skip_rebuild_chapters: bool,
     separate_intro_outro: bool,
-    ignore_missing_chapters: bool
+    remove_intro_outro: bool,
 ):
     """Decrypt audiobooks downloaded with audible-cli.
 
@@ -543,15 +637,30 @@ def cli(
         ctx = click.get_current_context()
         ctx.fail("ffmpeg not found")
 
-    if (separate_intro_outro or ignore_missing_chapters) and not rebuild_chapters:
+    if (force_rebuild_chapters or skip_rebuild_chapters or separate_intro_outro or remove_intro_outro) and not rebuild_chapters:
         raise click.BadOptionUsage(
-            "`--separate-intro-outro` and `--ignore-missing-chapters` can "
-            "only be used together with `--rebuild-chapters`"
+            "",
+            "`--force-rebuild-chapters`, `--skip-rebuild-chapters`, `--separate-intro-outro` "
+            "and `--remove-intro-outro` can only be used together with `--rebuild-chapters`"
+        )
+
+    if force_rebuild_chapters and skip_rebuild_chapters:
+        raise click.BadOptionUsage(
+            "",
+            "`--force-rebuild-chapters` and `--skip-rebuild-chapters` can "
+            "not be used together"
+        )
+
+    if separate_intro_outro and remove_intro_outro:
+        raise click.BadOptionUsage(
+            "",
+            "`--separate-intro-outro` and `--remove-intro-outro` can not be used together"
         )
 
     if all_:
         if files:
             raise click.BadOptionUsage(
+                "",
                 "If using `--all`, no FILES arguments can be used."
             )
         files = [f"*{suffix}" for suffix in SupportedFiles.get_supported_list()]
@@ -564,8 +673,11 @@ def cli(
                 target_dir=pathlib.Path(directory).resolve(),
                 tempdir=pathlib.Path(tempdir).resolve(),
                 activation_bytes=session.auth.activation_bytes,
+                overwrite=overwrite,
                 rebuild_chapters=rebuild_chapters,
-                ignore_missing_chapters=ignore_missing_chapters,
-                separate_intro_outro=separate_intro_outro
+                force_rebuild_chapters=force_rebuild_chapters,
+                skip_rebuild_chapters=skip_rebuild_chapters,
+                separate_intro_outro=separate_intro_outro,
+                remove_intro_outro=remove_intro_outro
             )
             decrypter.run()
