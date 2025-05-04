@@ -257,6 +257,37 @@ class FFMeta:
 
         return parsed_dict
 
+    def _clean(self, text):
+        # Remove text between parentheses
+        text = re.sub(r'\([^)]*\)', ' ', text)
+        # Remove junk characters
+        text = re.sub(r'[^a-zA-Z_\- ]', '', text)
+        # Remove multiple spaces and replace with a single space
+        text = re.sub(r'\s+', ' ', text)
+        # Optional: Strip leading and trailing spaces
+        text = text.strip()
+        return text
+
+    def get_output_path(self):
+        """
+        Return the <author>/<title>/ folder path for this audiobook
+        """
+        lines = self._ffmeta_raw.splitlines()
+        title = ""
+        artist = ""
+        album = ""
+        for line in lines:
+            if not title and line.startswith("title="):
+                title = line.split("=", 1)[-1]
+            elif not artist and line.startswith("artist="):
+                artist = line.split("=", 1)[-1]
+            elif not album and line.startswith("album="):
+                album = line.split("=", 1)[-1]
+        title = self._clean(title)
+        artist = self._clean(artist)
+        album = self._clean(album)
+        return pathlib.Path(f"{artist}/{album if album else title}")
+
     def count_chapters(self):
         return len(self._ffmeta_parsed["CHAPTER"])
 
@@ -372,7 +403,9 @@ class FfmpegFileDecrypter:
         skip_rebuild_chapters: bool,
         separate_intro_outro: bool,
         remove_intro_outro: bool,
-        output_opus_format: bool
+        output_opus_format: bool,
+        output_folders: bool,
+        bitrate: str,
     ) -> None:
         file_type = SupportedFiles(file.suffix)
 
@@ -402,6 +435,8 @@ class FfmpegFileDecrypter:
         self._ffmeta: t.Optional[FFMeta] = None
         self._is_rebuilded: bool = False
         self._output_opus_format = output_opus_format
+        self._output_folders = output_folders
+        self._bitrate = bitrate
 
     @property
     def api_chapter(self) -> ApiChapterInfo:
@@ -501,6 +536,9 @@ class FfmpegFileDecrypter:
             # Run ffmpeg command to extract the cover image
             cmd = [
                 'ffmpeg',
+                '-v',
+                'quiet',
+                '-stats',
                 '-i', m4b_file_path,
                 '-an',  # Disable audio
                 '-vcodec', 'copy',
@@ -517,6 +555,9 @@ class FfmpegFileDecrypter:
                 # Alternative approach if the first one doesn't work
                 cmd = [
                     'ffmpeg',
+                    '-v',
+                    'quiet',
+                    '-stats',
                     '-i', m4b_file_path,
                     '-an',
                     '-vf', 'scale=500:-1',  # Resize the image (optional)
@@ -623,12 +664,23 @@ class FfmpegFileDecrypter:
 
             return ['-metadata:s:a', f'METADATA_BLOCK_PICTURE={encoded_data}']
 
+    def _get_opus_filename(self, input_filename):
+        input_filename = pathlib.Path(input_filename)
+        base_filename = pathlib.Path(input_filename).stem.rsplit("-", 1)[0]
+        return pathlib.Path(base_filename + f"-{self._bitrate}bps.opus")
+
     def run(self):
         if self._output_opus_format:
-            oname = self._source.with_suffix(".opus").name
+            oname = self._get_opus_filename(self._source)
         else:
             oname = self._source.with_suffix(".m4b").name
-        outfile = self._target_dir / oname
+
+        outdir = self._target_dir
+        if self._output_folders:
+            outdir = self._target_dir / self.ffmeta.get_output_path()
+            os.makedirs(outdir, exist_ok=True)
+
+        outfile = outdir / oname
 
         if outfile.exists():
             if self._overwrite:
@@ -731,8 +783,13 @@ class FfmpegFileDecrypter:
                 [
                     "-c:a",
                     "libopus",
+                    "-vn",
+                    "-application",
+                    "voip",
+                    "-frame_duration",
+                    "60",
                     "-b:a",
-                    "32k",
+                    self._bitrate,
                     str(outfile),
                 ]
             )
@@ -819,6 +876,23 @@ class FfmpegFileDecrypter:
         "Includes cover art, chapters and other metadata."
     ),
 )
+@click.option(
+    "--folders",
+    is_flag=True,
+    help=(
+        "Output decrypted audiobooks into separate sub-folders, <author>/<title>/ "
+        "Required by some audiobook players."
+    ),
+)
+@click.option(
+    "--bitrate",
+    "-b",
+    "bitrate",
+    type=str,
+    default="16k",
+    help="Bitrate for Opus encoding, in bits.",
+    show_default=True
+)
 @pass_session
 def cli(
     session,
@@ -832,6 +906,8 @@ def cli(
     separate_intro_outro: bool,
     remove_intro_outro: bool,
     opus: bool,
+    folders: bool,
+    bitrate: str,
 ):
     """Decrypt audiobooks downloaded with audible-cli.
 
@@ -888,5 +964,7 @@ def cli(
                 separate_intro_outro=separate_intro_outro,
                 remove_intro_outro=remove_intro_outro,
                 output_opus_format=opus,
+                output_folders=folders,
+                bitrate=bitrate,
             )
             decrypter.run()
