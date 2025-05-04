@@ -15,6 +15,7 @@ import json
 import operator
 import os
 import pathlib
+import logging
 import re
 import struct
 import subprocess  # noqa: S404
@@ -32,6 +33,7 @@ from PIL import Image
 from audible_cli.decorators import pass_session
 from audible_cli.exceptions import AudibleCliException
 
+logger = logging.getLogger()
 
 class ChapterError(AudibleCliException):
     """Base class for all chapter errors."""
@@ -713,11 +715,18 @@ class FfmpegFileDecrypter:
             # Add cover
             cover_filename = self.get_cover_image(str(self._source))
             if cover_filename:
-                base_cmd.extend(self.get_cover_metadata(cover_filename))
+                try:
+                    base_cmd.extend(self.get_cover_metadata(cover_filename))
+                except Exception as ex:
+                    logger.warning(f"Failed to process cover image for {self._source}: {ex}")
+            else:
+                logger.info(f"No cover image available for {self._source}")
+                    
             # Clean up temp image if required
-            if cover_filename.startswith("deleteme_"):
+            if cover_filename and cover_filename.startswith("deleteme_"):
                 os.unlink(cover_filename)
-            # -c:a libopus -b:a 32k
+            
+            # ffmpeg transcoding options to opus
             base_cmd.extend(
                 [
                     "-c:a",
