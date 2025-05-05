@@ -22,7 +22,9 @@ import struct
 import subprocess  # noqa: S404
 import sys
 import tempfile
+import traceback
 import typing as t
+import unicodedata
 from enum import Enum
 from functools import reduce
 from glob import glob
@@ -260,15 +262,15 @@ class FFMeta:
         return parsed_dict
 
     def _clean(self, text):
-        # Remove text between parentheses
         text = re.sub(r'\([^)]*\)', ' ', text)
-        # Remove junk characters
-        text = re.sub(r'[^a-zA-Z_\- ]', '', text)
-        # Remove multiple spaces and replace with a single space
+        text = re.sub(r':', ' - ', text)
+        # Keep only Unicode letters, numbers, hyphen, underscore, space
+        text = ''.join(
+            c for c in text
+            if unicodedata.category(c)[0] in ('L', 'N') or c in ('-', '_', ' ')
+        )
         text = re.sub(r'\s+', ' ', text)
-        # Optional: Strip leading and trailing spaces
-        text = text.strip()
-        return text
+        return text.strip()
 
     def get_output_path(self):
         """
@@ -462,7 +464,6 @@ class FfmpegFileDecrypter:
                 "ffmpeg",
                 "-v",
                 "quiet",
-                "-stats",
             ]
             if isinstance(self._credentials, tuple):
                 key, iv = self._credentials
@@ -541,7 +542,7 @@ class FfmpegFileDecrypter:
                 'ffmpeg',
                 '-v',
                 'quiet',
-                '-stats',
+                '-nostats',
                 '-i', m4b_file_path,
                 '-an',  # Disable audio
                 '-vcodec', 'copy',
@@ -1049,7 +1050,7 @@ def cli(
                 try:
                     future.result()
                 except Exception as exc:
-                    logger.error(f'Error processing file {file}: {exc}')
+                    logger.error(f'Error processing file {file}: {exc} {traceback.format_exc()}')
 
 
 def process_file(file, directory, tempdir, activation_bytes, overwrite, rebuild_chapters,
