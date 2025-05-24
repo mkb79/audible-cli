@@ -31,6 +31,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - fix typo from `resolve_podcats` to `resolve_podcasts`
 - `models.Library.resolve_podcats` is now deprecated and will be removed in a future version
 
+### Removed
+
+- Python 3.6 - 3.9 compatibility
+
 ## [0.3.1] - 2024-03-19
 
 ### Bugfix
