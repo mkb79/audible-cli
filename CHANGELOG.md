@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+-
+
+## [0.3.2] - 2025-05-24
+
 ### Bugfix
 
 - Fixing `[Errno 18] Invalid cross-device link` when downloading files using the `--output-dir` option. This error is fixed by creating the resume file on the same location as the target file.
