@@ -40,11 +40,11 @@ pip install .
 
 ```
 
-or as the best solution using [pipx](https://pipx.pypa.io/stable/)
+or as the best solution using [uvx](https://github.com/astral-sh/uv)
 
 ```shell
 
-pipx install audible-cli
+uvx audible-cli
 
 ```
 
