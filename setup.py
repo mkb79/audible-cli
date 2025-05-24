@@ -11,8 +11,8 @@ if sys.argv[-1] == "publish":
     system("twine upload dist/*")
     sys.exit()
 
-if sys.version_info < (3, 6, 0):
-    raise RuntimeError("audible requires Python 3.6.0+")
+if sys.version_info < (3, 10, 0):
+    raise RuntimeError("audible requires Python 3.10.0+")
 
 here = pathlib.Path(__file__).parent
 
@@ -37,12 +37,13 @@ setup(
     author=read_from_file("__author__"),
     author_email=read_from_file("__author_email__"),
     classifiers=[
-         "Development Status :: 4 - Beta",
-         "Intended Audience :: Developers",
-         "License :: OSI Approved :: GNU Affero General Public License v3",
-         "Programming Language :: Python :: 3.6",
-         "Programming Language :: Python :: 3.7",
-         "Programming Language :: Python :: 3.8"
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: GNU Affero General Public License v3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
     ],
     install_requires=[
         "aiofiles",
@@ -56,14 +57,13 @@ setup(
         "toml",
         "tqdm",
         "questionary",
-        "importlib-metadata; python_version<'3.10'",
     ],
     extras_require={
         'pyi': [
             'pyinstaller'
         ]
     },
-    python_requires=">=3.6",
+    python_requires=">=3.10",
     keywords="Audible, API, async, cli",
     long_description=long_description,
     long_description_content_type="text/markdown",

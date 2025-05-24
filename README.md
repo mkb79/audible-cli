@@ -6,7 +6,7 @@ Both are written with Python.
 
 ## Requirements
 
-audible-cli needs at least *Python 3.6* and *Audible v0.6.0*.
+audible-cli needs at least *Python 3.10* and *Audible v0.8.2*.
 
 It depends on the following packages:
 
