@@ -944,7 +944,7 @@ async def cli(session, api_client, **params):
 
     # schedule the consumer
     consumers = [
-        asyncio.ensure_future(consume(ignore_errors)) for _ in range(sim_jobs)
+        asyncio.create_task(consume(ignore_errors)) for _ in range(sim_jobs)
     ]
     try:
         # wait until the consumer has processed all items

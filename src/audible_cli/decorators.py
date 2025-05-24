@@ -20,21 +20,7 @@ pass_session = click.make_pass_decorator(Session, ensure=True)
 def run_async(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if hasattr(asyncio, "run"):
-            logger.debug("Using asyncio.run ...")
-            return asyncio.run(f(*args, ** kwargs))
-        else:
-            logger.debug("Using asyncio.run_until_complete ...")
-            loop = asyncio.get_event_loop()
-
-            if loop.is_closed():
-                loop = asyncio.new_event_loop()
-
-            try:
-                return loop.run_until_complete(f(*args, ** kwargs))
-            finally:
-                loop.run_until_complete(loop.shutdown_asyncgens())
-                loop.close()
+        return asyncio.run(f(*args, ** kwargs))
     return wrapper
 
 

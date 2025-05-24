@@ -17,10 +17,7 @@ from .exceptions import AudibleCliException
 from ._logging import click_basic_config
 from . import plugins
 
-if sys.version_info >= (3, 10):
-    from importlib.metadata import entry_points
-else:  # Python < 3.10 (backport)
-    from importlib_metadata import entry_points
+from importlib.metadata import entry_points
 
 
 logger = logging.getLogger("audible_cli")
