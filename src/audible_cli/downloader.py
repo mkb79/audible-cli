@@ -2,18 +2,13 @@ import logging
 import pathlib
 import re
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Union
+from typing import Any, Callable, Dict, List, Literal, NamedTuple, Optional, Union
 
 import aiofiles
 import click
 import httpx
 import tqdm
 from aiofiles.os import path, unlink
-
-try:
-    from typing import Literal
-except ImportError:
-    from typing_extensions import Literal
 
 
 FileMode = Literal["ab", "wb"]
