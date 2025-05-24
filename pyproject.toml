@@ -1,0 +1,151 @@
+[project]
+name = "audible-cli"
+version = "0.3.2"
+description = "Command line interface (cli) for the audible package."
+authors = [{ name = "mkb79", email = "mkb79@hackitall.de" }]
+requires-python = ">=3.10,<3.14"
+readme = "README.md"
+license = "AGPL-3.0-only"
+keywords = [
+    "Audible",
+    "API",
+    "async",
+    "cli"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "aiofiles",
+    "audible>=0.8.2",
+    "click>=8",
+    "colorama; platform_system=='Windows'",
+    "httpx>=0.23.3,<0.28.0",
+    "packaging",
+    "Pillow",
+    "tabulate",
+    "toml",
+    "tqdm",
+    "questionary",
+]
+homepage = "https://github.com/mkb79/audible-cli"
+repository = "https://github.com/mkb79/audible-cli"
+documentation = "https://audible-cli.readthedocs.io/"
+
+[project.urls]
+Changelog = "https://github.com/mkb79/audible-cli/releases"
+
+[project.scripts]
+audible = "audible_cli:main"
+audible-quickstart = "audible_cli:quickstart"
+
+[dependency-groups]
+dev = [
+    "pyinstaller"
+]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/audible_cli"]
+
+[tool.hatch.build.targets.wheel]
+include = ["src/audible_cli"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src/audible_cli" = "audible_cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+required-version = ">=0.7.6"
+
+[tool.coverage.paths]
+source = ["src/audible_cli", "*/site-packages"]
+tests = ["tests", "*/tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/audible_cli", "tests"]
+relative_files = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 10  # temporarily drop complexity, target is 100
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:"
+]
+
+[tool.mypy]
+pretty = true
+show_column_numbers = true
+show_error_codes = true
+show_error_context = true
+strict = true
+warn_unreachable = true
+
+[tool.ruff]
+#  missing rst-docstrings check, these should be adding through ruff
+line-length = 88
+src = ["src", "plugin_cmds", "utils"]
+target-version = "py310"
+output-format = "grouped"
+
+[tool.ruff.lint]
+ignore = [
+    "D10",  # temporarily ignore missing docstrings
+    "E501",
+    "N818",
+    "PLR0912",  # temporarily
+    "PLR0913",  # temporarily
+    "PLR0915",  # temporarily
+    "PLR2004",  # temporarily
+]
+select=[
+    "A",
+    "ASYNC",
+    "B",
+    "C4",
+    "C90",
+    "D",
+    "E",
+    "F",
+    "G",
+    "I",
+    "N",
+    "PGH",
+    "PL",
+    "Q",
+    "RUF",
+    "S",
+    "UP",
+    "W",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 21  # temporarily raise complexity, target is 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+force-single-line = false
+known-first-party = ["audible_cli"]
+lines-after-imports = 2
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/audible_cli"]
