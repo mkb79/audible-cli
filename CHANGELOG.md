@@ -6,7 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
--
+### Changed
+
+- Remove Python <3.10 support.
+
+### Misc
+
+- switch from setup.py to pyproject.toml
+- use uv for development package management
 
 ## [0.3.2] - 2025-05-24
 
