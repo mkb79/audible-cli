@@ -3,6 +3,9 @@ name: Upload Python Package to TestPyPI
 on:
   workflow_dispatch:
 
+env:
+  PYTHON_VERSION: "3.13"
+
 jobs:
   build-n-publish:
     name: Build and publish Audible-cli to TestPyPI
@@ -10,14 +13,19 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.11
-      - name: Install setuptools and wheel
-        run: pip install --upgrade pip setuptools wheel
-      - name: Build a binary wheel and a source tarball
-        run: python setup.py sdist bdist_wheel
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build package
+        run: |
+          uv build
+
       - name: Publish distribution to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

@@ -1,11 +1,50 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
-
 version: 2
+enable-beta-ecosystems: true
 updates:
-  - package-ecosystem: "pip" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: github-actions
+    directory: "/"
     schedule:
-      interval: "daily"
+      interval: weekly
+    groups:
+      github-actions-updates:
+        applies-to: version-updates
+        dependency-type: development
+      github-actions-security-updates:
+        applies-to: security-updates
+        dependency-type: development
+  - package-ecosystem: pip
+    directory: "/.github/workflows"
+    schedule:
+      interval: weekly
+    groups:
+      workflow-updates:
+        applies-to: version-updates
+        dependency-type: development
+      workflow-security-updates:
+        applies-to: security-updates
+        dependency-type: development
+  - package-ecosystem: pip
+    directory: "/docs"
+    schedule:
+      interval: weekly
+    groups:
+      doc-updates:
+        applies-to: version-updates
+        dependency-type: development
+      doc-security-updates:
+        applies-to: security-updates
+        dependency-type: production
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: weekly
+    # versioning-strategy: lockfile-only
+    allow:
+      - dependency-type: "all"
+    groups:
+      pip-version-updates:
+        applies-to: version-updates
+        dependency-type: development
+      pip-security-updates:
+        applies-to: security-updates
+        dependency-type: production
