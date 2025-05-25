@@ -44,7 +44,7 @@ or as the best solution using [uvx](https://github.com/astral-sh/uv)
 
 ```shell
 
-uvx audible-cli
+uvx --with audible-cli audible
 
 ```
 
@@ -58,7 +58,7 @@ page (including beta releases). At this moment Windows, Linux and macOS are supp
 
 1. Linux
     - [ubuntu latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_latest.zip)
-    - [ubuntu 20.04 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_20_04.zip)
+    - [ubuntu 22.04 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_22_04.zip)
 
 2. macOS
     - [macOS latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac.zip)
@@ -77,14 +77,12 @@ You can create them yourself this way
 ```shell
 
 git clone https://github.com/mkb79/audible-cli.git
-cd audible-cli
-pip install .[pyi]
 
 # onefile output
-pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint
+uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint
 
 # onedir output
-pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint
+uv run pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint
 ```
 
 ### Hints
