@@ -1,0 +1,10 @@
+# This file is used by WorkingCopy App
+
+/.mypy_cache/**
+/.nox/**
+/.pytest_cache/**
+/.venv/**
+/.ruff_cache/**
+__pycache__/**
+/dist/**
+/src/*
