@@ -91,6 +91,9 @@ class ConfigFile:
 
         Args:
             name: The name of the profile
+
+        Returns:
+            `True` if the profile exists, `False` otherwise.
         """
         return name in self.data["profile"]
 
@@ -99,6 +102,12 @@ class ConfigFile:
 
         Args:
             name: The name of the profile
+
+        Returns:
+            Configuration data for the profile.
+
+        Raises:
+            AudibleCliException: If the profile does not exists.
         """
         if not self.has_profile(name):
             raise AudibleCliException(f"Profile {name} does not exists")
@@ -118,7 +127,7 @@ class ConfigFile:
     ) -> str:
         """Returns the value for an option for the given profile.
 
-        Looks first, if an option is in the ``profile`` section. If not, it 
+        Looks first, if an option is in the ``profile`` section. If not, it
         searches for the option in the ``APP`` section. If not found, it
         returns the ``default``.
 
@@ -126,6 +135,10 @@ class ConfigFile:
             profile: The name of the profile
             option: The name of the option to search for
             default: The default value to return, if the option is not found
+
+        Returns:
+            The value of the specified option from the profile, application
+            configuration, or the default value if the option is not found.
         """
         profile = self.get_profile(profile)
         if option in profile:
@@ -148,11 +161,16 @@ class ConfigFile:
         Args:
             name: The name of the profile
             auth_file: The name of the auth_file
-            country_code: The country code of the marketplace to use with 
+            country_code: The country code of the marketplace to use with
                 this profile
-            is_primary: If ``True``, this profile is set as primary in the 
+            is_primary: If ``True``, this profile is set as primary in the
                 ``APP`` section
             write_config: If ``True``, save the config to file
+            **additional_options: Additional key-value pairs to be stored in the
+                profile data.
+
+        Raises:
+            ProfileAlreadyExists: If the profile already exists in the config.
         """
 
         if self.has_profile(name):
@@ -179,6 +197,9 @@ class ConfigFile:
         Args:
             name: The name of the profile
             write_config: If ``True``, save the config to file
+
+        Raises:
+            AudibleCliException: If the profile does not exist.
 
         Note:    
             Does not delete the auth file.
@@ -288,6 +309,13 @@ class Session:
         Args:
             profile: The name of the profile
             password: The password of the auth file
+
+        Returns:
+            audible.Authenticator for the profile.
+
+        Raises:
+            AudibleCliException: If the profile does not exist in the config.
+            Abort: If no password is provided.
         """
         if profile in self._auths:
             return self._auths[profile]
