@@ -46,9 +46,7 @@ def from_folder(plugin_dir: str | pathlib.Path):
                 group.add_command(cmd)
 
                 orig_help = cmd.help or ""
-                new_help = (
-                    f"(P) {orig_help}\n\nPlugin loaded from file: {cmd_path!s}"
-                )
+                new_help = f"(P) {orig_help}\n\nPlugin loaded from file: {cmd_path!s}"
                 cmd.help = new_help
             except Exception:
                 # Catch this so a busted plugin doesn't take down the CLI.
@@ -114,8 +112,7 @@ class BrokenCommand(click.Command):
     """
 
     def __init__(self, name):
-        """Define the special help messages after instantiating a `click.Command()`.
-        """
+        """Define the special help messages after instantiating a `click.Command()`."""
         click.Command.__init__(self, name)
 
         util_name = os.path.basename((sys.argv and sys.argv[0]) or __file__)
@@ -136,8 +133,7 @@ class BrokenCommand(click.Command):
         )
 
     def invoke(self, ctx):
-        """Print the traceback instead of doing nothing.
-        """
+        """Print the traceback instead of doing nothing."""
         click.echo(self.help, color=ctx.color)
         ctx.exit(1)
 

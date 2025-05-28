@@ -45,9 +45,7 @@ class AudibleCliLogHelper:
         # noinspection PyTypeChecker
         self._set_handler(handler, "ConsoleLogger", level)
 
-    def set_file_logger(
-        self, filename: str, level: str | int | None = None
-    ) -> None:
+    def set_file_logger(self, filename: str, level: str | int | None = None) -> None:
         """Set up a file logger to the audible-cli package."""
         filename = pathlib.Path(filename)
         handler = logging.FileHandler(filename)

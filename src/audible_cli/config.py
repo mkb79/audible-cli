@@ -40,9 +40,7 @@ class ConfigFile:
             is loaded.
     """
 
-    def __init__(
-        self, filename: str | pathlib.Path, file_exists: bool = True
-    ) -> None:
+    def __init__(self, filename: str | pathlib.Path, file_exists: bool = True) -> None:
         filename = pathlib.Path(filename).resolve()
         config_data = DEFAULT_CONFIG_DATA.copy()
         file_data = {}
