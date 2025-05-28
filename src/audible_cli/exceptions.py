@@ -87,7 +87,7 @@ class ItemNotPublished(AudibleCliException):
         seconds = published_in.seconds
         hours, remainder = divmod(seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
-        hms = "{:02}h:{:02}m:{:02}s".format(int(hours), int(minutes), int(seconds))
+        hms = f"{int(hours):02}h:{int(minutes):02}m:{int(seconds):02}s"
         pub_str += hms
 
         message = f"{asin} is not published. It will be available in {pub_str}"

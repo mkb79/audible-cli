@@ -1,8 +1,9 @@
 import logging
 import pathlib
 import re
+from collections.abc import Callable
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Literal, NamedTuple, Optional, Union
+from typing import Any, Literal, NamedTuple
 
 import aiofiles
 import click
@@ -41,7 +42,7 @@ class ETag:
 
 
 class File:
-    def __init__(self, file: Union[pathlib.Path, str]) -> None:
+    def __init__(self, file: pathlib.Path | str) -> None:
         if not isinstance(file, pathlib.Path):
             file = pathlib.Path(file)
         self._file = file
@@ -78,10 +79,10 @@ class File:
         read_size = min(max_bytes, file_size)
         try:
             async with aiofiles.open(
-                file=self.path, mode="r", encoding=encoding, errors=errors
+                file=self.path, encoding=encoding, errors=errors
             ) as file:
                 return await file.read(read_size)
-        except Exception:  # noqa
+        except Exception:
             return "Unknown"
 
 
@@ -90,10 +91,10 @@ class ResponseInfo:
         self._response = response
         self.headers: httpx.Headers = response.headers
         self.status_code: int = response.status_code
-        self.content_length: Optional[int] = self._get_content_length(self.headers)
-        self.content_type: Optional[str] = self._get_content_type(self.headers)
+        self.content_length: int | None = self._get_content_length(self.headers)
+        self.content_type: str | None = self._get_content_type(self.headers)
         self.accept_ranges: bool = self._does_accept_ranges(self.headers)
-        self.etag: Optional[ETag] = self._get_etag(self.headers)
+        self.etag: ETag | None = self._get_etag(self.headers)
 
     @property
     def response(self) -> httpx.Response:
@@ -114,7 +115,7 @@ class ResponseInfo:
         return does_accept_ranges
 
     @staticmethod
-    def _get_content_length(headers: httpx.Headers) -> Optional[int]:
+    def _get_content_length(headers: httpx.Headers) -> int | None:
         content_length = headers.get(CONTENT_LENGTH_HEADER)
 
         if content_length is not None:
@@ -123,11 +124,11 @@ class ResponseInfo:
         return content_length
 
     @staticmethod
-    def _get_content_type(headers: httpx.Headers) -> Optional[str]:
+    def _get_content_type(headers: httpx.Headers) -> str | None:
         return headers.get(CONTENT_TYPE_HEADER)
 
     @staticmethod
-    def _get_etag(headers: httpx.Headers) -> Optional[ETag]:
+    def _get_etag(headers: httpx.Headers) -> ETag | None:
         etag_header = headers.get(ETAG_HEADER)
         if etag_header is None:
             return etag_header
@@ -200,7 +201,7 @@ async def check_content_type(
     response: ResponseInfo,
     target_file: File,
     tmp_file: File,
-    expected_types: List[str],
+    expected_types: list[str],
     **kwargs: Any,
 ) -> Status:
     if not expected_types:
@@ -239,9 +240,9 @@ async def check_status_for_message(
 class DownloadResult(NamedTuple):
     status: Status
     destination: File
-    head_response: Optional[ResponseInfo]
-    response: Optional[ResponseInfo]
-    message: Optional[str]
+    head_response: ResponseInfo | None
+    response: ResponseInfo | None
+    message: str | None
 
 
 class DummyProgressBar:
@@ -256,8 +257,8 @@ class DummyProgressBar:
 
 
 def get_progressbar(
-    destination: pathlib.Path, total: Optional[int], start: int = 0
-) -> Union[tqdm.tqdm, DummyProgressBar]:
+    destination: pathlib.Path, total: int | None, start: int = 0
+) -> tqdm.tqdm | DummyProgressBar:
     if total is None:
         return DummyProgressBar()
 
@@ -283,19 +284,19 @@ class Downloader:
         self,
         source: httpx.URL,
         client: httpx.AsyncClient,
-        expected_types: Optional[Union[List[str], str]] = None,
-        additional_headers: Optional[Dict[str, str]] = None,
+        expected_types: list[str] | str | None = None,
+        additional_headers: dict[str, str] | None = None,
     ) -> None:
         self._source = source
         self._client = client
         self._expected_types = self._normalize_expected_types(expected_types)
         self._additional_headers = self._normalize_headers(additional_headers)
-        self._head_request: Optional[ResponseInfo] = None
+        self._head_request: ResponseInfo | None = None
 
     @staticmethod
     def _normalize_expected_types(
-        expected_types: Optional[Union[List[str], str]],
-    ) -> List[str]:
+        expected_types: list[str] | str | None,
+    ) -> list[str]:
         if not isinstance(expected_types, list):
             if expected_types is None:
                 expected_types = []
@@ -304,7 +305,7 @@ class Downloader:
         return expected_types
 
     @staticmethod
-    def _normalize_headers(headers: Optional[Dict[str, str]]) -> Dict[str, str]:
+    def _normalize_headers(headers: dict[str, str] | None) -> dict[str, str]:
         if headers is None:
             return {}
         return headers
@@ -382,8 +383,8 @@ class Downloader:
         target_file: File,
         response: ResponseInfo,
         head_response: ResponseInfo,
-        expected_types: List[str],
-    ) -> Optional[DownloadResult]:
+        expected_types: list[str],
+    ) -> DownloadResult | None:
         status = await status_check_func(
             response=response,
             tmp_file=tmp_file,
@@ -448,7 +449,7 @@ class Downloader:
         tmp_file: File,
         target_file: File,
         start: int,
-        progressbar: Union[tqdm.tqdm, DummyProgressBar],
+        progressbar: tqdm.tqdm | DummyProgressBar,
         force_reload: bool = True,
     ) -> DownloadResult:
         headers = self._additional_headers.copy()

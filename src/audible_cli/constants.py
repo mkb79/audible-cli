@@ -1,4 +1,3 @@
-from typing import Dict
 
 from audible.localization import LOCALE_TEMPLATES
 
@@ -11,7 +10,7 @@ PLUGIN_DIR_ENV: str = "AUDIBLE_PLUGIN_DIR"
 PLUGIN_ENTRY_POINT: str = "audible.cli_plugins"
 DEFAULT_AUTH_FILE_EXTENSION: str = "json"
 DEFAULT_AUTH_FILE_ENCRYPTION: str = "json"
-DEFAULT_CONFIG_DATA: Dict[str, str] = {
+DEFAULT_CONFIG_DATA: dict[str, str] = {
     "title": "Audible Config File",
     "APP": {},
     "profile": {},

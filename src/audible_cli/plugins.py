@@ -1,5 +1,4 @@
-"""
-Core components for click_plugins
+"""Core components for click_plugins
 https://github.com/click-contrib/click-plugins
 """
 
@@ -8,14 +7,12 @@ import pathlib
 import sys
 import traceback
 from importlib import import_module
-from typing import Union
 
 import click
 
 
-def from_folder(plugin_dir: Union[str, pathlib.Path]):
-    """
-    A decorator to register external CLI commands to an instance of
+def from_folder(plugin_dir: str | pathlib.Path):
+    """A decorator to register external CLI commands to an instance of
     `click.Group()`.
 
     Parameters
@@ -23,7 +20,7 @@ def from_folder(plugin_dir: Union[str, pathlib.Path]):
     plugin_dir : str
         Desc.
 
-    Returns
+    Returns:
     -------
     click.Group()
     """
@@ -50,10 +47,10 @@ def from_folder(plugin_dir: Union[str, pathlib.Path]):
 
                 orig_help = cmd.help or ""
                 new_help = (
-                    f"(P) {orig_help}\n\nPlugin loaded from file: {str(cmd_path)}"
+                    f"(P) {orig_help}\n\nPlugin loaded from file: {cmd_path!s}"
                 )
                 cmd.help = new_help
-            except Exception:  # noqa
+            except Exception:
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
                 # other than explain the error.
@@ -65,8 +62,7 @@ def from_folder(plugin_dir: Union[str, pathlib.Path]):
 
 
 def from_entry_point(entry_point_group):
-    """
-    A decorator to register external CLI commands to an instance of
+    """A decorator to register external CLI commands to an instance of
     `click.Group()`.
 
     Parameters
@@ -74,7 +70,7 @@ def from_entry_point(entry_point_group):
     entry_point_group : list
         A list producing one `pkg_resources.EntryPoint()` per iteration.
 
-    Returns
+    Returns:
     -------
     click.Group()
     """
@@ -98,7 +94,7 @@ def from_entry_point(entry_point_group):
                 orig_help = cmd.help or ""
                 new_help = f"(P) {orig_help}\n\nPlugin loaded from package: {dist_name}"
                 cmd.help = new_help
-            except Exception:  # noqa
+            except Exception:
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
                 # other than explain the error.
@@ -110,8 +106,7 @@ def from_entry_point(entry_point_group):
 
 
 class BrokenCommand(click.Command):
-    """
-    Rather than completely crash the CLI when a broken plugin is loaded, this
+    """Rather than completely crash the CLI when a broken plugin is loaded, this
     class provides a modified help message informing the user that the plugin
     is broken, and they should contact the owner. If the user executes the
     plugin or specifies `--help` a traceback is reported showing the exception
@@ -119,13 +114,11 @@ class BrokenCommand(click.Command):
     """
 
     def __init__(self, name):
+        """Define the special help messages after instantiating a `click.Command()`.
         """
-        Define the special help messages after instantiating a `click.Command()`.
-        """
-
         click.Command.__init__(self, name)
 
-        util_name = os.path.basename(sys.argv and sys.argv[0] or __file__)
+        util_name = os.path.basename((sys.argv and sys.argv[0]) or __file__)
 
         if os.environ.get("CLICK_PLUGINS_HONESTLY"):  # pragma no cover
             icon = "\U0001f4a9"
@@ -143,10 +136,8 @@ class BrokenCommand(click.Command):
         )
 
     def invoke(self, ctx):
+        """Print the traceback instead of doing nothing.
         """
-        Print the traceback instead of doing nothing.
-        """
-
         click.echo(self.help, color=ctx.color)
         ctx.exit(1)
 

@@ -8,10 +8,10 @@ from click import echo
 from ..decorators import (
     bunch_size_option,
     end_date_option,
-    start_date_option,
-    timeout_option,
     pass_client,
     pass_session,
+    start_date_option,
+    timeout_option,
     wrap_async,
 )
 from ..models import Library
@@ -20,7 +20,7 @@ from ..utils import export_to_csv
 
 @click.group("library")
 def cli():
-    """interact with library"""
+    """Interact with library"""
 
 
 async def _get_library(session, client, resolve_podcasts):
@@ -77,7 +77,7 @@ async def _get_library(session, client, resolve_podcasts):
 @pass_session
 @pass_client
 async def export_library(session, client, **params):
-    """export library"""
+    """Export library"""
 
     @wrap_async
     def _prepare_item(item):
@@ -182,7 +182,7 @@ async def export_library(session, client, **params):
 @pass_session
 @pass_client
 async def list_library(session, client, resolve_podcasts):
-    """list titles in library"""
+    """List titles in library"""
 
     @wrap_async
     def _prepare_item(item):

@@ -8,7 +8,7 @@ import httpx
 import questionary
 from click import echo
 
-from ..decorators import timeout_option, pass_client, wrap_async
+from ..decorators import pass_client, timeout_option, wrap_async
 from ..models import Catalog, Wishlist
 from ..utils import export_to_csv
 
@@ -35,7 +35,7 @@ async def _get_wishlist(client):
 
 @click.group("wishlist")
 def cli():
-    """interact with wishlist"""
+    """Interact with wishlist"""
 
 
 @cli.command("export")
@@ -58,7 +58,7 @@ def cli():
 )
 @pass_client
 async def export_wishlist(client, **params):
-    """export wishlist"""
+    """Export wishlist"""
 
     @wrap_async
     def _prepare_item(item):
@@ -149,7 +149,7 @@ async def export_wishlist(client, **params):
 @timeout_option
 @pass_client
 async def list_wishlist(client):
-    """list titles in wishlist"""
+    """List titles in wishlist"""
 
     @wrap_async
     def _prepare_item(item):
@@ -186,7 +186,7 @@ async def list_wishlist(client):
 @timeout_option
 @pass_client(limits=limits)
 async def add_wishlist(client, asin, title):
-    """add asin(s) to wishlist
+    """Add asin(s) to wishlist
 
     Run the command without any option for interactive mode.
     """
@@ -257,7 +257,7 @@ async def add_wishlist(client, asin, title):
 @timeout_option
 @pass_client(limits=limits)
 async def remove_wishlist(client, asin, title):
-    """remove asin(s) from wishlist
+    """Remove asin(s) from wishlist
 
     Run the command without any option for interactive mode.
     """

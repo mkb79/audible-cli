@@ -3,17 +3,16 @@ import io
 import logging
 import pathlib
 from difflib import SequenceMatcher
-from typing import List, Optional, Union
 
 import aiofiles
 import click
 import httpx
 import tqdm
-from PIL import Image
 from audible import Authenticator
 from audible.client import raise_for_status
 from audible.login import default_login_url_callback
-from click import echo, secho, prompt
+from click import echo, prompt, secho
+from PIL import Image
 
 from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
 
@@ -34,7 +33,6 @@ datetime_type = click.DateTime(
 
 def prompt_captcha_callback(captcha_url: str) -> str:
     """Helper function for handling captcha."""
-
     echo("Captcha found")
     if click.confirm("Open Captcha with default image viewer", default=True):
         captcha = httpx.get(captcha_url).content
@@ -51,7 +49,6 @@ def prompt_captcha_callback(captcha_url: str) -> str:
 
 def prompt_otp_callback() -> str:
     """Helper function for handling 2-factor authentication."""
-
     echo("2FA is activated for this account.")
     guess = prompt("Please enter OTP Code")
     return str(guess).strip().lower()
@@ -74,11 +71,11 @@ def full_response_callback(resp: httpx.Response) -> httpx.Response:
 
 
 def build_auth_file(
-    filename: Union[str, pathlib.Path],
-    username: Optional[str],
-    password: Optional[str],
+    filename: str | pathlib.Path,
+    username: str | None,
+    password: str | None,
     country_code: str,
-    file_password: Optional[str] = None,
+    file_password: str | None = None,
     external_login: bool = False,
     with_username: bool = False,
 ) -> None:
@@ -167,11 +164,11 @@ class DummyProgressBar:
 class Downloader:
     def __init__(
         self,
-        url: Union[httpx.URL, str],
-        file: Union[pathlib.Path, str],
+        url: httpx.URL | str,
+        file: pathlib.Path | str,
         client,
         overwrite_existing: bool,
-        content_type: Optional[Union[List[str], str]] = None,
+        content_type: list[str] | str | None = None,
     ) -> None:
         self._url = url
         self._file = pathlib.Path(file).resolve()
@@ -290,7 +287,7 @@ class Downloader:
 
 
 def export_to_csv(
-    file: pathlib.Path, data: list, headers: Union[list, tuple], dialect: str
+    file: pathlib.Path, data: list, headers: list | tuple, dialect: str
 ) -> None:
     with file.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=headers, dialect=dialect)

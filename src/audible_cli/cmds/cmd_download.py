@@ -2,8 +2,8 @@ import asyncio
 import asyncio.log
 import asyncio.sslproto
 import json
-import pathlib
 import logging
+import pathlib
 from datetime import datetime
 
 import aiofiles
@@ -16,12 +16,13 @@ from click import echo
 from ..decorators import (
     bunch_size_option,
     end_date_option,
-    start_date_option,
-    timeout_option,
     pass_client,
     pass_session,
+    start_date_option,
+    timeout_option,
 )
-from ..downloader import Downloader as NewDownloader, Status
+from ..downloader import Downloader as NewDownloader
+from ..downloader import Status
 from ..exceptions import (
     AudibleCliException,
     DirectoryDoesNotExists,
@@ -30,7 +31,7 @@ from ..exceptions import (
     VoucherNeedRefresh,
 )
 from ..models import Library
-from ..utils import datetime_type, Downloader
+from ..utils import Downloader, datetime_type
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_download")
@@ -163,7 +164,7 @@ counter = DownloadCounter()
 async def download_cover(
     client, output_dir, base_filename, item, res, overwrite_existing
 ):
-    filename = f"{base_filename}_({str(res)}).jpg"
+    filename = f"{base_filename}_({res!s}).jpg"
     filepath = output_dir / filename
 
     url = item.get_cover_url(res)
@@ -355,7 +356,7 @@ async def download_aax(
 
 async def _reuse_voucher(lr_file, item):
     logger.info(f"Loading data from voucher file {lr_file}.")
-    async with aiofiles.open(lr_file, "r") as f:
+    async with aiofiles.open(lr_file) as f:
         lr = await f.read()
     lr = json.loads(lr)
     content_license = lr["content_license"]
@@ -372,15 +373,14 @@ async def _reuse_voucher(lr_file, item):
     # Verification of allowed user
     if user_id is None:
         logger.debug("No user id found. Skip user verification.")
+    elif "allowed_users" in content_license:
+        allowed_users = content_license["allowed_users"]
+        if allowed_users and user_id not in allowed_users:
+            # Don't proceed here to prevent overwriting voucher file
+            msg = f"The current user is not entitled to use the voucher {lr_file}."
+            raise AudibleCliException(msg)
     else:
-        if "allowed_users" in content_license:
-            allowed_users = content_license["allowed_users"]
-            if allowed_users and user_id not in allowed_users:
-                # Don't proceed here to prevent overwriting voucher file
-                msg = f"The current user is not entitled to use the voucher {lr_file}."
-                raise AudibleCliException(msg)
-        else:
-            logger.debug(f"{lr_file} does not contain allowed users key.")
+        logger.debug(f"{lr_file} does not contain allowed users key.")
 
     # Verification of voucher validity
     if "refresh_date" in content_license:
@@ -715,7 +715,7 @@ def display_counter():
 @pass_session
 @pass_client(headers=CLIENT_HEADERS)
 async def cli(session, api_client, **params):
-    """download audiobook(s) from library"""
+    """Download audiobook(s) from library"""
     client = api_client.session
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
 

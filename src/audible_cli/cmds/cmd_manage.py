@@ -16,22 +16,22 @@ logger = logging.getLogger("audible_cli.cmds.cmd_manage")
 
 @click.group("manage")
 def cli():
-    """manage audible-cli"""
+    """Manage audible-cli"""
 
 
 @cli.group("config")
 def manage_config():
-    """manage config"""
+    """Manage config"""
 
 
 @cli.group("profile")
 def manage_profiles():
-    """manage profiles"""
+    """Manage profiles"""
 
 
 @cli.group("auth-file")
 def manage_auth_files():
-    """manage auth files"""
+    """Manage auth files"""
 
 
 @manage_config.command("edit")

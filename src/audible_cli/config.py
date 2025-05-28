@@ -1,7 +1,7 @@
 import logging
 import os
 import pathlib
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import audible
 import click
@@ -41,7 +41,7 @@ class ConfigFile:
     """
 
     def __init__(
-        self, filename: Union[str, pathlib.Path], file_exists: bool = True
+        self, filename: str | pathlib.Path, file_exists: bool = True
     ) -> None:
         filename = pathlib.Path(filename).resolve()
         config_data = DEFAULT_CONFIG_DATA.copy()
@@ -73,12 +73,12 @@ class ConfigFile:
         return self.filename.parent
 
     @property
-    def data(self) -> Dict[str, Union[str, Dict]]:
+    def data(self) -> dict[str, str | dict]:
         """Returns the configuration data"""
         return self._config_data
 
     @property
-    def app_config(self) -> Dict[str, str]:
+    def app_config(self) -> dict[str, str]:
         """Returns the configuration data for the APP section"""
         return self.data["APP"]
 
@@ -93,7 +93,7 @@ class ConfigFile:
         """
         return name in self.data["profile"]
 
-    def get_profile(self, name: str) -> Dict[str, str]:
+    def get_profile(self, name: str) -> dict[str, str]:
         """Returns the configuration data for these profile name
 
         Args:
@@ -116,7 +116,7 @@ class ConfigFile:
         return self.app_config["primary_profile"]
 
     def get_profile_option(
-        self, profile: str, option: str, default: Optional[str] = None
+        self, profile: str, option: str, default: str | None = None
     ) -> str:
         """Returns the value for an option for the given profile.
 
@@ -143,7 +143,7 @@ class ConfigFile:
     def add_profile(
         self,
         name: str,
-        auth_file: Union[str, pathlib.Path],
+        auth_file: str | pathlib.Path,
         country_code: str,
         is_primary: bool = False,
         write_config: bool = True,
@@ -165,7 +165,6 @@ class ConfigFile:
         Raises:
             ProfileAlreadyExists: If the profile already exists in the config.
         """
-
         if self.has_profile(name):
             raise ProfileAlreadyExists(name)
 
@@ -207,7 +206,7 @@ class ConfigFile:
         if write_config:
             self.write_config()
 
-    def write_config(self, filename: Optional[Union[str, pathlib.Path]] = None) -> None:
+    def write_config(self, filename: str | pathlib.Path | None = None) -> None:
         """Write the config data to file
 
         Args:
@@ -229,9 +228,9 @@ class Session:
     """Holds the settings for the current session"""
 
     def __init__(self) -> None:
-        self._auths: Dict[str, Authenticator] = {}
-        self._config: Optional[CONFIG_FILE] = None
-        self._params: Dict[str, Any] = {}
+        self._auths: dict[str, Authenticator] = {}
+        self._config: CONFIG_FILE | None = None
+        self._params: dict[str, Any] = {}
         self._app_dir: pathlib.Path = get_app_dir()
         self._plugin_dir: pathlib.Path = get_plugin_dir()
 
@@ -285,7 +284,7 @@ class Session:
         return profile
 
     def get_auth_for_profile(
-        self, profile: str, password: Optional[str] = None
+        self, profile: str, password: str | None = None
     ) -> audible.Authenticator:
         """Returns an Authenticator for a profile
 
@@ -347,7 +346,7 @@ class Session:
         return self.get_auth_for_profile(profile, password)
 
     def get_client_for_profile(
-        self, profile: str, password: Optional[str] = None, **kwargs
+        self, profile: str, password: str | None = None, **kwargs
     ) -> AsyncClient:
         auth = self.get_auth_for_profile(profile, password)
         kwargs.setdefault("timeout", self.params.get("timeout", 5))

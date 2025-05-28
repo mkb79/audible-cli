@@ -1,13 +1,15 @@
 """Converts the credentials.json file from OpenAudible >= v2.4 beta to an
 audible-cli auth file. The credentials.json file from OpenAudible leaves
 unchanged, so you can use one device registration for OpenAudible and
-audible-cli."""
+audible-cli.
+"""
 
 import json
 import pathlib
 
 import audible
 import click
+
 from audible_cli.config import pass_session
 
 
@@ -68,7 +70,8 @@ def make_auth_file(fn, origin):
 def cli(session, input):
     """Converts a OpenAudible credential file to a audible-cli auth file
 
-    Stores the auth files in app dir"""
+    Stores the auth files in app dir
+    """
     fdata = pathlib.Path(input).read_text("utf-8")
     fdata = json.loads(fdata)
 

@@ -1,9 +1,12 @@
 import asyncio
 import logging
 import sys
+from importlib.metadata import entry_points
 
 import click
 
+from . import plugins
+from ._logging import click_basic_config
 from .cmds import build_in_cmds, cmd_quickstart
 from .config import get_plugin_dir
 from .constants import PLUGIN_ENTRY_POINT
@@ -14,10 +17,6 @@ from .decorators import (
     version_option,
 )
 from .exceptions import AudibleCliException
-from ._logging import click_basic_config
-from . import plugins
-
-from importlib.metadata import entry_points
 
 
 logger = logging.getLogger("audible_cli")

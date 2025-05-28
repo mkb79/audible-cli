@@ -1,5 +1,4 @@
-"""
-This script replaces the chapter titles from a ffmetadata file with the one
+"""This script replaces the chapter titles from a ffmetadata file with the one
 extracted from an API metadata/voucher file
 
 Example:

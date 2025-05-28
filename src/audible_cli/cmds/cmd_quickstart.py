@@ -3,7 +3,7 @@ import pathlib
 import sys
 
 import click
-from click import echo, secho, prompt
+from click import echo, prompt, secho
 from tabulate import tabulate
 
 from .. import __version__
