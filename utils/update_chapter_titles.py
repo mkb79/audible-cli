@@ -52,20 +52,23 @@ class ApiMeta:
         return len(self.get_chapters())
 
     def get_chapters(self):
-        return self._meta_parsed["content_metadata"]["chapter_info"][
-            "chapters"]
+        return self._meta_parsed["content_metadata"]["chapter_info"]["chapters"]
 
     def get_intro_duration_ms(self):
         return self._meta_parsed["content_metadata"]["chapter_info"][
-            "brandIntroDurationMs"]
+            "brandIntroDurationMs"
+        ]
 
     def get_outro_duration_ms(self):
         return self._meta_parsed["content_metadata"]["chapter_info"][
-            "brandOutroDurationMs"]
+            "brandOutroDurationMs"
+        ]
 
     def get_runtime_length_ms(self):
         return self._meta_parsed["content_metadata"]["chapter_info"][
-            "runtime_length_ms"]
+            "runtime_length_ms"
+        ]
+
 
 class FFMeta:
     SECTION = re.compile(r"\[(?P<header>[^]]+)\]")
@@ -117,12 +120,11 @@ class FFMeta:
             elif section == "CHAPTER":
                 # TODO: Tue etwas
                 for chapter in self._ffmeta_parsed[section]:
-                    self._write_section(fp, section,
-                                        self._ffmeta_parsed[section][chapter],
-                                        d)
+                    self._write_section(
+                        fp, section, self._ffmeta_parsed[section][chapter], d
+                    )
             else:
-                self._write_section(fp, section, self._ffmeta_parsed[section],
-                                    d)
+                self._write_section(fp, section, self._ffmeta_parsed[section], d)
 
     def _write_section(self, fp, section_name, section_items, delimiter):
         """Write a single section to the specified `fp`."""
@@ -152,7 +154,7 @@ class FFMeta:
 
     def update_chapters_from_api_meta(self, api_meta, separate_branding=True):
         """Replace all chapter data from api meta file.
-        
+
         This replaces TIMEBASE, START, END and title. If api meta files contains
         more chapters than ffmetadata file, the additionell chapters are added.
         If separate_branding is True Audible Branding Intro and Outro will become
@@ -165,7 +167,7 @@ class FFMeta:
             # This happens on some of my books
             # but runtime is identical +- few ms
             echo("Missmatch between chapter numbers.")
-            click.confirm('Do you want to continue?', abort=True)
+            click.confirm("Do you want to continue?", abort=True)
 
         echo(f"Found {self.count_chapters()} chapters to prepare.")
 
@@ -184,18 +186,24 @@ class FFMeta:
             outro_dur_ms = api_meta.get_outro_duration_ms()
             last["length_ms"] -= outro_dur_ms
 
-            api_chapters.append({
-                "length_ms": intro_dur_ms,
-                "start_offset_ms": 0,
-                "start_offset_sec": 0,
-                "title": "Intro"
-            })
-            api_chapters.append({
-                "length_ms": outro_dur_ms,
-                "start_offset_ms": api_meta.get_runtime_length_ms() - outro_dur_ms,
-                "start_offset_sec": round((api_meta.get_runtime_length_ms() - outro_dur_ms) / 1000),
-                "title": "Outro"
-            })
+            api_chapters.append(
+                {
+                    "length_ms": intro_dur_ms,
+                    "start_offset_ms": 0,
+                    "start_offset_sec": 0,
+                    "title": "Intro",
+                }
+            )
+            api_chapters.append(
+                {
+                    "length_ms": outro_dur_ms,
+                    "start_offset_ms": api_meta.get_runtime_length_ms() - outro_dur_ms,
+                    "start_offset_sec": round(
+                        (api_meta.get_runtime_length_ms() - outro_dur_ms) / 1000
+                    ),
+                    "title": "Outro",
+                }
+            )
             api_chapters.sort(key=operator.itemgetter("start_offset_ms"))
 
         num_chap = 0
@@ -208,7 +216,7 @@ class FFMeta:
                 "TIMEBASE": "1/1000",
                 "START": chap_start,
                 "END": chap_end,
-                "title": chapter["title"]
+                "title": chapter["title"],
             }
         self._ffmeta_parsed["CHAPTER"] = new_chapters
 
@@ -218,31 +226,31 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 @click.command(context_settings=CONTEXT_SETTINGS)
 @click.option(
-    "--ffmeta", "-f",
-    type=click.Path(
-        exists=True, file_okay=True, readable=True
-    ),
+    "--ffmeta",
+    "-f",
+    type=click.Path(exists=True, file_okay=True, readable=True),
     required=True,
-    help="ffmetadata file extracted from file with ffmpeg"
+    help="ffmetadata file extracted from file with ffmpeg",
 )
 @click.option(
-    "--apimeta", "-a",
-    type=click.Path(
-        exists=True, file_okay=True, readable=True
-    ),
+    "--apimeta",
+    "-a",
+    type=click.Path(exists=True, file_okay=True, readable=True),
     required=True,
-    help="metadata from api"
+    help="metadata from api",
 )
 @click.option(
-    "--outfile", "-o",
+    "--outfile",
+    "-o",
     type=click.Path(exists=False, file_okay=True),
     required=True,
-    help="filename to store prepared ffmeta"
+    help="filename to store prepared ffmeta",
 )
 @click.option(
-    "--separate-branding", "-s",
+    "--separate-branding",
+    "-s",
     is_flag=True,
-    help="Separate Intro and Outro branding into own chapters"
+    help="Separate Intro and Outro branding into own chapters",
 )
 def cli(ffmeta, apimeta, outfile, separate_branding):
     ffmeta_class = FFMeta(ffmeta)

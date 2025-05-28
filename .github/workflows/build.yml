@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     tags:
-      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+      - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
 
 env:
   PYTHON_VERSION: "3.13"
@@ -15,16 +15,16 @@ jobs:
     outputs:
       release_url: ${{ steps.create-release.outputs.upload_url }}
     steps:
-    - name: Create Release
-      id: create-release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
+      - name: Create Release
+        id: create-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
 
   build:
     name: Build packages
@@ -36,72 +36,72 @@ jobs:
           - os: ubuntu-latest
             TARGET: linux
             CMD_BUILD: >
-                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
-                cd dist/ &&
-                zip -r9 audible_linux_ubuntu_latest audible
+              uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+              cd dist/ &&
+              zip -r9 audible_linux_ubuntu_latest audible
             OUT_FILE_NAME: audible_linux_ubuntu_latest.zip
-            ASSET_MIME: application/zip  # application/octet-stream
+            ASSET_MIME: application/zip # application/octet-stream
           - os: ubuntu-22.04
             TARGET: linux
             CMD_BUILD: >
-                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
-                cd dist/ &&
-                zip -r9 audible_linux_ubuntu_22_04 audible
+              uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+              cd dist/ &&
+              zip -r9 audible_linux_ubuntu_22_04 audible
             OUT_FILE_NAME: audible_linux_ubuntu_22_04.zip
-            ASSET_MIME: application/zip  # application/octet-stream
+            ASSET_MIME: application/zip # application/octet-stream
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
-                cd dist/ &&
-                zip -r9 audible_mac audible
+              uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+              cd dist/ &&
+              zip -r9 audible_mac audible
             OUT_FILE_NAME: audible_mac.zip
             ASSET_MIME: application/zip
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                uv run pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
-                cd dist/ &&
-                zip -r9 audible_mac_dir audible
+              uv run pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+              cd dist/ &&
+              zip -r9 audible_mac_dir audible
             OUT_FILE_NAME: audible_mac_dir.zip
-            ASSET_MIME: application/zip 
+            ASSET_MIME: application/zip
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
-                uv run pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
-                cd dist/ &&
-                powershell Compress-Archive audible audible_win_dir.zip
+              uv run pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+              cd dist/ &&
+              powershell Compress-Archive audible audible_win_dir.zip
             OUT_FILE_NAME: audible_win_dir.zip
             ASSET_MIME: application/zip
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
-                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
-                cd dist/ &&
-                powershell Compress-Archive audible.exe audible_win.zip
+              uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+              cd dist/ &&
+              powershell Compress-Archive audible.exe audible_win.zip
             OUT_FILE_NAME: audible_win.zip
             ASSET_MIME: application/zip
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
 
-    - name: Build with pyinstaller for ${{matrix.TARGET}}
-      run: ${{matrix.CMD_BUILD}}
+      - name: Build with pyinstaller for ${{matrix.TARGET}}
+        run: ${{matrix.CMD_BUILD}}
 
-    - name: Upload Release Asset
-      id: upload-release-asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.createrelease.outputs.release_url }}
-        asset_path: ./dist/${{ matrix.OUT_FILE_NAME}}
-        asset_name: ${{ matrix.OUT_FILE_NAME}}
-        asset_content_type: ${{ matrix.ASSET_MIME}}
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.createrelease.outputs.release_url }}
+          asset_path: ./dist/${{ matrix.OUT_FILE_NAME}}
+          asset_name: ${{ matrix.OUT_FILE_NAME}}
+          asset_content_type: ${{ matrix.ASSET_MIME}}

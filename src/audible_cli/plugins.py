@@ -2,6 +2,7 @@
 Core components for click_plugins
 https://github.com/click-contrib/click-plugins
 """
+
 import os
 import pathlib
 import sys
@@ -26,6 +27,7 @@ def from_folder(plugin_dir: Union[str, pathlib.Path]):
     -------
     click.Group()
     """
+
     def decorator(group):
         if not isinstance(group, click.Group):
             raise TypeError(
@@ -76,6 +78,7 @@ def from_entry_point(entry_point_group):
     -------
     click.Group()
     """
+
     def decorator(group):
         if not isinstance(group, click.Group):
             raise TypeError(
@@ -124,21 +127,22 @@ class BrokenCommand(click.Command):
 
         util_name = os.path.basename(sys.argv and sys.argv[0] or __file__)
 
-        if os.environ.get('CLICK_PLUGINS_HONESTLY'):  # pragma no cover
-            icon = u'\U0001F4A9'
+        if os.environ.get("CLICK_PLUGINS_HONESTLY"):  # pragma no cover
+            icon = "\U0001f4a9"
         else:
-            icon = u'\u2020'
+            icon = "\u2020"
 
         self.help = (
             "\nWarning: entry point could not be loaded. Contact "
-            "its author for help.\n\n\b\n"
-            + traceback.format_exc())
+            "its author for help.\n\n\b\n" + traceback.format_exc()
+        )
         self.short_help = (
-            icon + " Warning: could not load plugin. See `%s %s --help`."
-            % (util_name, self.name))
+            icon
+            + " Warning: could not load plugin. See `%s %s --help`."
+            % (util_name, self.name)
+        )
 
     def invoke(self, ctx):
-
         """
         Print the traceback instead of doing nothing.
         """

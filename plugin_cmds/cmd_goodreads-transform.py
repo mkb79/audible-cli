@@ -7,7 +7,7 @@ from audible_cli.decorators import (
     bunch_size_option,
     timeout_option,
     pass_client,
-    pass_session
+    pass_session,
 )
 from audible_cli.models import Library
 from audible_cli.utils import export_to_csv
@@ -19,11 +19,12 @@ logger = logging.getLogger("audible_cli.cmds.cmd_goodreads-transform")
 
 @click.command("goodreads-transform")
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     type=click.Path(path_type=pathlib.Path),
     default=pathlib.Path().cwd() / "library.csv",
     show_default=True,
-    help="output file"
+    help="output file",
 )
 @timeout_option
 @bunch_size_option
@@ -36,10 +37,8 @@ async def cli(session, client, output):
     bunch_size = session.params.get("bunch_size")
     library = await Library.from_api_full_sync(
         client,
-        response_groups=(
-            "product_details, contributors, is_finished, product_desc"
-        ),
-        bunch_size=bunch_size
+        response_groups=("product_details, contributors, is_finished, product_desc"),
+        bunch_size=bunch_size,
     )
 
     logger.debug("prepare library")
@@ -48,12 +47,7 @@ async def cli(session, client, output):
     logger.debug("write data rows to file")
 
     headers = ("isbn", "Date Added", "Date Read", "Title")
-    export_to_csv(
-        file=output,
-        data=library,
-        headers=headers,
-        dialect="excel"
-    )
+    export_to_csv(file=output, data=library, headers=headers, dialect="excel")
 
     logger.info(f"File saved to {output}")
 
@@ -72,7 +66,7 @@ def _prepare_library_for_export(library):
         if authors is not None:
             authors = ", ".join([a["name"] for a in authors])
         is_finished = i.is_finished
-        
+
         isbn = i.isbn
         if isbn is None:
             isbn_counter += 1
@@ -85,9 +79,11 @@ def _prepare_library_for_export(library):
         date_added = i.library_status
         if date_added is not None:
             date_added = date_added["date_added"]
-            date_added = datetime.strptime(
-                date_added, '%Y-%m-%dT%H:%M:%S.%fZ'
-            ).replace(tzinfo=timezone.utc).astimezone()    
+            date_added = (
+                datetime.strptime(date_added, "%Y-%m-%dT%H:%M:%S.%fZ")
+                .replace(tzinfo=timezone.utc)
+                .astimezone()
+            )
             date_added = date_added.astimezone().date().isoformat()
 
         date_read = None
@@ -104,7 +100,7 @@ def _prepare_library_for_export(library):
     logger.debug(f"ISBNs requested with isbntools: {isbn_counter}")
     logger.debug(f"No result with isbntools: {isbn_no_result_counter}")
     logger.debug(
-        f"title skipped from file due to no ISBN or title not read: "
-        f"{skipped_items}")
+        f"title skipped from file due to no ISBN or title not read: {skipped_items}"
+    )
 
     return prepared_library

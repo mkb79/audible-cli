@@ -11,7 +11,7 @@ from .decorators import (
     password_option,
     profile_option,
     verbosity_option,
-    version_option
+    version_option,
 )
 from .exceptions import AudibleCliException
 from ._logging import click_basic_config

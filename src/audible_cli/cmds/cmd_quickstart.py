@@ -8,11 +8,7 @@ from tabulate import tabulate
 
 from .. import __version__
 from ..config import ConfigFile
-from ..constants import (
-    AVAILABLE_MARKETPLACES,
-    CONFIG_FILE,
-    DEFAULT_AUTH_FILE_EXTENSION
-)
+from ..constants import AVAILABLE_MARKETPLACES, CONFIG_FILE, DEFAULT_AUTH_FILE_EXTENSION
 from ..decorators import pass_session
 from ..utils import build_auth_file
 
@@ -25,12 +21,10 @@ def tabulate_summary(d: dict) -> str:
     data = [
         ["profile_name", d.get("profile_name")],
         ["auth_file", d.get("auth_file")],
-        ["country_code", d.get("country_code")]
+        ["country_code", d.get("country_code")],
     ]
     if "use_existing_auth_file" not in d:
-        data.append(
-            ["auth_file_password",
-             "***" if "auth_file_password" in d else "-"])
+        data.append(["auth_file_password", "***" if "auth_file_password" in d else "-"])
         data.append(["audible_username", d.get("audible_username")])
         data.append(["audible_password", "***"])
 
@@ -39,20 +33,19 @@ def tabulate_summary(d: dict) -> str:
 
 def ask_user(config: ConfigFile):
     d = {}
-    welcome_message = (
-        f"\nWelcome to the audible-cli {__version__} quickstart utility.")
+    welcome_message = f"\nWelcome to the audible-cli {__version__} quickstart utility."
     secho(welcome_message, bold=True)
     secho(len(welcome_message) * "=", bold=True)
 
-    intro = """Quickstart will guide you through the process of build a basic 
+    intro = """Quickstart will guide you through the process of build a basic
 config, create a first profile and assign an auth file to the profile now.
 
-The profile created by quickstart will set as primary. It will be used, if no 
+The profile created by quickstart will set as primary. It will be used, if no
 other profile is chosen.
 
-An auth file can be shared between multiple profiles. Simply enter the name of 
-an existing auth file when asked about it. Auth files have to be stored in the 
-config dir. If the auth file doesn't exists, it will be created. In this case, 
+An auth file can be shared between multiple profiles. Simply enter the name of
+an existing auth file when asked about it. Auth files have to be stored in the
+config dir. If the auth file doesn't exists, it will be created. In this case,
 an authentication to the audible server is necessary to register a new device.
 """
     echo()
@@ -63,25 +56,28 @@ an authentication to the audible server is necessary to register a new device.
     echo(path)
 
     echo()
-    echo("Please enter values for the following settings (just press Enter "
-         "to accept a default value, if one is given in brackets).")
+    echo(
+        "Please enter values for the following settings (just press Enter "
+        "to accept a default value, if one is given in brackets)."
+    )
 
     echo()
     d["profile_name"] = prompt(
-        "Please enter a name for your primary profile",
-        default="audible")
+        "Please enter a name for your primary profile", default="audible"
+    )
 
     echo()
     d["country_code"] = prompt(
         "Enter a country code for the profile",
         show_choices=False,
-        type=click.Choice(AVAILABLE_MARKETPLACES)
+        type=click.Choice(AVAILABLE_MARKETPLACES),
     )
 
     echo()
     d["auth_file"] = prompt(
         "Please enter a name for the auth file",
-        default=d["profile_name"] + "." + DEFAULT_AUTH_FILE_EXTENSION)
+        default=d["profile_name"] + "." + DEFAULT_AUTH_FILE_EXTENSION,
+    )
 
     while (path / d["auth_file"]).exists():
         echo()
@@ -89,8 +85,8 @@ an authentication to the audible server is necessary to register a new device.
         echo()
 
         d["use_existing_auth_file"] = click.confirm(
-            "Should this file be used for the new profile",
-            default=False)
+            "Should this file be used for the new profile", default=False
+        )
 
         if d["use_existing_auth_file"]:
             echo()
@@ -100,41 +96,41 @@ an authentication to the audible server is necessary to register a new device.
 
         echo()
         d["auth_file"] = prompt(
-            "Please enter a new name for the auth file "
-            "(or just Enter to exit)",
-            default=""
+            "Please enter a new name for the auth file (or just Enter to exit)",
+            default="",
         )
         if not d["auth_file"]:
             sys.exit(1)
 
     echo()
-    encrypt_file = click.confirm(
-        "Do you want to encrypt the auth file?",
-        default=False)
+    encrypt_file = click.confirm("Do you want to encrypt the auth file?", default=False)
 
     if encrypt_file:
         echo()
         d["auth_file_password"] = prompt(
             "Please enter a password for the auth file",
-            confirmation_prompt=True, hide_input=True)
+            confirmation_prompt=True,
+            hide_input=True,
+        )
 
     echo()
     d["external_login"] = click.confirm(
-        "Do you want to login with external browser?",
-        default=False)
+        "Do you want to login with external browser?", default=False
+    )
     d["audible_username"] = None
     d["audible_password"] = None
 
     echo()
     d["with_username"] = click.confirm(
-        "Do you want to login with a pre-amazon Audible account?",
-        default=False)
+        "Do you want to login with a pre-amazon Audible account?", default=False
+    )
 
     if not d["external_login"]:
         d["audible_username"] = prompt("Please enter your amazon username")
         d["audible_password"] = prompt(
             "Please enter your amazon password",
-            hide_input=True, confirmation_prompt=True
+            hide_input=True,
+            confirmation_prompt=True,
         )
 
     return d
@@ -147,8 +143,10 @@ def cli(session):
     config_file: pathlib.Path = session.app_dir / CONFIG_FILE
     config = ConfigFile(config_file, file_exists=False)
     if config_file.is_file():
-        m = f"Config file {config_file} already exists. Quickstart will " \
+        m = (
+            f"Config file {config_file} already exists. Quickstart will "
             f"not overwrite existing files."
+        )
         logger.error(m)
         raise click.Abort()
 
@@ -166,7 +164,7 @@ def cli(session):
             country_code=d.get("country_code"),
             file_password=d.get("auth_file_password"),
             external_login=d.get("external_login"),
-            with_username=d.get("with_username")
+            with_username=d.get("with_username"),
         )
 
     config.add_profile(

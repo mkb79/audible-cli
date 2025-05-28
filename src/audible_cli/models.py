@@ -19,7 +19,7 @@ from .exceptions import (
     LicenseDenied,
     NoDownloadUrl,
     NotDownloadableAsAAX,
-    ItemNotPublished
+    ItemNotPublished,
 )
 from .utils import full_response_callback, LongestSubString
 
@@ -29,11 +29,11 @@ logger = logging.getLogger("audible_cli.models")
 
 class BaseItem:
     def __init__(
-            self,
-            data: dict,
-            api_client: audible.AsyncClient,
-            parent: Optional["BaseItem"] = None,
-            response_groups: Optional[List] = None
+        self,
+        data: dict,
+        api_client: audible.AsyncClient,
+        parent: Optional["BaseItem"] = None,
+        response_groups: Optional[List] = None,
     ) -> None:
         self._data = self._prepare_data(data)
         self._client = api_client
@@ -73,9 +73,7 @@ class BaseItem:
         cleaned_title = unicodedata.normalize("NFKD", self.full_title or "")
         cleaned_title = cleaned_title.encode("ASCII", "ignore")
         cleaned_title = cleaned_title.replace(b" ", b"_")
-        slug_title = "".join(
-            chr(c) for c in cleaned_title if chr(c) in valid_chars
-        )
+        slug_title = "".join(chr(c) for c in cleaned_title if chr(c) in valid_chars)
 
         if len(slug_title) < 2:
             return self.asin
@@ -85,9 +83,7 @@ class BaseItem:
     def create_base_filename(self, mode: str):
         supported_modes = ("ascii", "asin_ascii", "unicode", "asin_unicode")
         if mode not in supported_modes:
-            raise AudibleCliException(
-                f"Unsupported mode {mode} for name creation"
-            )
+            raise AudibleCliException(f"Unsupported mode {mode} for name creation")
 
         if "ascii" in mode:
             base_filename = self.full_title_slugify
@@ -127,13 +123,16 @@ class BaseItem:
 
     def is_parent_podcast(self):
         if "content_delivery_type" in self and "content_type" in self:
-            if (self.content_delivery_type in ("Periodical", "PodcastParent")
-                    or self.content_type == "Podcast") and self.has_children:
+            if (
+                self.content_delivery_type in ("Periodical", "PodcastParent")
+                or self.content_type == "Podcast"
+            ) and self.has_children:
                 return True
 
     def is_published(self):
         if (
-            self.content_delivery_type and self.content_delivery_type == "AudioPart"
+            self.content_delivery_type
+            and self.content_delivery_type == "AudioPart"
             and self._parent
         ):
             publication_datetime = self._parent.publication_datetime
@@ -141,9 +140,7 @@ class BaseItem:
             publication_datetime = self.publication_datetime
 
         if publication_datetime is not None:
-            pub_date = datetime.strptime(
-                publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
-            )
+            pub_date = datetime.strptime(publication_datetime, "%Y-%m-%dT%H:%M:%SZ")
             now = datetime.utcnow()
             return now > pub_date
 
@@ -156,7 +153,11 @@ class LibraryItem(BaseItem):
         """If quality is not ``best``, ensures the given quality is present in
         them codecs list. Otherwise, will find the best aax quality available
         """
-        assert quality in ("best", "high", "normal",)
+        assert quality in (
+            "best",
+            "high",
+            "normal",
+        )
 
         # if available_codecs is None the item can't be downloaded as aax
         if self.available_codecs is None:
@@ -164,8 +165,7 @@ class LibraryItem(BaseItem):
 
         verify = None
         if quality != "best":
-            verify = CODEC_HIGH_QUALITY if quality == "high" else \
-                CODEC_NORMAL_QUALITY
+            verify = CODEC_HIGH_QUALITY if quality == "high" else CODEC_NORMAL_QUALITY
 
         best = (None, 0, 0, None)
         for codec in self.available_codecs:
@@ -183,7 +183,7 @@ class LibraryItem(BaseItem):
                             codec["name"].upper(),
                             sample_rate,
                             bitrate,
-                            codec["enhanced_codec"]
+                            codec["enhanced_codec"],
                         )
 
                 except ValueError:
@@ -197,36 +197,38 @@ class LibraryItem(BaseItem):
 
     async def get_child_items(self, **request_params) -> Optional["Library"]:
         """Get child elements of MultiPartBooks and Podcasts
-        
+
         With these all parts of a MultiPartBook or all episodes of a Podcasts
         can be shown.
         """
 
-        # Only items with content_delivery_type 
+        # Only items with content_delivery_type
         # MultiPartBook or Periodical have child elements
         if not self.has_children:
             return
 
-        if "response_groups" not in request_params and \
-                self._response_groups is not None:
+        if (
+            "response_groups" not in request_params
+            and self._response_groups is not None
+        ):
             response_groups = ", ".join(self._response_groups)
             request_params["response_groups"] = response_groups
 
         request_params["parent_asin"] = self.asin
         children = await Library.from_api_full_sync(
-            api_client=self._client,
-            **request_params
+            api_client=self._client, **request_params
         )
 
-        if self.is_parent_podcast() and "episode_count" in self and \
-                self.episode_count is not None:
+        if (
+            self.is_parent_podcast()
+            and "episode_count" in self
+            and self.episode_count is not None
+        ):
             if int(self.episode_count) != len(children):
-
                 if "response_groups" in request_params:
                     request_params.pop("response_groups")
                 children = await Catalog.from_api(
-                    api_client=self._client,
-                    **request_params
+                    api_client=self._client, **request_params
                 )
 
         for child in children:
@@ -248,9 +250,7 @@ class LibraryItem(BaseItem):
             raise ItemNotPublished(self.asin, self.publication_datetime)
 
         if not self.is_downloadable():
-            raise AudibleCliException(
-                f"{self.full_title} is not downloadable."
-            )
+            raise AudibleCliException(f"{self.full_title} is not downloadable.")
 
         codec, codec_name = self._get_codec(quality)
         if codec is None or self.is_ayce:
@@ -258,15 +258,12 @@ class LibraryItem(BaseItem):
                 f"{self.full_title} is not downloadable in AAX format"
             )
 
-        url = (
-            "https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/"
-            "FSDownloadContent"
-        )
+        url = "https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/FSDownloadContent"
         params = {
-           "type": "AUDI",
-           "currentTransportMethod": "WIFI",
-           "key": self.asin,
-           "codec": codec_name
+            "type": "AUDI",
+            "currentTransportMethod": "WIFI",
+            "key": self.asin,
+            "codec": codec_name,
         }
         r = await self._client.session.head(url, params=params)
 
@@ -299,24 +296,17 @@ class LibraryItem(BaseItem):
 
         domain = self._client.auth.locale.domain
         url = f"https://www.audible.{domain}/library/download"
-        params = {
-            "asin": self.asin,
-            "codec": codec
-        }
+        params = {"asin": self.asin, "codec": codec}
         return httpx.URL(url, params=params), codec_name
 
     async def get_aaxc_url(
-            self,
-            quality: str = "high",
-            license_response_groups: Optional[str] = None
+        self, quality: str = "high", license_response_groups: Optional[str] = None
     ):
         if not self.is_published():
             raise ItemNotPublished(self.asin, self.publication_datetime)
 
         if not self.is_downloadable():
-            raise AudibleCliException(
-                f"{self.full_title} is not downloadable."
-            )
+            raise AudibleCliException(f"{self.full_title} is not downloadable.")
 
         lr = await self.get_license(quality, license_response_groups)
 
@@ -327,11 +317,13 @@ class LibraryItem(BaseItem):
         return url, codec, lr
 
     async def get_license(
-            self,
-            quality: str = "high",
-            response_groups: Optional[str] = None
+        self, quality: str = "high", response_groups: Optional[str] = None
     ):
-        assert quality in ("best", "high", "normal",)
+        assert quality in (
+            "best",
+            "high",
+            "normal",
+        )
 
         if response_groups is None:
             response_groups = "last_position_heard, pdf_url, content_reference"
@@ -340,7 +332,7 @@ class LibraryItem(BaseItem):
             "supported_drm_types": ["Mpeg", "Adrm"],
             "quality": "High" if quality in ("best", "high") else "Normal",
             "consumption_type": "Download",
-            "response_groups": response_groups
+            "response_groups": response_groups,
         }
 
         headers = {
@@ -349,12 +341,10 @@ class LibraryItem(BaseItem):
             "X-ADP-Transport": "WIFI",
             "X-ADP-LTO": "120",
             "X-Device-Type-Id": "A2CZJZGLK2JJVM",
-            "device_idiom": "phone"
+            "device_idiom": "phone",
         }
         lr = await self._client.post(
-            f"content/{self.asin}/licenserequest",
-            body=body,
-            headers=headers
+            f"content/{self.asin}/licenserequest", body=body, headers=headers
         )
         content_license = lr["content_license"]
 
@@ -373,16 +363,17 @@ class LibraryItem(BaseItem):
             msg = content_license["message"]
             raise LicenseDenied(msg)
 
-        content_url = content_license["content_metadata"]\
-            .get("content_url", {}).get("offline_url")
+        content_url = (
+            content_license["content_metadata"]
+            .get("content_url", {})
+            .get("offline_url")
+        )
         if content_url is None:
             raise NoDownloadUrl(self.asin)
 
         if "license_response" in content_license:
             try:
-                voucher = decrypt_voucher_from_licenserequest(
-                    self._client.auth, lr
-                )
+                voucher = decrypt_voucher_from_licenserequest(self._client.auth, lr)
             except Exception:
                 logger.error(f"Decrypting voucher for  {self.asin} failed")
             else:
@@ -396,17 +387,20 @@ class LibraryItem(BaseItem):
         self, quality: str = "high", chapter_type: str = "Tree", **request_kwargs
     ):
         chapter_type = chapter_type.capitalize()
-        assert quality in ("best", "high", "normal",)
+        assert quality in (
+            "best",
+            "high",
+            "normal",
+        )
         assert chapter_type in ("Flat", "Tree")
 
         url = f"content/{self.asin}/metadata"
         params = {
-            "response_groups": "last_position_heard, content_reference, "
-                               "chapter_info",
+            "response_groups": "last_position_heard, content_reference, chapter_info",
             "quality": "High" if quality in ("best", "high") else "Normal",
             "drm_type": "Adrm",
             "chapter_titles_type": chapter_type,
-            **request_kwargs
+            **request_kwargs,
         }
 
         metadata = await self._client.get(url, params=params)
@@ -415,10 +409,7 @@ class LibraryItem(BaseItem):
 
     async def get_annotations(self):
         url = f"https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/sidecar"
-        params = {
-            "type": "AUDI",
-            "key": self.asin
-        }
+        params = {"type": "AUDI", "key": self.asin}
 
         annotations = await self._client.get(url, params=params)
 
@@ -430,11 +421,7 @@ class WishlistItem(BaseItem):
 
 
 class BaseList:
-    def __init__(
-            self,
-            data: Union[dict, list],
-            api_client: audible.AsyncClient
-    ):
+    def __init__(self, data: Union[dict, list], api_client: audible.AsyncClient):
         self._client = api_client
         self._data = self._prepare_data(data)
 
@@ -479,32 +466,29 @@ class Library(BaseList):
             data = data.get("items", data)
         data = [
             LibraryItem(
-                data=i,
-                api_client=self._client,
-                response_groups=response_groups
-            ) for i in data
+                data=i, api_client=self._client, response_groups=response_groups
+            )
+            for i in data
         ]
         return data
 
     @classmethod
     async def from_api(
-            cls,
-            api_client: audible.AsyncClient,
-            include_total_count_header: bool = False,
-            start_date: Optional[datetime] = None,
-            end_date: Optional[datetime] = None,
-            **request_params
+        cls,
+        api_client: audible.AsyncClient,
+        include_total_count_header: bool = False,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        **request_params,
     ):
         def filter_by_date(item):
             if item.purchase_date is not None:
                 date_added = datetime.strptime(
-                    item.purchase_date,
-                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                    item.purchase_date, "%Y-%m-%dT%H:%M:%S.%fZ"
                 )
             elif item.library_status.get("date_added") is not None:
                 date_added = datetime.strptime(
-                    item.library_status.get("date_added"),
-                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                    item.library_status.get("date_added"), "%Y-%m-%dT%H:%M:%S.%fZ"
                 )
             else:
                 logger.info(
@@ -515,7 +499,7 @@ class Library(BaseList):
             if start_date is not None and start_date > date_added:
                 return False
             # If a new episode is added to a parent podcast, the purchase_date
-            # and date_added is set to this date. This can makes things 
+            # and date_added is set to this date. This can makes things
             # difficult to get older podcast episodes
             # the end date will be filtered by the resolve_podcasts function later
             if item.is_parent_podcast():
@@ -545,12 +529,11 @@ class Library(BaseList):
                     "Do not use purchase_date and start_date together"
                 )
             request_params["purchased_after"] = start_date.strftime(
-                "%Y-%m-%dT%H:%M:%S.%fZ")
+                "%Y-%m-%dT%H:%M:%S.%fZ"
+            )
 
         resp: httpx.Response = await api_client.get(
-            "library",
-            response_callback=full_response_callback,
-            **request_params
+            "library", response_callback=full_response_callback, **request_params
         )
         resp_content = convert_response_content(resp)
         total_count_header = resp.headers.get("total-count")
@@ -565,32 +548,22 @@ class Library(BaseList):
 
     @classmethod
     async def from_api_full_sync(
-            cls,
-            api_client: audible.AsyncClient,
-            bunch_size: int = 1000,
-            **request_params
+        cls, api_client: audible.AsyncClient, bunch_size: int = 1000, **request_params
     ) -> "Library":
         request_params.pop("page", None)
         request_params["num_results"] = bunch_size
 
         library, total_count = await cls.from_api(
-            api_client,
-            page=1,
-            include_total_count_header=True,
-            **request_params
+            api_client, page=1, include_total_count_header=True, **request_params
         )
         pages = ceil(int(total_count) / bunch_size)
         if pages == 1:
             return library
 
         additional_pages = []
-        for page in range(2, pages+1):
+        for page in range(2, pages + 1):
             additional_pages.append(
-                cls.from_api(
-                    api_client,
-                    page=page,
-                    **request_params
-                )
+                cls.from_api(api_client, page=page, **request_params)
             )
 
         additional_pages = await asyncio.gather(*additional_pages)
@@ -601,25 +574,24 @@ class Library(BaseList):
         return library
 
     async def resolve_podcats(
-            self,
-            start_date: Optional[datetime] = None,
-            end_date: Optional[datetime] = None
+        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
     ):
         warn(
             "resolve_podcats is deprecated, use resolve_podcasts instead",
-             DeprecationWarning,
-            stacklevel=2
+            DeprecationWarning,
+            stacklevel=2,
         )
         return self.resolve_podcasts(start_date, end_date)
 
     async def resolve_podcasts(
-            self,
-            start_date: Optional[datetime] = None,
-            end_date: Optional[datetime] = None
+        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
     ):
         podcast_items = await asyncio.gather(
-            *[i.get_child_items(start_date=start_date, end_date=end_date) 
-              for i in self if i.is_parent_podcast()]
+            *[
+                i.get_child_items(start_date=start_date, end_date=end_date)
+                for i in self
+                if i.is_parent_podcast()
+            ]
         )
         for i in podcast_items:
             self.data.extend(i.data)
@@ -634,20 +606,14 @@ class Catalog(BaseList):
             data = data.get("products", data)
         data = [
             LibraryItem(
-                data=i,
-                api_client=self._client,
-                response_groups=response_groups
-            ) for i in data
+                data=i, api_client=self._client, response_groups=response_groups
+            )
+            for i in data
         ]
         return data
 
     @classmethod
-    async def from_api(
-            cls,
-            api_client: audible.AsyncClient,
-            **request_params
-    ):
-
+    async def from_api(cls, api_client: audible.AsyncClient, **request_params):
         if "response_groups" not in request_params:
             request_params["response_groups"] = (
                 "contributors, customer_rights, media, price, product_attrs, "
@@ -698,20 +664,14 @@ class Wishlist(BaseList):
             data = data.get("products", data)
         data = [
             WishlistItem(
-                data=i,
-                api_client=self._client,
-                response_groups=response_groups
-            ) for i in data
+                data=i, api_client=self._client, response_groups=response_groups
+            )
+            for i in data
         ]
         return data
 
     @classmethod
-    async def from_api(
-            cls,
-            api_client: audible.AsyncClient,
-            **request_params
-    ):
-
+    async def from_api(cls, api_client: audible.AsyncClient, **request_params):
         async def fetch_wishlist(params):
             entire_lib = False
             if "page" not in params and "num_results" not in params:

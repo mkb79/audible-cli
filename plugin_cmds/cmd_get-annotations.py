@@ -9,10 +9,7 @@ from audible_cli.decorators import pass_client
 @pass_client
 async def cli(client, asin):
     url = f"https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/sidecar"
-    params = {
-        "type": "AUDI",
-        "key": asin
-    }
+    params = {"type": "AUDI", "key": asin}
     try:
         r = await client.get(url, params=params)
     except NotFoundError:

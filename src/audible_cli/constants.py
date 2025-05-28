@@ -14,7 +14,7 @@ DEFAULT_AUTH_FILE_ENCRYPTION: str = "json"
 DEFAULT_CONFIG_DATA: Dict[str, str] = {
     "title": "Audible Config File",
     "APP": {},
-    "profile": {}
+    "profile": {},
 }
 CODEC_HIGH_QUALITY: str = "AAX_44_128"
 CODEC_NORMAL_QUALITY: str = "AAX_44_64"

@@ -152,9 +152,7 @@ async def check_target_file_status(
     target_file: File, force_reload: bool, **kwargs: Any
 ) -> Status:
     if not await target_file.directory_exists():
-        logger.error(
-            f"Folder {target_file.path} does not exists! Skip download."
-        )
+        logger.error(f"Folder {target_file.path} does not exists! Skip download.")
         return Status.DestinationFolderNotExists
 
     if await target_file.exists() and not await target_file.is_file():
@@ -164,9 +162,7 @@ async def check_target_file_status(
         return Status.DestinationNotAFile
 
     if await target_file.is_file() and not force_reload:
-        logger.info(
-            f"File {target_file.path} already exists. Skip download."
-        )
+        logger.info(f"File {target_file.path} already exists. Skip download.")
         return Status.DestinationAlreadyExists
 
     return Status.Success
@@ -194,17 +190,18 @@ async def check_status_code(
 ) -> Status:
     if not 200 <= response.status_code < 400:
         content = await tmp_file.read_text_content()
-        logger.error(
-            f"Error downloading {target_file.path}. Message: {content}"
-        )
+        logger.error(f"Error downloading {target_file.path}. Message: {content}")
         return Status.StatusCode
 
     return Status.Success
 
 
 async def check_content_type(
-    response: ResponseInfo, target_file: File, tmp_file: File,
-    expected_types: List[str], **kwargs: Any
+    response: ResponseInfo,
+    target_file: File,
+    tmp_file: File,
+    expected_types: List[str],
+    **kwargs: Any,
 ) -> Status:
     if not expected_types:
         return Status.Success
@@ -235,7 +232,7 @@ async def check_status_for_message(
         if length <= MAX_FILE_READ_SIZE:
             message = await tmp_file.read_text_content()
             return _status_for_message(message)
-        
+
     return Status.Success
 
 
@@ -266,11 +263,7 @@ def get_progressbar(
 
     description = click.format_filename(destination, shorten=True)
     progressbar = tqdm.tqdm(
-        desc=description,
-        total=total,
-        unit="B",
-        unit_scale=True,
-        unit_divisor=1024
+        desc=description, total=total, unit="B", unit_scale=True, unit_divisor=1024
     )
     if start > 0:
         progressbar.update(start)
@@ -279,9 +272,10 @@ def get_progressbar(
 
 
 class Downloader:
-
-    MIN_STREAM_LENGTH = 10*1024*1024  # using stream mode if source is greater than
-    MIN_RESUME_FILE_LENGTH = 10*1024*1024  # keep resume file if file is greater than
+    MIN_STREAM_LENGTH = 10 * 1024 * 1024  # using stream mode if source is greater than
+    MIN_RESUME_FILE_LENGTH = (
+        10 * 1024 * 1024
+    )  # keep resume file if file is greater than
     RESUME_SUFFIX = ".resume"
     TMP_SUFFIX = ".tmp"
 
@@ -290,7 +284,7 @@ class Downloader:
         source: httpx.URL,
         client: httpx.AsyncClient,
         expected_types: Optional[Union[List[str], str]] = None,
-        additional_headers: Optional[Dict[str, str]] = None
+        additional_headers: Optional[Dict[str, str]] = None,
     ) -> None:
         self._source = source
         self._client = client
@@ -300,7 +294,7 @@ class Downloader:
 
     @staticmethod
     def _normalize_expected_types(
-        expected_types: Optional[Union[List[str], str]]
+        expected_types: Optional[Union[List[str], str]],
     ) -> List[str]:
         if not isinstance(expected_types, list):
             if expected_types is None:
@@ -321,7 +315,9 @@ class Downloader:
             # HEAD request to cds.audible.de will responded in 1 - 2 minutes
             # a GET request to the same URI will take ~4-6 seconds
             async with self._client.stream(
-                "GET", self._source, headers=self._additional_headers,
+                "GET",
+                self._source,
+                headers=self._additional_headers,
                 follow_redirects=True,
             ) as head_response:
                 if head_response.request.url != self._source:
@@ -355,7 +351,8 @@ class Downloader:
         expected_size = response.content_length
 
         if (
-            supports_resume and expected_size is not None
+            supports_resume
+            and expected_size is not None
             and self.MIN_RESUME_FILE_LENGTH < tmp_file_size < expected_size
         ):
             logger.debug(f"Keep resume file {tmp_file.path}")
@@ -375,9 +372,7 @@ class Downloader:
             target_path.rename(target_path.with_suffix(f"{target_path.suffix}.old.{i}"))
 
         tmp_file.path.rename(target_path)
-        logger.info(
-            f"File {target_path} downloaded in {response.response.elapsed}."
-        )
+        logger.info(f"File {target_path} downloaded in {response.response.elapsed}.")
         return Status.Success
 
     @staticmethod
@@ -387,13 +382,13 @@ class Downloader:
         target_file: File,
         response: ResponseInfo,
         head_response: ResponseInfo,
-        expected_types: List[str]
+        expected_types: List[str],
     ) -> Optional[DownloadResult]:
         status = await status_check_func(
             response=response,
             tmp_file=tmp_file,
             target_file=target_file,
-            expected_types=expected_types
+            expected_types=expected_types,
         )
         if status != Status.Success:
             message = await tmp_file.read_text_content()
@@ -402,13 +397,16 @@ class Downloader:
                 destination=target_file,
                 head_response=head_response,
                 response=response,
-                message=message
+                message=message,
             )
         return None
 
     async def _postprocessing(
-        self, tmp_file: File, target_file: File, response: ResponseInfo,
-        force_reload: bool
+        self,
+        tmp_file: File,
+        target_file: File,
+        response: ResponseInfo,
+        force_reload: bool,
     ) -> DownloadResult:
         head_response = await self.get_head_response()
 
@@ -416,12 +414,16 @@ class Downloader:
             check_status_for_message,
             check_status_code,
             check_status_code,
-            check_content_type
+            check_content_type,
         ]
         for check in status_checks:
             result = await self._check_and_return_download_result(
-                check, tmp_file, target_file, response,
-                head_response, self._expected_types
+                check,
+                tmp_file,
+                target_file,
+                response,
+                head_response,
+                self._expected_types,
             )
             if result:
                 return result
@@ -438,7 +440,7 @@ class Downloader:
             destination=target_file,
             head_response=head_response,
             response=response,
-            message=None
+            message=None,
         )
 
     async def _stream_download(
@@ -447,7 +449,7 @@ class Downloader:
         target_file: File,
         start: int,
         progressbar: Union[tqdm.tqdm, DummyProgressBar],
-        force_reload: bool = True
+        force_reload: bool = True,
     ) -> DownloadResult:
         headers = self._additional_headers.copy()
         if start > 0:
@@ -469,7 +471,7 @@ class Downloader:
                 tmp_file=tmp_file,
                 target_file=target_file,
                 response=ResponseInfo(response=response),
-                force_reload=force_reload
+                force_reload=force_reload,
             )
 
     async def _download(
@@ -492,25 +494,21 @@ class Downloader:
             tmp_file=tmp_file,
             target_file=target_file,
             response=ResponseInfo(response=response),
-            force_reload=force_reload
+            force_reload=force_reload,
         )
 
     async def run(
-        self,
-        target: pathlib.Path,
-        force_reload: bool = False
+        self, target: pathlib.Path, force_reload: bool = False
     ) -> DownloadResult:
         target_file = File(target)
-        destination_status = await check_target_file_status(
-            target_file, force_reload
-        )
+        destination_status = await check_target_file_status(target_file, force_reload)
         if destination_status != Status.Success:
             return DownloadResult(
                 status=destination_status,
                 destination=target_file,
                 head_response=None,
                 response=None,
-                message=None
+                message=None,
             )
 
         head_response = await self.get_head_response()
@@ -526,8 +524,8 @@ class Downloader:
         should_stream = False
         progressbar = None
         if (
-                head_response.content_length is not None and
-                head_response.content_length >= self.MIN_STREAM_LENGTH
+            head_response.content_length is not None
+            and head_response.content_length >= self.MIN_STREAM_LENGTH
         ):
             should_stream = True
             progressbar = get_progressbar(
@@ -541,18 +539,18 @@ class Downloader:
                     target_file=target_file,
                     start=start,
                     progressbar=progressbar,
-                    force_reload=force_reload
+                    force_reload=force_reload,
                 )
             else:
                 return await self._download(
                     tmp_file=tmp_file,
                     target_file=target_file,
                     start=start,
-                    force_reload=force_reload
+                    force_reload=force_reload,
                 )
         finally:
             await self._handle_tmp_file(
                 tmp_file=tmp_file,
                 supports_resume=supports_resume,
-                response=head_response
+                response=head_response,
             )

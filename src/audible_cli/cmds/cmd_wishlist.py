@@ -28,7 +28,7 @@ async def _get_wishlist(client):
             "product_extended_attrs, product_plan_details, product_plans, "
             "rating, sample, sku, series, reviews, review_attrs, ws4v, "
             "customer_rights, categories, category_ladders, claim_code_url"
-        )
+        ),
     )
     return wishlist
 
@@ -40,19 +40,21 @@ def cli():
 
 @cli.command("export")
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     type=click.Path(),
     default=pathlib.Path().cwd() / r"wishlist.{format}",
     show_default=True,
-    help="output file"
+    help="output file",
 )
 @timeout_option
 @click.option(
-    "--format", "-f",
+    "--format",
+    "-f",
     type=click.Choice(["tsv", "csv", "json"]),
     default="tsv",
     show_default=True,
-    help="Output format"
+    help="Output format",
 )
 @pass_client
 async def export_wishlist(client, **params):
@@ -75,9 +77,9 @@ async def export_wishlist(client, **params):
             elif key == "rating":
                 overall_distributing = v.get("overall_distribution") or {}
                 data_row["rating"] = overall_distributing.get(
-                    "display_average_rating", "-")
-                data_row["num_ratings"] = overall_distributing.get(
-                    "num_ratings", "-")
+                    "display_average_rating", "-"
+                )
+                data_row["num_ratings"] = overall_distributing.get("num_ratings", "-")
             elif key == "added_timestamp":
                 data_row["date_added"] = v
             elif key == "product_images":
@@ -99,13 +101,16 @@ async def export_wishlist(client, **params):
     wishlist = await _get_wishlist(client)
 
     keys_with_raw_values = (
-        "asin", "title", "subtitle", "runtime_length_min", "is_finished",
-        "percent_complete", "release_date"
+        "asin",
+        "title",
+        "subtitle",
+        "runtime_length_min",
+        "is_finished",
+        "percent_complete",
+        "release_date",
     )
 
-    prepared_wishlist = await asyncio.gather(
-        *[_prepare_item(i) for i in wishlist]
-    )
+    prepared_wishlist = await asyncio.gather(*[_prepare_item(i) for i in wishlist])
     prepared_wishlist.sort(key=lambda x: x["asin"])
 
     if output_format in ("tsv", "csv"):
@@ -115,15 +120,25 @@ async def export_wishlist(client, **params):
             dialect = "excel-tab"
 
         headers = (
-            "asin", "title", "subtitle", "authors", "narrators", "series_title",
-            "series_sequence", "genres", "runtime_length_min", "is_finished",
-            "percent_complete", "rating", "num_ratings", "date_added",
-            "release_date", "cover_url"
+            "asin",
+            "title",
+            "subtitle",
+            "authors",
+            "narrators",
+            "series_title",
+            "series_sequence",
+            "genres",
+            "runtime_length_min",
+            "is_finished",
+            "percent_complete",
+            "rating",
+            "num_ratings",
+            "date_added",
+            "release_date",
+            "cover_url",
         )
 
-        export_to_csv(
-            output_filename, prepared_wishlist, headers, dialect
-        )
+        export_to_csv(output_filename, prepared_wishlist, headers, dialect)
 
     elif output_format == "json":
         data = json.dumps(prepared_wishlist, indent=4)
@@ -157,24 +172,16 @@ async def list_wishlist(client):
 
     wishlist = await _get_wishlist(client)
 
-    books = await asyncio.gather(
-        *[_prepare_item(i) for i in wishlist]
-    )
+    books = await asyncio.gather(*[_prepare_item(i) for i in wishlist])
 
     for i in sorted(books):
         echo(i)
 
 
 @cli.command("add")
+@click.option("--asin", "-a", multiple=True, help="asin of the audiobook")
 @click.option(
-    "--asin", "-a",
-    multiple=True,
-    help="asin of the audiobook"
-)
-@click.option(
-    "--title", "-t",
-    multiple=True,
-    help="tile of the audiobook (partial search)"
+    "--title", "-t", multiple=True, help="tile of the audiobook (partial search)"
 )
 @timeout_option
 @pass_client(limits=limits)
@@ -197,11 +204,11 @@ async def add_wishlist(client, asin, title):
             "Do you want to add an item by asin or title?",
             choices=[
                 questionary.Choice(title="by title", value="title"),
-                questionary.Choice(title="by asin", value="asin")
-            ]
+                questionary.Choice(title="by asin", value="asin"),
+            ],
         ).unsafe_ask_async()
 
-        if q == 'asin':
+        if q == "asin":
             q = await questionary.text("Please enter the asin").unsafe_ask_async()
             asin.append(q)
         else:
@@ -209,11 +216,7 @@ async def add_wishlist(client, asin, title):
             title.append(q)
 
     for t in title:
-        catalog = await Catalog.from_api(
-            client,
-            title=t,
-            num_results=50
-        )
+        catalog = await Catalog.from_api(client, title=t, num_results=50)
 
         match = catalog.search_item_by_title(t)
         full_match = [i for i in match if i[1] == 100]
@@ -226,15 +229,13 @@ async def add_wishlist(client, asin, title):
 
             answer = await questionary.checkbox(
                 f"Found the following matches for '{t}'. Which you want to add?",
-                choices=choices
+                choices=choices,
             ).unsafe_ask_async()
 
             if answer is not None:
                 [asin.append(i) for i in answer]
         else:
-            logger.error(
-                f"Skip title {t}: Not found in library"
-            )
+            logger.error(f"Skip title {t}: Not found in library")
 
     jobs = [add_asin(a) for a in asin]
     await asyncio.gather(*jobs)
@@ -249,15 +250,9 @@ async def add_wishlist(client, asin, title):
 
 
 @cli.command("remove")
+@click.option("--asin", "-a", multiple=True, help="asin of the audiobook")
 @click.option(
-    "--asin", "-a",
-    multiple=True,
-    help="asin of the audiobook"
-)
-@click.option(
-    "--title", "-t",
-    multiple=True,
-    help="tile of the audiobook (partial search)"
+    "--title", "-t", multiple=True, help="tile of the audiobook (partial search)"
 )
 @timeout_option
 @pass_client(limits=limits)
@@ -284,8 +279,7 @@ async def remove_wishlist(client, asin, title):
             choices.append(c)
 
         asin = await questionary.checkbox(
-            "Select item(s) which you want to remove from whishlist",
-            choices=choices
+            "Select item(s) which you want to remove from whishlist", choices=choices
         ).unsafe_ask_async()
 
     for t in title:
@@ -300,15 +294,13 @@ async def remove_wishlist(client, asin, title):
 
             answer = await questionary.checkbox(
                 f"Found the following matches for '{t}'. Which you want to remove?",
-                choices=choices
+                choices=choices,
             ).unsafe_ask_async()
 
             if answer is not None:
                 [asin.append(i) for i in answer]
         else:
-            logger.error(
-                f"Skip title {t}: Not found in library"
-            )
+            logger.error(f"Skip title {t}: Not found in library")
 
     if asin:
         jobs = []

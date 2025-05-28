@@ -10,7 +10,7 @@ jobs:
   build-n-publish:
     name: Build and publish Audible-cli to TestPyPI
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
 

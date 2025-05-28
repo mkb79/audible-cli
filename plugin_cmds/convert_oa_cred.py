@@ -1,8 +1,7 @@
 """Converts the credentials.json file from OpenAudible >= v2.4 beta to an
-audible-cli auth file. The credentials.json file from OpenAudible leaves 
-unchanged, so you can use one device registration for OpenAudible and 
+audible-cli auth file. The credentials.json file from OpenAudible leaves
+unchanged, so you can use one device registration for OpenAudible and
 audible-cli."""
-
 
 import json
 import pathlib
@@ -18,10 +17,7 @@ def extract_data_from_file(credentials):
         if k == "active_device":
             continue
         origin = v["details"]["response"]["success"]
-        origin["additionnel"] = {
-            "expires": v["expires"],
-            "region": v["region"].lower()
-        }
+        origin["additionnel"] = {"expires": v["expires"], "region": v["region"].lower()}
         origins.update({k: origin})
     return origins
 
@@ -41,7 +37,7 @@ def make_auth_file(fn, origin):
 
     website_cookies = dict()
     for cookie in tokens["website_cookies"]:
-        website_cookies[cookie["Name"]] = cookie["Value"].replace(r'"', r'')
+        website_cookies[cookie["Name"]] = cookie["Value"].replace(r'"', r"")
 
     data = {
         "adp_token": adp_token,
@@ -53,7 +49,7 @@ def make_auth_file(fn, origin):
         "store_authentication_cookie": store_authentication_cookie,
         "device_info": device_info,
         "customer_info": customer_info,
-        "locale": origin["additionnel"]["region"]
+        "locale": origin["additionnel"]["region"],
     }
     auth = audible.Authenticator()
     auth._update_attrs(**data)
@@ -62,22 +58,23 @@ def make_auth_file(fn, origin):
 
 @click.command("convert-oa-file")
 @click.option(
-    "--input", "-i",
+    "--input",
+    "-i",
     type=click.Path(exists=True, file_okay=True),
     multiple=True,
-    help="OpenAudible credentials.json file")
+    help="OpenAudible credentials.json file",
+)
 @pass_session
 def cli(session, input):
     """Converts a OpenAudible credential file to a audible-cli auth file
-    
+
     Stores the auth files in app dir"""
     fdata = pathlib.Path(input).read_text("utf-8")
     fdata = json.loads(fdata)
-    
+
     x = extract_data_from_file(fdata)
     for k, v in x.items():
         app_dir = pathlib.Path(session.get_app_dir())
         fn = app_dir / pathlib.Path(k).with_suffix(".json")
         auth = make_auth_file(fn, v)
         auth.to_file(fn)
-

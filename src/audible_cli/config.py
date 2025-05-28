@@ -15,7 +15,7 @@ from .constants import (
     CONFIG_FILE,
     DEFAULT_CONFIG_DATA,
     PLUGIN_DIR_ENV,
-    PLUGIN_PATH
+    PLUGIN_PATH,
 )
 from .exceptions import AudibleCliException, ProfileAlreadyExists
 
@@ -26,13 +26,13 @@ logger = logging.getLogger("audible_cli.config")
 class ConfigFile:
     """Presents an audible-cli configuration file
 
-    Instantiate a :class:`~audible_cli.config.ConfigFile` will load the file 
-    content by default. To create a new config file, the ``file_exists`` 
+    Instantiate a :class:`~audible_cli.config.ConfigFile` will load the file
+    content by default. To create a new config file, the ``file_exists``
     argument must be set to ``False``.
 
-    Audible-cli configuration files are written in the toml markup language. 
-    It has a main section named `APP` and sections for each profile named 
-    `profile.<profile_name>`. 
+    Audible-cli configuration files are written in the toml markup language.
+    It has a main section named `APP` and sections for each profile named
+    `profile.<profile_name>`.
 
     Args:
         filename: The file path to the config file
@@ -41,9 +41,7 @@ class ConfigFile:
     """
 
     def __init__(
-            self,
-            filename: Union[str, pathlib.Path],
-            file_exists: bool = True
+        self, filename: Union[str, pathlib.Path], file_exists: bool = True
     ) -> None:
         filename = pathlib.Path(filename).resolve()
         config_data = DEFAULT_CONFIG_DATA.copy()
@@ -52,13 +50,11 @@ class ConfigFile:
         if file_exists:
             if not filename.is_file():
                 raise AudibleCliException(
-                    f"Config file {click.format_filename(filename)} "
-                    f"does not exists"
+                    f"Config file {click.format_filename(filename)} does not exists"
                 )
             file_data = toml.load(filename)
             logger.debug(
-                f"Config loaded from "
-                f"{click.format_filename(filename, shorten=True)}"
+                f"Config loaded from {click.format_filename(filename, shorten=True)}"
             )
 
         config_data.update(file_data)
@@ -120,10 +116,7 @@ class ConfigFile:
         return self.app_config["primary_profile"]
 
     def get_profile_option(
-            self,
-            profile: str,
-            option: str,
-            default: Optional[str] = None
+        self, profile: str, option: str, default: Optional[str] = None
     ) -> str:
         """Returns the value for an option for the given profile.
 
@@ -148,13 +141,13 @@ class ConfigFile:
         return default
 
     def add_profile(
-            self,
-            name: str,
-            auth_file: Union[str, pathlib.Path],
-            country_code: str,
-            is_primary: bool = False,
-            write_config: bool = True,
-            **additional_options
+        self,
+        name: str,
+        auth_file: Union[str, pathlib.Path],
+        country_code: str,
+        is_primary: bool = False,
+        write_config: bool = True,
+        **additional_options,
     ) -> None:
         """Adds a new profile to the config
 
@@ -179,7 +172,7 @@ class ConfigFile:
         profile_data = {
             "auth_file": str(auth_file),
             "country_code": country_code,
-            **additional_options
+            **additional_options,
         }
         self.data["profile"][name] = profile_data
 
@@ -201,7 +194,7 @@ class ConfigFile:
         Raises:
             AudibleCliException: If the profile does not exist.
 
-        Note:    
+        Note:
             Does not delete the auth file.
         """
         if not self.has_profile(name):
@@ -214,14 +207,11 @@ class ConfigFile:
         if write_config:
             self.write_config()
 
-    def write_config(
-            self,
-            filename: Optional[Union[str, pathlib.Path]] = None
-    ) -> None:
+    def write_config(self, filename: Optional[Union[str, pathlib.Path]] = None) -> None:
         """Write the config data to file
 
         Args:
-            filename: If not ``None`` the config is written to these file path 
+            filename: If not ``None`` the config is written to these file path
                 instead of ``self.filename``
         """
         f = pathlib.Path(filename or self.filename).resolve()
@@ -237,6 +227,7 @@ class ConfigFile:
 
 class Session:
     """Holds the settings for the current session"""
+
     def __init__(self) -> None:
         self._auths: Dict[str, Authenticator] = {}
         self._config: Optional[CONFIG_FILE] = None
@@ -251,9 +242,9 @@ class Session:
     @property
     def params(self):
         """Returns the parameter of the session
-        
-        Parameter are usually added using the ``add_param_to_session`` 
-        callback on a click option. This way an option from a parent command 
+
+        Parameter are usually added using the ``add_param_to_session``
+        callback on a click option. This way an option from a parent command
         can be accessed from his subcommands.
         """
         return self._params
@@ -280,30 +271,27 @@ class Session:
     @property
     def selected_profile(self):
         """Returns the selected config profile name for this session
-        
-        The `profile` to use must be set using the ``add_param_to_session`` 
+
+        The `profile` to use must be set using the ``add_param_to_session``
         callback of a click option. Otherwise, the primary profile from the
         config is used.
         """
         profile = self.params.get("profile") or self.config.primary_profile
         if profile is None:
             message = (
-                "No profile provided and primary profile not set "
-                "properly in config."
+                "No profile provided and primary profile not set properly in config."
             )
             raise AudibleCliException(message)
         return profile
 
     def get_auth_for_profile(
-            self,
-            profile: str,
-            password: Optional[str] = None
+        self, profile: str, password: Optional[str] = None
     ) -> audible.Authenticator:
         """Returns an Authenticator for a profile
 
-        If an Authenticator for this profile is already loaded, it will 
+        If an Authenticator for this profile is already loaded, it will
         return the Authenticator without reloading it. This way a session can
-        hold multiple Authenticators for different profiles. Commands can use 
+        hold multiple Authenticators for different profiles. Commands can use
         this to make API requests for more than one profile.
 
         Args:
@@ -332,16 +320,16 @@ class Session:
                 auth = Authenticator.from_file(
                     filename=self.config.dirname / auth_file,
                     password=password,
-                    locale=country_code)
+                    locale=country_code,
+                )
                 break
             except (FileEncryptionError, ValueError):
-                logger.info(
-                    "Auth file is encrypted but no/wrong password is provided"
-                )
+                logger.info("Auth file is encrypted but no/wrong password is provided")
                 password = click.prompt(
                     "Please enter the auth-file password (or enter to exit)",
                     hide_input=True,
-                    default="")
+                    default="",
+                )
                 if len(password) == 0:
                     raise click.Abort()
 
@@ -359,10 +347,7 @@ class Session:
         return self.get_auth_for_profile(profile, password)
 
     def get_client_for_profile(
-            self,
-            profile: str,
-            password: Optional[str] = None,
-            **kwargs
+        self, profile: str, password: Optional[str] = None, **kwargs
     ) -> AsyncClient:
         auth = self.get_auth_for_profile(profile, password)
         kwargs.setdefault("timeout", self.params.get("timeout", 5))

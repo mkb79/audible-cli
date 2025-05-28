@@ -162,7 +162,7 @@ def mypy(s: nox.Session) -> None:
         "tests",
         "docs/source/conf.py",
         "plugin_cmds",
-        "utils"
+        "utils",
     ]
     args = s.posargs or default_args
 
