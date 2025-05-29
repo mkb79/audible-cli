@@ -193,15 +193,15 @@ class Downloader:
 
     def _file_okay(self):
         if not self._file.parent.is_dir():
-            logger.error(f"Folder {self._file.parent} doesn't exists! Skip download")
+            logger.error("Folder %s doesn't exists! Skip download", self._file.parent)
             return False
 
         if self._file.exists() and not self._file.is_file():
-            logger.error(f"Object {self._file} exists but is no file. Skip download")
+            logger.error("Object %s exists but is no file. Skip download", self._file)
             return False
 
         if self._file.is_file() and not self._overwrite_existing:
-            logger.info(f"File {self._file} already exists. Skip download")
+            logger.info("File %s already exists. Skip download", self._file)
             return False
 
         return True
@@ -212,7 +212,7 @@ class Downloader:
                 msg = self._tmp_file.read_text()
             except:  # noqa
                 msg = "Unknown"
-            logger.error(f"Error downloading {self._file}. Message: {msg}")
+            logger.error("Error downloading %s. Message: %s", self._file, msg)
             return False
 
         if length is not None:
@@ -220,8 +220,11 @@ class Downloader:
             length = int(length)
             if downloaded_size != length:
                 logger.error(
-                    f"Error downloading {self._file}. File size missmatch. "
-                    f"Expected size: {length}; Downloaded: {downloaded_size}"
+                    "Error downloading %s. File size missmatch. "
+                    "Expected size: %s; Downloaded: %s",
+                    self._file,
+                    length,
+                    downloaded_size,
                 )
                 return False
 
@@ -232,9 +235,13 @@ class Downloader:
                 except:  # noqa
                     msg = "Unknown"
                 logger.error(
-                    f"Error downloading {self._file}. Wrong content type. "
-                    f"Expected type(s): {self._expected_content_type}; "
-                    f"Got: {content_type}; Message: {msg}"
+                    "Error downloading %s. Wrong content type. "
+                    "Expected type(s): %s; "
+                    "Got: %s; Message: %s",
+                    self._file,
+                    self._expected_content_type,
+                    content_type,
+                    msg,
                 )
                 return False
 
@@ -246,7 +253,7 @@ class Downloader:
                 i += 1
             file.rename(file.with_suffix(f"{file.suffix}.old.{i}"))
         tmp_file.rename(file)
-        logger.info(f"File {self._file} downloaded in {elapsed}.")
+        logger.info("File %s downloaded in %s.", self._file, elapsed)
         return True
 
     def _remove_tmp_file(self):

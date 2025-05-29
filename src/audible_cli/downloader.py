@@ -153,17 +153,17 @@ async def check_target_file_status(
     target_file: File, force_reload: bool, **kwargs: Any
 ) -> Status:
     if not await target_file.directory_exists():
-        logger.error(f"Folder {target_file.path} does not exists! Skip download.")
+        logger.error("Folder %s does not exists! Skip download.", target_file.path)
         return Status.DestinationFolderNotExists
 
     if await target_file.exists() and not await target_file.is_file():
         logger.error(
-            f"Object {target_file.path} exists but is not a file. Skip download."
+            "Object %s exists but is not a file. Skip download.", target_file.path
         )
         return Status.DestinationNotAFile
 
     if await target_file.is_file() and not force_reload:
-        logger.info(f"File {target_file.path} already exists. Skip download.")
+        logger.info("File %s already exists. Skip download.", target_file.path)
         return Status.DestinationAlreadyExists
 
     return Status.Success
@@ -178,8 +178,11 @@ async def check_download_size(
     if tmp_file_size is not None and content_length is not None:
         if tmp_file_size != content_length:
             logger.error(
-                f"Error downloading {target_file.path}. File size missmatch. "
-                f"Expected size: {content_length}; Downloaded: {tmp_file_size}"
+                "Error downloading %s. File size missmatch. "
+                "Expected size: %s; Downloaded: %s",
+                target_file.path,
+                content_length,
+                tmp_file_size,
             )
         return Status.DownloadSizeMismatch
 
@@ -191,7 +194,7 @@ async def check_status_code(
 ) -> Status:
     if not 200 <= response.status_code < 400:
         content = await tmp_file.read_text_content()
-        logger.error(f"Error downloading {target_file.path}. Message: {content}")
+        logger.error("Error downloading %s. Message: %s", target_file.path, content)
         return Status.StatusCode
 
     return Status.Success
@@ -210,9 +213,13 @@ async def check_content_type(
     if response.content_type not in expected_types:
         content = await tmp_file.read_text_content()
         logger.error(
-            f"Error downloading {target_file.path}. Wrong content type. "
-            f"Expected type(s): {expected_types}; "
-            f"Got: {response.content_type}; Message: {content}"
+            "Error downloading %s. Wrong content type. "
+            "Expected type(s): %s; "
+            "Got: %s; Message: %s",
+            target_file.path,
+            expected_types,
+            response.content_type,
+            content,
         )
         return Status.DownloadContentTypeMismatch
 
@@ -356,7 +363,7 @@ class Downloader:
             and expected_size is not None
             and self.MIN_RESUME_FILE_LENGTH < tmp_file_size < expected_size
         ):
-            logger.debug(f"Keep resume file {tmp_file.path}")
+            logger.debug("Keep resume file %s", tmp_file.path)
         else:
             await tmp_file.remove()
 
@@ -373,7 +380,7 @@ class Downloader:
             target_path.rename(target_path.with_suffix(f"{target_path.suffix}.old.{i}"))
 
         tmp_file.path.rename(target_path)
-        logger.info(f"File {target_path} downloaded in {response.response.elapsed}.")
+        logger.info("File %s downloaded in %s.", target_path, response.response.elapsed)
         return Status.Success
 
     @staticmethod

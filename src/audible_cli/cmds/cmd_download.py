@@ -60,7 +60,7 @@ class DownloadCounter:
 
     def count_aax(self):
         self._aax += 1
-        logger.debug(f"Currently downloaded aax files: {self.aax}")
+        logger.debug("Currently downloaded aax files: %s", self.aax)
 
     @property
     def aaxc(self):
@@ -68,7 +68,7 @@ class DownloadCounter:
 
     def count_aaxc(self):
         self._aaxc += 1
-        logger.debug(f"Currently downloaded aaxc files: {self.aaxc}")
+        logger.debug("Currently downloaded aaxc files: %s", self.aaxc)
 
     @property
     def aycl(self):
@@ -77,7 +77,7 @@ class DownloadCounter:
     def count_aycl(self):
         self._aycl += 1
         # log as error to display this message in any cases
-        logger.debug(f"Currently downloaded aycl files: {self.aycl}")
+        logger.debug("Currently downloaded aycl files: %s", self.aycl)
 
     @property
     def aycl_voucher(self):
@@ -86,7 +86,7 @@ class DownloadCounter:
     def count_aycl_voucher(self):
         self._aycl_voucher += 1
         # log as error to display this message in any cases
-        logger.debug(f"Currently downloaded aycl voucher files: {self.aycl_voucher}")
+        logger.debug("Currently downloaded aycl voucher files: %s", self.aycl_voucher)
 
     @property
     def annotation(self):
@@ -94,7 +94,7 @@ class DownloadCounter:
 
     def count_annotation(self):
         self._annotation += 1
-        logger.debug(f"Currently downloaded annotations: {self.annotation}")
+        logger.debug("Currently downloaded annotations: %s", self.annotation)
 
     @property
     def chapter(self):
@@ -102,7 +102,7 @@ class DownloadCounter:
 
     def count_chapter(self):
         self._chapter += 1
-        logger.debug(f"Currently downloaded chapters: {self.chapter}")
+        logger.debug("Currently downloaded chapters: %s", self.chapter)
 
     @property
     def cover(self):
@@ -110,7 +110,7 @@ class DownloadCounter:
 
     def count_cover(self):
         self._cover += 1
-        logger.debug(f"Currently downloaded covers: {self.cover}")
+        logger.debug("Currently downloaded covers: %s", self.cover)
 
     @property
     def pdf(self):
@@ -118,7 +118,7 @@ class DownloadCounter:
 
     def count_pdf(self):
         self._pdf += 1
-        logger.debug(f"Currently downloaded PDFs: {self.pdf}")
+        logger.debug("Currently downloaded PDFs: %s", self.pdf)
 
     @property
     def voucher(self):
@@ -126,7 +126,7 @@ class DownloadCounter:
 
     def count_voucher(self):
         self._voucher += 1
-        logger.debug(f"Currently downloaded voucher files: {self.voucher}")
+        logger.debug("Currently downloaded voucher files: %s", self.voucher)
 
     @property
     def voucher_saved(self):
@@ -134,7 +134,7 @@ class DownloadCounter:
 
     def count_voucher_saved(self):
         self._voucher_saved += 1
-        logger.debug(f"Currently saved voucher files: {self.voucher_saved}")
+        logger.debug("Currently saved voucher files: %s", self.voucher_saved)
 
     def as_dict(self) -> dict:
         return {
@@ -169,7 +169,10 @@ async def download_cover(
 
     url = item.get_cover_url(res)
     if url is None:
-        logger.error(f"No COVER with size {res} found for {item.full_title}")
+        logger.error("No COVER with size %s found for %s", res, item.full_title)
+        logger.info(
+            "You can download the cover manually from: %s", item.get_download_url(res)
+        )
         return
 
     dl = Downloader(url, filepath, client, overwrite_existing, "image/jpeg")
@@ -182,7 +185,7 @@ async def download_cover(
 async def download_pdf(client, output_dir, base_filename, item, overwrite_existing):
     url = item.get_pdf_url()
     if url is None:
-        logger.info(f"No PDF found for {item.full_title}")
+        logger.info("No PDF found for %s", item.full_title)
         return
 
     filename = base_filename + ".pdf"
@@ -209,18 +212,18 @@ async def download_chapters(
     filename = base_filename + "-chapters.json"
     file = output_dir / filename
     if file.exists() and not overwrite_existing:
-        logger.info(f"File {file} already exists. Skip saving chapters")
+        logger.info("File %s already exists. Skip saving chapters", file)
         return True
 
     try:
         metadata = await item.get_content_metadata(quality, chapter_type=chapter_type)
     except NotFoundError:
-        logger.info(f"No chapters found for {item.full_title}.")
+        logger.info("No chapters found for %s.", item.full_title)
         return
     metadata = json.dumps(metadata, indent=4)
     async with aiofiles.open(file, "w") as f:
         await f.write(metadata)
-    logger.info(f"Chapter file saved in style '{chapter_type.upper()}' to {file}.")
+    logger.info("Chapter file saved in style %s to %s.", chapter_type.upper(), file)
     counter.count_chapter()
 
 
@@ -231,18 +234,18 @@ async def download_annotations(output_dir, base_filename, item, overwrite_existi
     filename = base_filename + "-annotations.json"
     file = output_dir / filename
     if file.exists() and not overwrite_existing:
-        logger.info(f"File {file} already exists. Skip saving annotations")
+        logger.info("File %s already exists. Skip saving annotations", file)
         return True
 
     try:
         annotation = await item.get_annotations()
     except NotFoundError:
-        logger.info(f"No annotations found for {item.full_title}.")
+        logger.info("No annotations found for %s.", item.full_title)
         return
     annotation = json.dumps(annotation, indent=4)
     async with aiofiles.open(file, "w") as f:
         await f.write(annotation)
-    logger.info(f"Annotation file saved to {file}.")
+    logger.info("Annotation file saved to %s.", file)
     counter.count_annotation()
 
 
@@ -314,7 +317,7 @@ async def download_aax(
         url, codec = await item.get_aax_url_old(quality)
     except NotDownloadableAsAAX:
         if aax_fallback:
-            logger.info(f"Fallback to aaxc for {item.full_title}")
+            logger.info("Fallback to aaxc for %s", item.full_title)
             return await download_aaxc(
                 client=client,
                 output_dir=output_dir,
@@ -340,7 +343,7 @@ async def download_aax(
         counter.count_aax()
     elif downloaded.status == Status.DownloadIndividualParts:
         logger.info(
-            f"Item {filepath} must be downloaded in parts. Adding parts to queue"
+            "Item %s must be downloaded in parts. Adding parts to queue", filepath
         )
         await _add_audioparts_to_queue(
             client=client,
@@ -355,7 +358,7 @@ async def download_aax(
 
 
 async def _reuse_voucher(lr_file, item):
-    logger.info(f"Loading data from voucher file {lr_file}.")
+    logger.info("Loading data from voucher file %s.", lr_file)
     async with aiofiles.open(lr_file) as f:
         lr = await f.read()
     lr = json.loads(lr)
@@ -380,7 +383,7 @@ async def _reuse_voucher(lr_file, item):
             msg = f"The current user is not entitled to use the voucher {lr_file}."
             raise AudibleCliException(msg)
     else:
-        logger.debug(f"{lr_file} does not contain allowed users key.")
+        logger.debug("%s does not contain allowed users key.", lr_file)
 
     # Verification of voucher validity
     if "refresh_date" in content_license:
@@ -417,20 +420,21 @@ async def download_aaxc(
 
             if lr_file.is_file():
                 if filepath.is_file():
-                    logger.info(f"File {lr_file} already exists. Skip download.")
-                    logger.info(f"File {filepath} already exists. Skip download.")
+                    logger.info("File %s already exists. Skip download.", lr_file)
+                    logger.info("File %s already exists. Skip download.", filepath)
                     return
 
                 try:
                     lr, url, codec = await _reuse_voucher(lr_file, item)
                 except DownloadUrlExpired:
                     logger.debug(
-                        f"Download url in {lr_file} is expired. Refreshing license."
+                        "Download url in %s is expired. Refreshing license.", lr_file
                     )
                     overwrite_existing = True
                 except VoucherNeedRefresh:
                     logger.debug(
-                        f"Refresh date for voucher {lr_file} reached. Refreshing license."
+                        "Refresh date for voucher %s reached. Refreshing license.",
+                        lr_file,
                     )
                     overwrite_existing = True
 
@@ -451,12 +455,12 @@ async def download_aaxc(
     lr_file = filepath.with_suffix(".voucher")
 
     if lr_file.is_file() and not overwrite_existing:
-        logger.info(f"File {lr_file} already exists. Skip download.")
+        logger.info("File %s already exists. Skip download.", lr_file)
     else:
         lr = json.dumps(lr, indent=4)
         async with aiofiles.open(lr_file, "w") as f:
             await f.write(lr)
-        logger.info(f"Voucher file saved to {lr_file}.")
+        logger.info("Voucher file saved to %s.", lr_file)
         counter.count_voucher_saved()
 
     dl = NewDownloader(
@@ -478,7 +482,7 @@ async def download_aaxc(
             counter.count_aycl()
     elif downloaded.status == Status.DownloadIndividualParts:
         logger.info(
-            f"Item {filepath} must be downloaded in parts. Adding parts to queue"
+            "Item %s must be downloaded in parts. Adding parts to queue", filepath
         )
         await _add_audioparts_to_queue(
             client=client,
@@ -773,10 +777,10 @@ async def cli(session, api_client, **params):
 
     if start_date is not None:
         logger.info(
-            f"Selected start date: {start_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}"
+            "Selected start date: %s", start_date.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         )
     if end_date is not None:
-        logger.info(f"Selected end date: {end_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}")
+        logger.info("Selected end date: %s", end_date.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
 
     chapter_type = params.get("chapter_type")
     if chapter_type == "config":
@@ -824,9 +828,9 @@ async def cli(session, api_client, **params):
             jobs.append(asin)
         else:
             if not ignore_errors:
-                logger.error(f"Asin {asin} not found in library.")
+                logger.error("Asin %s not found in library.", asin)
                 raise click.Abort()
-            logger.error(f"Skip asin {asin}: Not found in library")
+            logger.error("Skip asin %s: Not found in library", asin)
 
     for title in titles:
         match = library.search_item_by_title(title)
@@ -851,7 +855,7 @@ async def cli(session, api_client, **params):
                     [jobs.append(i) for i in answer]
 
         else:
-            logger.error(f"Skip title {title}: Not found in library")
+            logger.error("Skip title %s: Not found in library", title)
 
     # set queue
     global QUEUE

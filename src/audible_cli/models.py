@@ -187,11 +187,11 @@ class LibraryItem(BaseItem):
                         )
 
                 except ValueError:
-                    logger.warning(f"Unexpected codec name: {name}")
+                    logger.warning("Unexpected codec name: %s", name)
                     continue
 
         if verify is not None:
-            logger.info(f"{verify} codec was not found, using {best[0]} instead")
+            logger.info("%s codec was not found, using %s instead", verify, best[0])
 
         return best[0], best[3]
 
@@ -354,9 +354,11 @@ class LibraryItem(BaseItem):
                     rejection_reason = reason.get("rejectionReason", "UNKNOWN")
                     validation_type = reason.get("validationType", "UNKNOWN")
                     logger.debug(
-                        f"License denied message for {self.asin}: {message}."
-                        f"Reason: {rejection_reason}."
-                        f"Type: {validation_type}"
+                        "License denied message for %s: %s.Reason: %s.Type: %s",
+                        self.asin,
+                        message,
+                        rejection_reason,
+                        validation_type,
                     )
 
             msg = content_license["message"]
@@ -374,11 +376,11 @@ class LibraryItem(BaseItem):
             try:
                 voucher = decrypt_voucher_from_licenserequest(self._client.auth, lr)
             except Exception:
-                logger.error(f"Decrypting voucher for  {self.asin} failed")
+                logger.error("Decrypting voucher for %s failed", self.asin)
             else:
                 content_license["license_response"] = voucher
         else:
-            logger.error(f"No voucher for {self.asin} found")
+            logger.error("No voucher for %s found", self.asin)
 
         return lr
 
@@ -491,7 +493,7 @@ class Library(BaseList):
                 )
             else:
                 logger.info(
-                    f"{item.asin}: {item.full_title} can not determine date added."
+                    "%s: %s can not determine date added.", item.asin, item.full_title
                 )
                 return True
 

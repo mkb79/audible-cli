@@ -235,7 +235,7 @@ async def add_wishlist(client, asin, title):
             if answer is not None:
                 [asin.append(i) for i in answer]
         else:
-            logger.error(f"Skip title {t}: Not found in library")
+            logger.error("Skip title %s: Not found in library", t)
 
     jobs = [add_asin(a) for a in asin]
     await asyncio.gather(*jobs)
@@ -244,9 +244,9 @@ async def add_wishlist(client, asin, title):
     for a in asin:
         if wishlist.has_asin(a):
             item = wishlist.get_item_by_asin(a)
-            logger.info(f"{a} ({item.full_title}) added to wishlist")
+            logger.info("%s (%s) added to wishlist", a, item.full_title)
         else:
-            logger.error(f"{a} was not added to wishlist")
+            logger.error("%s was not added to wishlist", a)
 
 
 @cli.command("remove")
@@ -265,7 +265,7 @@ async def remove_wishlist(client, asin, title):
     async def remove_asin(rasin):
         r = await client.delete(f"wishlist/{rasin}")
         item = wishlist.get_item_by_asin(rasin)
-        logger.info(f"{rasin} ({item.full_title}) removed from wishlist")
+        logger.info("%s (%s) removed from wishlist", rasin, item.full_title)
         return r
 
     asin = list(asin)
@@ -300,7 +300,7 @@ async def remove_wishlist(client, asin, title):
             if answer is not None:
                 [asin.append(i) for i in answer]
         else:
-            logger.error(f"Skip title {t}: Not found in library")
+            logger.error("Skip title %s: Not found in library", t)
 
     if asin:
         jobs = []
@@ -308,6 +308,6 @@ async def remove_wishlist(client, asin, title):
             if wishlist.has_asin(a):
                 jobs.append(remove_asin(a))
             else:
-                logger.error(f"{a} not in wishlist")
+                logger.error("%s not in wishlist", a)
 
         await asyncio.gather(*jobs)
