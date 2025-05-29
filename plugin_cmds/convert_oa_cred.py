@@ -67,12 +67,12 @@ def make_auth_file(fn, origin):
     help="OpenAudible credentials.json file",
 )
 @pass_session
-def cli(session, input):
+def cli(session, _input):
     """Converts a OpenAudible credential file to a audible-cli auth file
 
     Stores the auth files in app dir
     """
-    fdata = pathlib.Path(input).read_text("utf-8")
+    fdata = pathlib.Path(_input).read_text("utf-8")
     fdata = json.loads(fdata)
 
     x = extract_data_from_file(fdata)

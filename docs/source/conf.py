@@ -21,7 +21,7 @@ import audible_cli
 # -- Project information -----------------------------------------------------
 
 project = "audible-cli"
-copyright = "2020, mkb79"
+copyright = "2020, mkb79"  # noqa: A001
 author = "mkb79"
 
 # The full version, including alpha/beta/rc tags
