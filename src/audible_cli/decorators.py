@@ -26,7 +26,7 @@ def run_async(f):
 
 
 def wrap_async(f):
-    """Wrap a synchronous function and runs them in an executor"""
+    """Wrap a synchronous function and runs them in an executor."""
 
     @wraps(f)
     async def wrapper(*args, loop=None, executor=None, **kwargs):
@@ -58,7 +58,7 @@ def pass_client(func=None, **client_kwargs):
 
 
 def add_param_to_session(ctx: click.Context, param, value):
-    """Add a parameter to :class:`Session` `param` attribute
+    """Add a parameter to :class:`Session` `param` attribute.
 
     This is usually used as a callback for a click option
     """
@@ -83,7 +83,7 @@ def version_option(func=None, **kwargs):
             response.raise_for_status()
         except Exception as e:
             logger.error(e)
-            raise click.Abort()
+            raise click.Abort() from None
 
         content = response.json()
 
@@ -145,10 +145,9 @@ def password_option(func=None, **kwargs):
 
 
 def verbosity_option(func=None, *, cli_logger=None, **kwargs):
-    """A decorator that adds a `--verbosity, -v` option to the decorated
-    command.
-    Keyword arguments are passed to
-    the underlying ``click.option`` decorator.
+    """A decorator that adds a `--verbosity, -v` option to the decorated command.
+
+    Keyword arguments are passed to the underlying ``click.option`` decorator.
     """
 
     def callback(ctx, param, value):

@@ -57,11 +57,10 @@ logger = logging.getLogger("audible_cli.cmds.cmd_api")
 )
 @pass_session
 def cli(session, **options):
-    """Send requests to an Audible API endpoint
+    """Send requests to an Audible API endpoint.
 
-    Take a look at
-    https://audible.readthedocs.io/en/latest/misc/external_api.html for known
-    endpoints and parameters.
+    Take a look at https://audible.readthedocs.io/en/latest/misc/external_api.html
+    for known endpoints and parameters.
     """
     auth = session.auth
     endpoint = options.get("endpoint")

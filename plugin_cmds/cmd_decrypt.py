@@ -37,7 +37,7 @@ class SupportedFiles(Enum):
 
     @classmethod
     def get_supported_list(cls):
-        return list(set(item.value for item in cls))
+        return list({item.value for item in cls})
 
     @classmethod
     def is_supported_suffix(cls, value):
@@ -66,7 +66,7 @@ def _get_input_files(
         expanded_filter = filter(
             lambda x: SupportedFiles.is_supported_file(x), expanded
         )
-        expanded = list(map(lambda x: pathlib.Path(x).resolve(), expanded_filter))
+        expanded = [pathlib.Path(x).resolve() for x in expanded_filter]
         filenames.extend(expanded)
 
     return filenames
@@ -133,7 +133,7 @@ class ApiChapterInfo:
             if "chapters" in current:
                 return initial + [current] + current["chapters"]
             else:
-                return initial + [current]
+                return [*initial, current]
 
         chapters = list(
             reduce(

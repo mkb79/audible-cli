@@ -24,7 +24,7 @@ logger = logging.getLogger("audible_cli.config")
 
 
 class ConfigFile:
-    """Presents an audible-cli configuration file
+    """Presents an audible-cli configuration file.
 
     Instantiate a :class:`~audible_cli.config.ConfigFile` will load the file
     content by default. To create a new config file, the ``file_exists``
@@ -62,26 +62,26 @@ class ConfigFile:
 
     @property
     def filename(self) -> pathlib.Path:
-        """Returns the path to the config file"""
+        """Returns the path to the config file."""
         return self._config_file
 
     @property
     def dirname(self) -> pathlib.Path:
-        """Returns the path to the config file directory"""
+        """Returns the path to the config file directory."""
         return self.filename.parent
 
     @property
     def data(self) -> dict[str, str | dict]:
-        """Returns the configuration data"""
+        """Returns the configuration data."""
         return self._config_data
 
     @property
     def app_config(self) -> dict[str, str]:
-        """Returns the configuration data for the APP section"""
+        """Returns the configuration data for the APP section."""
         return self.data["APP"]
 
     def has_profile(self, name: str) -> bool:
-        """Check if a profile with this name are in the configuration data
+        """Check if a profile with this name are in the configuration data.
 
         Args:
             name: The name of the profile
@@ -92,7 +92,7 @@ class ConfigFile:
         return name in self.data["profile"]
 
     def get_profile(self, name: str) -> dict[str, str]:
-        """Returns the configuration data for these profile name
+        """Returns the configuration data for this profile name.
 
         Args:
             name: The name of the profile
@@ -118,7 +118,7 @@ class ConfigFile:
     ) -> str:
         """Returns the value for an option for the given profile.
 
-        Looks first, if an option is in the ``profile`` section. If not, it
+        Looks first if an option is in the ``profile`` section. If not, it
         searches for the option in the ``APP`` section. If not found, it
         returns the ``default``.
 
@@ -147,7 +147,7 @@ class ConfigFile:
         write_config: bool = True,
         **additional_options,
     ) -> None:
-        """Adds a new profile to the config
+        """Adds a new profile to the config.
 
         Args:
             name: The name of the profile
@@ -182,7 +182,7 @@ class ConfigFile:
             self.write_config()
 
     def delete_profile(self, name: str, write_config: bool = True) -> None:
-        """Deletes a profile from config
+        """Deletes a profile from config.
 
         Args:
             name: The name of the profile
@@ -205,7 +205,7 @@ class ConfigFile:
             self.write_config()
 
     def write_config(self, filename: str | pathlib.Path | None = None) -> None:
-        """Write the config data to file
+        """Write the config data to file.
 
         Args:
             filename: If not ``None`` the config is written to these file path
@@ -223,7 +223,7 @@ class ConfigFile:
 
 
 class Session:
-    """Holds the settings for the current session"""
+    """Holds the settings for the current session."""
 
     def __init__(self) -> None:
         self._auths: dict[str, Authenticator] = {}
@@ -238,9 +238,9 @@ class Session:
 
     @property
     def params(self):
-        """Returns the parameter of the session
+        """Returns the parameter of the session.
 
-        Parameter are usually added using the ``add_param_to_session``
+        Parameters are usually added using the ``add_param_to_session``
         callback on a click option. This way an option from a parent command
         can be accessed from his subcommands.
         """
@@ -248,17 +248,17 @@ class Session:
 
     @property
     def app_dir(self):
-        """Returns the path of the app dir"""
+        """Returns the path of the app dir."""
         return self._app_dir
 
     @property
     def plugin_dir(self):
-        """Returns the path of the plugin dir"""
+        """Returns the path of the plugin dir."""
         return self._plugin_dir
 
     @property
     def config(self):
-        """Returns the ConfigFile for this session"""
+        """Returns the ConfigFile for this session."""
         if self._config is None:
             conf_file = self.app_dir / CONFIG_FILE
             self._config = ConfigFile(conf_file)
@@ -267,7 +267,7 @@ class Session:
 
     @property
     def selected_profile(self):
-        """Returns the selected config profile name for this session
+        """Returns the selected config profile name for this session.
 
         The `profile` to use must be set using the ``add_param_to_session``
         callback of a click option. Otherwise, the primary profile from the
@@ -284,7 +284,7 @@ class Session:
     def get_auth_for_profile(
         self, profile: str, password: str | None = None
     ) -> audible.Authenticator:
-        """Returns an Authenticator for a profile
+        """Returns an Authenticator for a profile.
 
         If an Authenticator for this profile is already loaded, it will
         return the Authenticator without reloading it. This way a session can
@@ -328,7 +328,7 @@ class Session:
                     default="",
                 )
                 if len(password) == 0:
-                    raise click.Abort()
+                    raise click.Abort() from None
 
         click_f = click.format_filename(auth_file, shorten=True)
         logger.debug("Auth file %s for profile %s loaded.", click_f, profile)
@@ -338,7 +338,7 @@ class Session:
 
     @property
     def auth(self):
-        """Returns the Authenticator for the selected profile"""
+        """Returns the Authenticator for the selected profile."""
         profile = self.selected_profile
         password = self.params.get("password")
         return self.get_auth_for_profile(profile, password)

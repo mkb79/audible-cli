@@ -1,6 +1,4 @@
-"""Core components for click_plugins
-https://github.com/click-contrib/click-plugins
-"""
+"""Core components for click_plugins https://github.com/click-contrib/click-plugins."""
 
 import os
 import pathlib
@@ -12,8 +10,7 @@ import click
 
 
 def from_folder(plugin_dir: str | pathlib.Path):
-    """A decorator to register external CLI commands to an instance of
-    `click.Group()`.
+    """A decorator to register external CLI commands to an instance of `click.Group()`.
 
     Parameters
     ----------
@@ -60,8 +57,7 @@ def from_folder(plugin_dir: str | pathlib.Path):
 
 
 def from_entry_point(entry_point_group):
-    """A decorator to register external CLI commands to an instance of
-    `click.Group()`.
+    """A decorator to register external CLI commands to an instance of `click.Group()`.
 
     Parameters
     ----------
@@ -104,7 +100,9 @@ def from_entry_point(entry_point_group):
 
 
 class BrokenCommand(click.Command):
-    """Rather than completely crash the CLI when a broken plugin is loaded, this
+    """Class for a broken command.
+
+    Rather than completely crash the CLI when a broken plugin is loaded, this
     class provides a modified help message informing the user that the plugin
     is broken, and they should contact the owner. If the user executes the
     plugin or specifies `--help` a traceback is reported showing the exception
@@ -126,11 +124,7 @@ class BrokenCommand(click.Command):
             "\nWarning: entry point could not be loaded. Contact "
             "its author for help.\n\n\b\n" + traceback.format_exc()
         )
-        self.short_help = (
-            icon
-            + " Warning: could not load plugin. See `%s %s --help`."
-            % (util_name, self.name)
-        )
+        self.short_help = f"{icon} Warning: could not load plugin. See `{util_name} {self.name} --help`."
 
     def invoke(self, ctx):
         """Print the traceback instead of doing nothing."""

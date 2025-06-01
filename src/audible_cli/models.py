@@ -150,14 +150,12 @@ class LibraryItem(BaseItem):
         return data.get("item", data)
 
     def _get_codec(self, quality: str):
-        """If quality is not ``best``, ensures the given quality is present in
-        them codecs list. Otherwise, will find the best aax quality available
+        """Get codec for quality.
+
+        If quality is not ``best``, ensures the given quality is present in
+        the codec list. Otherwise, will find the best aax quality available
         """
-        assert quality in (
-            "best",
-            "high",
-            "normal",
-        )
+        assert quality in ("best", "high", "normal")  # noqa: S101
 
         # if available_codecs is None the item can't be downloaded as aax
         if self.available_codecs is None:
@@ -196,7 +194,7 @@ class LibraryItem(BaseItem):
         return best[0], best[3]
 
     async def get_child_items(self, **request_params) -> Optional["Library"]:
-        """Get child elements of MultiPartBooks and Podcasts
+        """Get child elements of MultiPartBooks and Podcasts.
 
         With these all parts of a MultiPartBook or all episodes of a Podcasts
         can be shown.
@@ -274,7 +272,7 @@ class LibraryItem(BaseItem):
         except Exception as e:
             raise AudibleCliException(
                 f"Can not get download url for asin {self.asin} with message {e}"
-            )
+            ) from None
 
         return httpx.URL(link), codec_name
 
@@ -318,11 +316,7 @@ class LibraryItem(BaseItem):
     async def get_license(
         self, quality: str = "high", response_groups: str | None = None
     ):
-        assert quality in (
-            "best",
-            "high",
-            "normal",
-        )
+        assert quality in ("best", "high", "normal")  # noqa: S101
 
         if response_groups is None:
             response_groups = "last_position_heard, pdf_url, content_reference"
@@ -388,12 +382,8 @@ class LibraryItem(BaseItem):
         self, quality: str = "high", chapter_type: str = "Tree", **request_kwargs
     ):
         chapter_type = chapter_type.capitalize()
-        assert quality in (
-            "best",
-            "high",
-            "normal",
-        )
-        assert chapter_type in ("Flat", "Tree")
+        assert quality in ("best", "high", "normal")  # noqa: S101
+        assert chapter_type in ("Flat", "Tree")  # noqa: S101
 
         url = f"content/{self.asin}/metadata"
         params = {

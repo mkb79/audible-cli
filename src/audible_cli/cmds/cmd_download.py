@@ -4,7 +4,7 @@ import asyncio.sslproto
 import json
 import logging
 import pathlib
-from datetime import datetime
+from datetime import datetime, timezone
 
 import aiofiles
 import click
@@ -364,7 +364,7 @@ async def _reuse_voucher(lr_file, item):
     lr = json.loads(lr)
     content_license = lr["content_license"]
 
-    assert content_license["status_code"] == "Granted", "License not granted"
+    assert content_license["status_code"] == "Granted", "License not granted"  # noqa: S101
 
     # try to get the user id
     user_id = None
@@ -389,7 +389,7 @@ async def _reuse_voucher(lr_file, item):
     if "refresh_date" in content_license:
         refresh_date = content_license["refresh_date"]
         refresh_date = datetime_type.convert(refresh_date, None, None)
-        if refresh_date < datetime.utcnow():
+        if refresh_date < datetime.now(timezone.utc):
             raise VoucherNeedRefresh(lr_file)
 
     content_metadata = content_license["content_metadata"]
@@ -398,8 +398,8 @@ async def _reuse_voucher(lr_file, item):
 
     expires = url.params.get("Expires")
     if expires:
-        expires = datetime.utcfromtimestamp(int(expires))
-        now = datetime.utcnow()
+        expires = datetime.fromtimestamp(int(expires), timezone.utc)
+        now = datetime.now(timezone.utc)
         if expires < now:
             raise DownloadUrlExpired(lr_file)
 
@@ -610,15 +610,17 @@ def display_counter():
                 continue
 
             if k == "voucher_saved":
-                k = "voucher"
+                category = "voucher"
             elif k == "aycl_voucher":
-                k = "aycl voucher"
+                category = "aycl voucher"
             elif k == "voucher":
                 diff = v - counter.voucher_saved
                 if diff > 0:
                     echo(f"Unsaved voucher: {diff}")
                 continue
-            echo(f"New {k} files: {v}")
+            else:
+                category = k
+            echo(f"New {category} files: {v}")
     else:
         echo("No new files downloaded.")
 
@@ -718,8 +720,8 @@ def display_counter():
 @bunch_size_option
 @pass_session
 @pass_client(headers=CLIENT_HEADERS)
-async def cli(session, api_client, **params):
-    """Download audiobook(s) from library"""
+async def cli(session, api_client, **params):  # noqa: C901
+    """Download audiobook(s) from a library."""
     client = api_client.session
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
 
@@ -858,7 +860,7 @@ async def cli(session, api_client, **params):
             logger.error("Skip title %s: Not found in library", title)
 
     # set queue
-    global QUEUE
+    global QUEUE  # noqa: PLW0603
     QUEUE = asyncio.Queue()
 
     for job in jobs:

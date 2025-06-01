@@ -54,8 +54,8 @@ async def _get_stats_year(client, year):
 )
 @pass_client
 async def cli(client, output, signup_year):
-    """Get and analyse listening statistics"""
-    year_range = [y for y in range(signup_year, current_year + 1)]
+    """Get and analyse listening statistics."""
+    year_range = list(range(signup_year, current_year + 1))
 
     r = await asyncio.gather(*[_get_stats_year(client, y) for y in year_range])
 

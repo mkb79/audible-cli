@@ -20,7 +20,7 @@ from ..utils import export_to_csv
 
 @click.group("library")
 def cli():
-    """Interact with library"""
+    """Interact with a library."""
 
 
 async def _get_library(session, client, resolve_podcasts):
@@ -77,7 +77,7 @@ async def _get_library(session, client, resolve_podcasts):
 @pass_session
 @pass_client
 async def export_library(session, client, **params):
-    """Export library"""
+    """Export a library."""
 
     @wrap_async
     def _prepare_item(item):
@@ -182,7 +182,7 @@ async def export_library(session, client, **params):
 @pass_session
 @pass_client
 async def list_library(session, client, resolve_podcasts):
-    """List titles in library"""
+    """List titles in a library."""
 
     @wrap_async
     def _prepare_item(item):

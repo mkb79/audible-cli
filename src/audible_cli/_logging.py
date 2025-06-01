@@ -30,7 +30,8 @@ class AudibleCliLogHelper:
 
         if 0 < obj.level < audible_cli_logger.level:
             warn(
-                f"{obj.name} level is lower than {audible_cli_logger.name} logger level"
+                f"{obj.name} level is lower than {audible_cli_logger.name} logger level",
+                stacklevel=2,
             )
 
     def _set_handler(self, handler, name, level):
@@ -108,11 +109,11 @@ def _normalize_logger(logger):
 
 def _normalize_style_kwargs(styles):
     normalized_styles = {
-        "error": dict(fg="red"),
-        "exception": dict(fg="red"),
-        "critical": dict(fg="red"),
-        "debug": dict(fg="blue"),
-        "warning": dict(fg="yellow"),
+        "error": {"fg": "red"},
+        "exception": {"fg": "red"},
+        "critical": {"fg": "red"},
+        "debug": {"fg": "blue"},
+        "warning": {"fg": "yellow"},
     }
     if styles:
         normalized_styles.update(styles)
@@ -120,16 +121,14 @@ def _normalize_style_kwargs(styles):
 
 
 def _normalize_echo_kwargs(echo_kwargs):
-    normamized_echo_kwargs = dict()
+    normalized_echo_kwargs = {}
     if echo_kwargs:
-        normamized_echo_kwargs.update(echo_kwargs)
-    return normamized_echo_kwargs
+        normalized_echo_kwargs.update(echo_kwargs)
+    return normalized_echo_kwargs
 
 
 def click_basic_config(logger=None, style_kwargs=None, echo_kwargs=None):
-    """Set up the default handler (:py:class:`ClickHandler`) and formatter
-    (:py:class:`ColorFormatter`) on the given logger.
-    """
+    """Set up the default handler and formatter on the given logger."""
     logger = _normalize_logger(logger)
     style_kwargs = _normalize_style_kwargs(style_kwargs)
     echo_kwargs = _normalize_echo_kwargs(echo_kwargs)

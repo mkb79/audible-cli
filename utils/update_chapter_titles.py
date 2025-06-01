@@ -1,5 +1,7 @@
-"""This script replaces the chapter titles from a ffmetadata file with the one
-extracted from an API metadata/voucher file
+"""Script for replacing chapter titles.
+
+This script replaces the chapter titles from a ffmetadata file with the one
+extracted from an API metadata/voucher file.
 
 Example:
 
@@ -140,7 +142,7 @@ class FFMeta:
         if not isinstance(api_meta, ApiMeta):
             api_meta = ApiMeta(api_meta)
 
-        assert api_meta.count_chapters() == self.count_chapters()
+        assert api_meta.count_chapters() == self.count_chapters()  # noqa: S101
 
         echo(f"Found {self.count_chapters()} chapters to prepare.")
 
@@ -220,7 +222,7 @@ class FFMeta:
         self._ffmeta_parsed["CHAPTER"] = new_chapters
 
 
-CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 
 @click.command(context_settings=CONTEXT_SETTINGS)

@@ -32,7 +32,7 @@ logger = logging.getLogger("audible_cli.cmds.cmd_goodreads-transform")
 @pass_session
 @pass_client
 async def cli(session, client, output):
-    """YOUR COMMAND DESCRIPTION"""
+    """YOUR COMMAND DESCRIPTION."""
     logger.debug("fetching library")
     bunch_size = session.params.get("bunch_size")
     library = await Library.from_api_full_sync(
