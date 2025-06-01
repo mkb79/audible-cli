@@ -15,7 +15,7 @@ nox.needs_version = ">= 2023.04.22"
 nox.options.default_venv_backend = "uv"
 nox.options.error_on_external_run = True
 nox.options.sessions = (
-    # "pre-commit",
+    "pre-commit",
     "safety",
     # "mypy",
     "tests",
