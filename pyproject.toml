@@ -61,10 +61,13 @@ docs = [
 ]
 mypy = [
     "mypy>=0.930",
-    "types-beautifulsoup4>=4.12.0.20250516",
     "types-docutils>=0.21.0.20250516",
     "types-html5lib>=1.1.11.20250516",
     "types-pygments>=2.19.0.20250516",
+    "types-aiofiles>=24.1.0.20250516",
+    "types-tabulate>=0.9.0.20241207",
+    "types-toml>=0.10.8.20240310",
+    "types-tqdm>=4.67.0.20250516",
 ]
 pre-commit = [
     "darglint>=1.8.1",
