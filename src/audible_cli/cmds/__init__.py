@@ -7,8 +7,9 @@ from . import (
     cmd_library,
     cmd_manage,
     cmd_quickstart,
-    cmd_wishlist
+    cmd_wishlist,
 )
+
 
 cli_cmds = [
     cmd_activation_bytes.cli,
@@ -17,24 +18,22 @@ cli_cmds = [
     cmd_library.cli,
     cmd_manage.cli,
     cmd_quickstart.cli,
-    cmd_wishlist.cli
+    cmd_wishlist.cli,
 ]
 
 
 def build_in_cmds(func=None):
-    """
-    A decorator to register build-in CLI commands to an instance of
-    `click.Group()`.
+    """A decorator to register build-in CLI commands to an instance of `click.Group()`.
 
-    Returns
+    Returns:
     -------
     click.Group()
     """
+
     def decorator(group):
         if not isinstance(group, click.Group):
             raise TypeError(
-                "Plugins can only be attached to an instance of "
-                "click.Group()"
+                "Plugins can only be attached to an instance of click.Group()"
             )
 
         for cmd in cli_cmds:

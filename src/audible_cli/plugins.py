@@ -1,31 +1,27 @@
-"""
-Core components for click_plugins
-https://github.com/click-contrib/click-plugins
-"""
+"""Core components for click_plugins https://github.com/click-contrib/click-plugins."""
+
 import os
 import pathlib
 import sys
 import traceback
 from importlib import import_module
-from typing import Union
 
 import click
 
 
-def from_folder(plugin_dir: Union[str, pathlib.Path]):
-    """
-    A decorator to register external CLI commands to an instance of
-    `click.Group()`.
+def from_folder(plugin_dir: str | pathlib.Path):
+    """A decorator to register external CLI commands to an instance of `click.Group()`.
 
     Parameters
     ----------
     plugin_dir : str
         Desc.
 
-    Returns
+    Returns:
     -------
     click.Group()
     """
+
     def decorator(group):
         if not isinstance(group, click.Group):
             raise TypeError(
@@ -47,11 +43,9 @@ def from_folder(plugin_dir: Union[str, pathlib.Path]):
                 group.add_command(cmd)
 
                 orig_help = cmd.help or ""
-                new_help = (
-                    f"(P) {orig_help}\n\nPlugin loaded from file: {str(cmd_path)}"
-                )
+                new_help = f"(P) {orig_help}\n\nPlugin loaded from file: {cmd_path!s}"
                 cmd.help = new_help
-            except Exception:  # noqa
+            except Exception:
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
                 # other than explain the error.
@@ -63,19 +57,18 @@ def from_folder(plugin_dir: Union[str, pathlib.Path]):
 
 
 def from_entry_point(entry_point_group):
-    """
-    A decorator to register external CLI commands to an instance of
-    `click.Group()`.
+    """A decorator to register external CLI commands to an instance of `click.Group()`.
 
     Parameters
     ----------
     entry_point_group : list
         A list producing one `pkg_resources.EntryPoint()` per iteration.
 
-    Returns
+    Returns:
     -------
     click.Group()
     """
+
     def decorator(group):
         if not isinstance(group, click.Group):
             raise TypeError(
@@ -95,7 +88,7 @@ def from_entry_point(entry_point_group):
                 orig_help = cmd.help or ""
                 new_help = f"(P) {orig_help}\n\nPlugin loaded from package: {dist_name}"
                 cmd.help = new_help
-            except Exception:  # noqa
+            except Exception:
                 # Catch this so a busted plugin doesn't take down the CLI.
                 # Handled by registering a dummy command that does nothing
                 # other than explain the error.
@@ -107,7 +100,8 @@ def from_entry_point(entry_point_group):
 
 
 class BrokenCommand(click.Command):
-    """
+    """Class for a broken command.
+
     Rather than completely crash the CLI when a broken plugin is loaded, this
     class provides a modified help message informing the user that the plugin
     is broken, and they should contact the owner. If the user executes the
@@ -116,33 +110,24 @@ class BrokenCommand(click.Command):
     """
 
     def __init__(self, name):
-        """
-        Define the special help messages after instantiating a `click.Command()`.
-        """
-
+        """Define the special help messages after instantiating a `click.Command()`."""
         click.Command.__init__(self, name)
 
-        util_name = os.path.basename(sys.argv and sys.argv[0] or __file__)
+        util_name = os.path.basename((sys.argv and sys.argv[0]) or __file__)
 
-        if os.environ.get('CLICK_PLUGINS_HONESTLY'):  # pragma no cover
-            icon = u'\U0001F4A9'
+        if os.environ.get("CLICK_PLUGINS_HONESTLY"):  # pragma no cover
+            icon = "\U0001f4a9"
         else:
-            icon = u'\u2020'
+            icon = "\u2020"
 
         self.help = (
             "\nWarning: entry point could not be loaded. Contact "
-            "its author for help.\n\n\b\n"
-            + traceback.format_exc())
-        self.short_help = (
-            icon + " Warning: could not load plugin. See `%s %s --help`."
-            % (util_name, self.name))
+            "its author for help.\n\n\b\n" + traceback.format_exc()
+        )
+        self.short_help = f"{icon} Warning: could not load plugin. See `{util_name} {self.name} --help`."
 
     def invoke(self, ctx):
-
-        """
-        Print the traceback instead of doing nothing.
-        """
-
+        """Print the traceback instead of doing nothing."""
         click.echo(self.help, color=ctx.color)
         ctx.exit(1)
 

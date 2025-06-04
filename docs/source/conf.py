@@ -12,6 +12,8 @@
 #
 import os
 import sys
+
+
 sys.path.insert(0, os.path.abspath("../../src"))
 import audible_cli
 
@@ -19,7 +21,7 @@ import audible_cli
 # -- Project information -----------------------------------------------------
 
 project = "audible-cli"
-copyright = "2020, mkb79"
+copyright = "2020, mkb79"  # noqa: A001
 author = "mkb79"
 
 # The full version, including alpha/beta/rc tags
@@ -31,14 +33,26 @@ version = audible_cli.__version__
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
+
 extensions = [
-    "recommonmark",
+    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.coverage",
     "sphinx.ext.napoleon",
     "sphinx_rtd_theme",
-    "sphinx.ext.autosummary"
+    "sphinx.ext.viewcode",
+    "sphinxcontrib.httpdomain",
+    "sphinx_autodoc_typehints",
+    "sphinx.ext.autosummary",
 ]
+
+# Napoleon
+napoleon_numpy_docstring = False
+
+# Autodoc Typehints
+set_type_checking_flag = True
+typehints_fully_qualified = False
+always_document_param_types = True
 
 master_doc = "index"
 

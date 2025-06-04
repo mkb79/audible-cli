@@ -19,20 +19,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- The `--chapter-type` option is added to the download command. Chapter can now be 
-  downloaded as `flat` or `tree` type. `tree` is the default. A default chapter type 
+- The `--chapter-type` option is added to the download command. Chapter can now be
+  downloaded as `flat` or `tree` type. `tree` is the default. A default chapter type
   can be set in the config file.
 
 ### Changed
 
 - Improved podcast ignore feature in download command
-- make `--ignore-podcasts` and `--resolve-podcasts` options of download command mutual 
+- make `--ignore-podcasts` and `--resolve-podcasts` options of download command mutual
   exclusive
-- Switched from a HEAD to a GET request without loading the body in the downloader 
-  class. This change improves the program's speed, as the HEAD request was taking 
+- Switched from a HEAD to a GET request without loading the body in the downloader
+  class. This change improves the program's speed, as the HEAD request was taking
   considerably longer than a GET request on some Audible pages.
-- `models.LibraryItem.get_content_metadatata` now accept a `chapter_type` argument. 
-  Additional keyword arguments to this method are now passed through the metadata 
+- `models.LibraryItem.get_content_metadatata` now accept a `chapter_type` argument.
+  Additional keyword arguments to this method are now passed through the metadata
   request.
 - Update httpx version range to >=0.23.3 and <0.28.0.
 - fix typo from `resolve_podcats` to `resolve_podcasts`
@@ -55,7 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added a resume feature when downloading aaxc files.
 - New `downlaoder` module which contains a rework of the Downloader class.
 - If necessary, large audiobooks are now downloaded in parts.
-- Plugin command help page now contains additional information about the source of 
+- Plugin command help page now contains additional information about the source of
   the plugin.
 - Command help text now starts with ´(P)` for plugin commands.
 
@@ -77,8 +77,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- Update httpx version range to >=0.23.3 and <0.26.0. 
- 
+- Update httpx version range to >=0.23.3 and <0.26.0.
+
 ### Misc
 
 - add `freeze_support` to pyinstaller entry script (#78)
@@ -94,7 +94,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - Allow download multiple cover sizes at once. Each cover size must be provided with the `--cover-size` option
-
 
 ### Changed
 
@@ -183,7 +182,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 - the `library export` and `wishlist export` command will now export to `csv` correctly
-- 
+-
 
 ## [0.1.3] - 2022-03-27
 
@@ -223,7 +222,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - the `--ignore-podcasts` flag to download subcommand; if a podcast contains multiple episodes, the podcast will be ignored
 - the`models.Library.resolve_podcasts` method to append all podcast episodes to given library.
 - the `models.LibraryItem.get_child_items` method to get all episodes of a podcast item or parts for a MultiPartBook.
-- the`models.BaseItem` now holds a list of `response_groups` in the `_response_groups` attribute. 
+- the`models.BaseItem` now holds a list of `response_groups` in the `_response_groups` attribute.
 - the`--format` option to `library export` subcommand
 - the `models.Catalog` class
 - the `models.Library.from_api_full_sync` method to fetch the full library
@@ -233,9 +232,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - the `--aaxc` flag of the download command now try to check if a voucher file exists before a `licenserequest` is make (issue #60)
 - the `--aaxc` flag of the download command now downloads mp3/m4a files if the `aaxc` format is not available and the `licenserequest` offers this formats
 - the `download` subcommand now download podcasts
-- *Remove sync code where async code are available. All plugins should take care about this!!!*
+- _Remove sync code where async code are available. All plugins should take care about this!!!_
 - Bump `audible` to v0.7.0
-- rebuild `models.LibraryItem.get_aax_url` to build the aax download url in another way 
+- rebuild `models.LibraryItem.get_aax_url` to build the aax download url in another way
 - `models.BaseItem.full_title` now contains publication name for podcast episodes
 - `models.LibraryItem` now checks the customer rights when calling `LibraryItem._is_downloadable`
 - `models.BaseItem` and `models.BaseList` now holds the `api_client` instead the `locale` and `auth`
@@ -276,9 +275,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Add timeout option to download command
 
 ### Changed
+
 - models.py: If no supported codec is found when downloading aax files, no url
   is returned now.
-- utils.py: Downloading a file with the `Downloader` class now checks the 
+- utils.py: Downloading a file with the `Downloader` class now checks the
   response status code, the content type and compares the file size.
 - models.py: Now all books are fetched if the library is greater than 1000.
   This works for the download and library command.

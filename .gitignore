@@ -2,6 +2,10 @@
 !/src/audible_cli
 /src/audible_cli/*.bak
 library.csv
+/.idea/
+/.pytype/
+.DS_Store
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -132,7 +136,8 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# ruff
+.ruff_cache/
+
 # Pyre type checker
 .pyre/
-
-.idea

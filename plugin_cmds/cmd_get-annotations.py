@@ -1,6 +1,6 @@
 import click
-
 from audible.exceptions import NotFoundError
+
 from audible_cli.decorators import pass_client
 
 
@@ -8,11 +8,8 @@ from audible_cli.decorators import pass_client
 @click.argument("asin")
 @pass_client
 async def cli(client, asin):
-    url = f"https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/sidecar"
-    params = {
-        "type": "AUDI",
-        "key": asin
-    }
+    url = "https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/sidecar"
+    params = {"type": "AUDI", "key": asin}
     try:
         r = await client.get(url, params=params)
     except NotFoundError:

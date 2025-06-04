@@ -1,6 +1,5 @@
 import logging
 import pathlib
-from typing import Optional, Union
 from warnings import warn
 
 import click
@@ -16,25 +15,23 @@ log_formatter = logging.Formatter(
 
 
 class AudibleCliLogHelper:
-    def set_level(self, level: Union[str, int]) -> None:
+    def set_level(self, level: str | int) -> None:
         """Set logging level for the audible-cli package."""
         self._set_level(audible_cli_logger, level)
 
     @staticmethod
-    def _set_level(obj, level: Optional[Union[str, int]]) -> None:
+    def _set_level(obj, level: str | int | None) -> None:
         if level:
             level = level.upper() if isinstance(level, str) else level
             obj.setLevel(level)
 
         level_name = logging.getLevelName(obj.level)
-        audible_cli_logger.info(
-            f"set log level for {obj.name} to: {level_name}"
-        )
+        audible_cli_logger.info("set log level for %s to: %s", obj.name, level_name)
 
         if 0 < obj.level < audible_cli_logger.level:
             warn(
-                f"{obj.name} level is lower than "
-                f"{audible_cli_logger.name} logger level"
+                f"{obj.name} level is lower than {audible_cli_logger.name} logger level",
+                stacklevel=2,
             )
 
     def _set_handler(self, handler, name, level):
@@ -43,18 +40,13 @@ class AudibleCliLogHelper:
         audible_cli_logger.addHandler(handler)
         self._set_level(handler, level)
 
-    def set_console_logger(
-            self,
-            level: Optional[Union[str, int]] = None
-    ) -> None:
+    def set_console_logger(self, level: str | int | None = None) -> None:
         """Set up a console logger to the audible-cli package."""
         handler = logging.StreamHandler()
         # noinspection PyTypeChecker
         self._set_handler(handler, "ConsoleLogger", level)
 
-    def set_file_logger(
-            self, filename: str, level: Optional[Union[str, int]] = None
-    ) -> None:
+    def set_file_logger(self, filename: str, level: str | int | None = None) -> None:
         """Set up a file logger to the audible-cli package."""
         filename = pathlib.Path(filename)
         handler = logging.FileHandler(filename)
@@ -65,9 +57,8 @@ class AudibleCliLogHelper:
     def capture_warnings(status: bool = True) -> None:
         """Lets the logger capture warnings."""
         logging.captureWarnings(status)
-        audible_cli_logger.info(
-            f"Capture warnings {'activated' if status else 'deactivated'}"
-        )
+        logging_status = "activated" if status else "deactivated"
+        audible_cli_logger.info("Capture warnings %s", logging_status)
 
 
 log_helper = AudibleCliLogHelper()
@@ -84,9 +75,7 @@ class ColorFormatter(logging.Formatter):
             level = record.levelname.lower()
             msg = record.getMessage()
             if self.style_kwargs.get(level):
-                prefix = click.style(
-                    f"{level}: ",
-                    **self.style_kwargs[level])
+                prefix = click.style(f"{level}: ", **self.style_kwargs[level])
                 msg = "\n".join(prefix + x for x in msg.splitlines())
             return msg
         return super().format(record)
@@ -120,11 +109,11 @@ def _normalize_logger(logger):
 
 def _normalize_style_kwargs(styles):
     normalized_styles = {
-        "error": dict(fg="red"),
-        "exception": dict(fg="red"),
-        "critical": dict(fg="red"),
-        "debug": dict(fg="blue"),
-        "warning": dict(fg="yellow")
+        "error": {"fg": "red"},
+        "exception": {"fg": "red"},
+        "critical": {"fg": "red"},
+        "debug": {"fg": "blue"},
+        "warning": {"fg": "yellow"},
     }
     if styles:
         normalized_styles.update(styles)
@@ -132,15 +121,14 @@ def _normalize_style_kwargs(styles):
 
 
 def _normalize_echo_kwargs(echo_kwargs):
-    normamized_echo_kwargs = dict()
+    normalized_echo_kwargs = {}
     if echo_kwargs:
-        normamized_echo_kwargs.update(echo_kwargs)
-    return normamized_echo_kwargs
+        normalized_echo_kwargs.update(echo_kwargs)
+    return normalized_echo_kwargs
 
 
 def click_basic_config(logger=None, style_kwargs=None, echo_kwargs=None):
-    """Set up the default handler (:py:class:`ClickHandler`) and formatter
-    (:py:class:`ColorFormatter`) on the given logger."""
+    """Set up the default handler and formatter on the given logger."""
     logger = _normalize_logger(logger)
     style_kwargs = _normalize_style_kwargs(style_kwargs)
     echo_kwargs = _normalize_echo_kwargs(echo_kwargs)

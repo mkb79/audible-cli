@@ -6,10 +6,10 @@ import click
 import httpx
 from packaging.version import parse
 
+from . import __version__
+from ._logging import _normalize_logger
 from .config import Session
 from .utils import datetime_type
-from ._logging import _normalize_logger
-from . import __version__
 
 
 logger = logging.getLogger("audible_cli.options")
@@ -20,12 +20,13 @@ pass_session = click.make_pass_decorator(Session, ensure=True)
 def run_async(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        return asyncio.run(f(*args, ** kwargs))
+        return asyncio.run(f(*args, **kwargs))
+
     return wrapper
 
 
 def wrap_async(f):
-    """Wrap a synchronous function and runs them in an executor"""
+    """Wrap a synchronous function and runs them in an executor."""
 
     @wraps(f)
     async def wrapper(*args, loop=None, executor=None, **kwargs):
@@ -47,6 +48,7 @@ def pass_client(func=None, **client_kwargs):
             client = session.get_client(**client_kwargs)
             async with client.session:
                 return await f(*args, client, **kwargs)
+
         return wrapper
 
     if callable(func):
@@ -56,8 +58,8 @@ def pass_client(func=None, **client_kwargs):
 
 
 def add_param_to_session(ctx: click.Context, param, value):
-    """Add a parameter to :class:`Session` `param` attribute
-    
+    """Add a parameter to :class:`Session` `param` attribute.
+
     This is usually used as a callback for a click option
     """
     session = ctx.ensure_object(Session)
@@ -75,13 +77,13 @@ def version_option(func=None, **kwargs):
 
         url = "https://api.github.com/repos/mkb79/audible-cli/releases/latest"
         headers = {"Accept": "application/vnd.github.v3+json"}
-        logger.debug(f"Requesting Github API for latest release information")
+        logger.debug("Requesting Github API for latest release information")
         try:
             response = httpx.get(url, headers=headers, follow_redirects=True)
             response.raise_for_status()
         except Exception as e:
             logger.error(e)
-            raise click.Abort()
+            raise click.Abort() from None
 
         content = response.json()
 
@@ -93,7 +95,7 @@ def version_option(func=None, **kwargs):
             click.echo(
                 f" (update available)\nVisit {html_url} "
                 f"for information about the new release.",
-                color=ctx.color
+                color=ctx.color,
             )
         else:
             click.echo(" (up-to-date)", color=ctx.color)
@@ -118,8 +120,7 @@ def profile_option(func=None, **kwargs):
     kwargs.setdefault("callback", add_param_to_session)
     kwargs.setdefault("expose_value", False)
     kwargs.setdefault(
-        "help",
-        "The profile to use instead primary profile (case sensitive!)."
+        "help", "The profile to use instead primary profile (case sensitive!)."
     )
 
     option = click.option("--profile", "-P", **kwargs)
@@ -144,17 +145,16 @@ def password_option(func=None, **kwargs):
 
 
 def verbosity_option(func=None, *, cli_logger=None, **kwargs):
-    """A decorator that adds a `--verbosity, -v` option to the decorated
-    command.
-    Keyword arguments are passed to
-    the underlying ``click.option`` decorator.
+    """A decorator that adds a `--verbosity, -v` option to the decorated command.
+
+    Keyword arguments are passed to the underlying ``click.option`` decorator.
     """
+
     def callback(ctx, param, value):
         x = getattr(logging, value.upper(), None)
         if x is None:
             raise click.BadParameter(
-                f"Must be CRITICAL, ERROR, WARNING, INFO or DEBUG, "
-                f"not {value}"
+                f"Must be CRITICAL, ERROR, WARNING, INFO or DEBUG, not {value}"
             )
         cli_logger.setLevel(x)
 
@@ -162,8 +162,7 @@ def verbosity_option(func=None, *, cli_logger=None, **kwargs):
     kwargs.setdefault("metavar", "LVL")
     kwargs.setdefault("expose_value", False)
     kwargs.setdefault(
-        "help", "Either CRITICAL, ERROR, WARNING, "
-        "INFO or DEBUG. [default: INFO]"
+        "help", "Either CRITICAL, ERROR, WARNING, INFO or DEBUG. [default: INFO]"
     )
     kwargs.setdefault("is_eager", True)
     kwargs.setdefault("callback", callback)
@@ -190,8 +189,11 @@ def timeout_option(func=None, **kwargs):
     kwargs.setdefault("default", 30)
     kwargs.setdefault("show_default", True)
     kwargs.setdefault(
-        "help", ("Increase the timeout time if you got any TimeoutErrors. "
-                 "Set to 0 to disable timeout.")
+        "help",
+        (
+            "Increase the timeout time if you got any TimeoutErrors. "
+            "Set to 0 to disable timeout."
+        ),
     )
     kwargs.setdefault("callback", callback)
     kwargs.setdefault("expose_value", False)
@@ -209,10 +211,13 @@ def bunch_size_option(func=None, **kwargs):
     kwargs.setdefault("default", 1000)
     kwargs.setdefault("show_default", True)
     kwargs.setdefault(
-        "help", ("How many library items should be requested per request. A "
-                 "lower size results in more requests to get the full library. "
-                 "A higher size can result in a TimeOutError on low internet "
-                 "connections.")
+        "help",
+        (
+            "How many library items should be requested per request. A "
+            "lower size results in more requests to get the full library. "
+            "A higher size can result in a TimeOutError on low internet "
+            "connections."
+        ),
     )
     kwargs.setdefault("callback", add_param_to_session)
     kwargs.setdefault("expose_value", False)
@@ -228,8 +233,7 @@ def bunch_size_option(func=None, **kwargs):
 def start_date_option(func=None, **kwargs):
     kwargs.setdefault("type", datetime_type)
     kwargs.setdefault(
-        "help",
-        "Only considers books added to library on or after this UTC date."
+        "help", "Only considers books added to library on or after this UTC date."
     )
     kwargs.setdefault("callback", add_param_to_session)
     kwargs.setdefault("expose_value", False)
@@ -245,8 +249,7 @@ def start_date_option(func=None, **kwargs):
 def end_date_option(func=None, **kwargs):
     kwargs.setdefault("type", datetime_type)
     kwargs.setdefault(
-        "help",
-        "Only considers books added to library on or before this UTC date."
+        "help", "Only considers books added to library on or before this UTC date."
     )
     kwargs.setdefault("callback", add_param_to_session)
     kwargs.setdefault("expose_value", False)

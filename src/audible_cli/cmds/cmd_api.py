@@ -16,31 +16,25 @@ logger = logging.getLogger("audible_cli.cmds.cmd_api")
 @click.command("api")
 @click.argument("endpoint")
 @click.option(
-    "--method", "-m",
-    type=click.Choice(
-        ["GET", "POST", "DELETE", "PUT"],
-        case_sensitive=False
-    ),
+    "--method",
+    "-m",
+    type=click.Choice(["GET", "POST", "DELETE", "PUT"], case_sensitive=False),
     default="GET",
     help="The http request method",
     show_default=True,
 )
 @click.option(
-    "--param", "-p",
+    "--param",
+    "-p",
     help="A query parameter (e.g. num_results=5). Only one parameter "
-         "per option. Multiple options of this type are allowed.",
-    multiple=True
+    "per option. Multiple options of this type are allowed.",
+    multiple=True,
 )
+@click.option("--body", "-b", help="The json formatted body to send")
+@click.option("--indent", "-i", help="pretty-printed output with indent level")
 @click.option(
-    "--body", "-b",
-    help="The json formatted body to send"
-)
-@click.option(
-    "--indent", "-i",
-    help="pretty-printed output with indent level"
-)
-@click.option(
-    "--format", "-f",
+    "--format",
+    "-f",
     type=click.Choice(
         ["json", "dict"],
     ),
@@ -49,23 +43,24 @@ logger = logging.getLogger("audible_cli.cmds.cmd_api")
     show_default=True,
 )
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     type=click.Path(path_type=pathlib.Path),
-    help="Output the response to a file"
+    help="Output the response to a file",
 )
 @click.option(
-    "--country-code", "-c",
+    "--country-code",
+    "-c",
     type=click.Choice(AVAILABLE_MARKETPLACES),
     help="Requested Audible marketplace. If not set, the country code for "
-         "the current profile is used."
+    "the current profile is used.",
 )
 @pass_session
 def cli(session, **options):
-    """Send requests to an Audible API endpoint
+    """Send requests to an Audible API endpoint.
 
-    Take a look at 
-    https://audible.readthedocs.io/en/latest/misc/external_api.html for known 
-    endpoints and parameters.
+    Take a look at https://audible.readthedocs.io/en/latest/misc/external_api.html
+    for known endpoints and parameters.
     """
     auth = session.auth
     endpoint = options.get("endpoint")
@@ -105,4 +100,4 @@ def cli(session, **options):
         click.echo(r)
     else:
         output_filename.write_text(r)
-        logger.info(f"Output saved to {output_filename.resolve()}")
+        logger.info("Output saved to %s", output_filename.resolve())

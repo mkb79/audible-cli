@@ -1,0 +1,130 @@
+name: Tests
+
+on:
+  - push
+  - pull_request
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  tests:
+    name: ${{ matrix.session }} ${{ matrix.python }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { python: "3.13", os: "ubuntu-latest", session: "pre-commit" }
+          - { python: "3.13", os: "ubuntu-latest", session: "safety" }
+          # - { python: "3.13", os: "ubuntu-latest", session: "mypy" }
+          # - { python: "3.12", os: "ubuntu-latest", session: "mypy" }
+          # - { python: "3.11", os: "ubuntu-latest", session: "mypy" }
+          # - { python: "3.10", os: "ubuntu-latest", session: "mypy" }
+          - { python: "3.13", os: "ubuntu-latest", session: "tests" }
+          - { python: "3.12", os: "ubuntu-latest", session: "tests" }
+          - { python: "3.11", os: "ubuntu-latest", session: "tests" }
+          - { python: "3.10", os: "ubuntu-latest", session: "tests" }
+          - { python: "3.13", os: "windows-latest", session: "tests" }
+          - { python: "3.13", os: "macos-latest", session: "tests" }
+          - { python: "3.13", os: "ubuntu-latest", session: "typeguard" }
+          - { python: "3.13", os: "ubuntu-latest", session: "xdoctest" }
+          - { python: "3.13", os: "ubuntu-latest", session: "docs-build" }
+
+    env:
+      NOXSESSION: ${{ matrix.session }}
+      FORCE_COLOR: "1"
+      PRE_COMMIT_COLOR: "always"
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Compute pre-commit cache key
+        if: matrix.session == 'pre-commit'
+        id: pre-commit-cache
+        shell: python
+        run: |
+          import hashlib
+          import os
+          import sys
+
+          python = "py{}.{}".format(*sys.version_info[:2])
+          payload = sys.version.encode() + sys.executable.encode()
+          digest = hashlib.sha256(payload).hexdigest()
+          result = "${{ runner.os }}-{}-{}-pre-commit".format(python, digest[:8])
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as io:
+              print(f"result={result}", file=io)
+
+      - name: Restore pre-commit cache
+        uses: actions/cache@v4
+        if: matrix.session == 'pre-commit'
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ steps.pre-commit-cache.outputs.result }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ steps.pre-commit-cache.outputs.result }}-
+
+      - name: Run Nox
+        run: |
+          uv run nox --python=${{ matrix.python }}
+
+      - name: Upload coverage data
+        if: always() && matrix.session == 'tests'
+        uses: "actions/upload-artifact@v4"
+        with:
+          name: coverage-data-${{ matrix.python }}-${{ matrix.os }}
+          include-hidden-files: true
+          path: ".coverage.*"
+
+      - name: Upload documentation
+        if: matrix.session == 'docs-build'
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs
+          path: docs/_build
+
+  coverage:
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Download coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-data-*
+          merge-multiple: true
+
+      - name: Combine coverage data and display human readable report
+        run: |
+          uv run nox --session=coverage
+
+      - name: Create coverage report
+        run: |
+          uv run nox --session=coverage -- xml
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5.4.3
+        env:
+          token: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          files: ./coverage.xml,./coverage1.xml,./coverage2.xml

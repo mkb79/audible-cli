@@ -1,0 +1,6 @@
+sphinx==8.2.3
+sphinx-autobuild==2024.9.19
+sphinx-autodoc-typehints==2.4.4
+sphinx-rtd-theme==3.0.2
+sphinxcontrib-httpdomain==1.8.1
+myst_parser==4.0.1

@@ -16,10 +16,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: GNU Affero General Public License v3",
-    "Programming Language :: Python :: 3.6",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -51,8 +47,52 @@ audible-quickstart = "audible_cli:quickstart"
 
 [dependency-groups]
 dev = [
-    "pyinstaller"
+    "nox>=2025.5.1",
+    "nox-uv>=0.3.0",
+    "pyinstaller",
 ]
+docs = [
+    "myst-parser>=0.16.1",
+    "sphinx>=4.3.2",
+    "sphinx-autobuild>=2021.3.14",
+    "sphinx-autodoc-typehints>=1.22",
+    "sphinx-rtd-theme>=1.2.0",
+    "sphinxcontrib-httpdomain>=1.8.1",
+]
+mypy = [
+    "mypy>=0.930",
+    "types-docutils>=0.21.0.20250516",
+    "types-html5lib>=1.1.11.20250516",
+    "types-pygments>=2.19.0.20250516",
+    "types-aiofiles>=24.1.0.20250516",
+    "types-tabulate>=0.9.0.20241207",
+    "types-toml>=0.10.8.20240310",
+    "types-tqdm>=4.67.0.20250516",
+]
+pre-commit = [
+    "darglint>=1.8.1",
+    "nox>=2025.5.1",
+    "pre-commit>=2.16.0",
+    "pre-commit-hooks>=4.1.0",
+    "ruff>=0.3.7",
+]
+safety = [
+    "safety>=1.10.3",
+]
+tests = [
+    "coverage[toml]>=6.2",
+    "pytest>=6.2.5",
+    "pytest-mock>=3.10.0",
+]
+typeguard = [
+    {include-group = "tests"},
+    "Pygments>=2.10.0",
+    "typeguard>=2.13.3",
+]
+xdocs = [
+    "xdoctest[colors]>=0.15.10",
+]
+
 
 [tool.hatch.build.targets.sdist]
 include = ["src/audible_cli"]
@@ -68,7 +108,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv]
-required-version = ">=0.7.6"
+required-version = ">=0.7.1"
 
 [tool.coverage.paths]
 source = ["src/audible_cli", "*/site-packages"]
