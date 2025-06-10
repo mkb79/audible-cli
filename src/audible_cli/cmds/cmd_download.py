@@ -644,7 +644,17 @@ def display_counter():
 @click.option(
     "--title", "-t",
     multiple=True,
-    help="tile of the audiobook (partial search)"
+    help="title of the audiobook (partial search)"
+)
+@click.option(
+    "--author", "-a",
+    multiple=True,
+    help="author of the audiobook (partial search)"
+)
+@click.option(
+    "--series", "-s",
+    multiple=True,
+    help="series of the audiobook (partial search)"
 )
 @click.option(
     "--aax",
@@ -757,6 +767,8 @@ async def cli(session, api_client, **params):
     get_all = params.get("all") is True
     asins = params.get("asin")
     titles = params.get("title")
+    authors = params.get("author")
+    series = params.get("series")
     if get_all and (asins or titles):
         raise click.BadOptionUsage(
             "--all",
@@ -836,7 +848,7 @@ async def cli(session, api_client, **params):
         image_sizes=", ".join(cover_sizes),
         bunch_size=bunch_size,
         response_groups=(
-            "product_desc, media, product_attrs, relationships, "
+            "product_desc, media, product_attrs, relationships, contributors, "
             "series, customer_rights, pdf_url"
         ),
         start_date=start_date,
@@ -893,6 +905,62 @@ async def cli(session, api_client, **params):
         else:
             logger.error(
                 f"Skip title {title}: Not found in library"
+            )
+
+    for author in authors:
+        match = library.search_item_by_author(author)
+        full_match = [i for i in match if i[1] == 100]
+
+        if match:
+            if no_confirm:
+                [jobs.append(i[0].asin) for i in full_match or match]
+            else:
+                choices = []
+                for i in full_match or match:
+                    a = i[0].asin
+                    t = i[0].full_title
+                    l = ", ".join(a["name"] for a in i[0].authors)
+                    c = questionary.Choice(title=f"{a} # {t} by {l}", value=a)
+                    choices.append(c)
+
+                answer = await questionary.checkbox(
+                    f"Found the following matches for '{author}'. Which you want to download?",
+                    choices=choices
+                ).unsafe_ask_async()
+                if answer is not None:
+                    [jobs.append(i) for i in answer]
+
+        else:
+            logger.error(
+                f"Skip author {author}: Not found in library"
+            )
+
+    for s in series:
+        match = library.search_item_by_series(s)
+        full_match = [i for i in match if i[1] == 100]
+
+        if match:
+            if no_confirm:
+                [jobs.append(i[0].asin) for i in full_match or match]
+            else:
+                choices = []
+                for i in full_match or match:
+                    a = i[0].asin
+                    t = i[0].full_title
+                    l = ", ".join(s["title"] for s in i[0].series)
+                    c = questionary.Choice(title=f"{a} # {t} in {l}", value=a)
+                    choices.append(c)
+
+                answer = await questionary.checkbox(
+                    f"Found the following matches for '{s}'. Which you want to download?",
+                    choices=choices
+                ).unsafe_ask_async()
+                if answer is not None:
+                    [jobs.append(i) for i in answer]
+
+        else:
+            logger.error(
+                f"Skip series {s}: Not found in library"
             )
 
     # set queue
