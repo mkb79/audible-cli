@@ -5,9 +5,11 @@ on:
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
-jobs:
+env:
+  PYTHON_VERSION: "3.13"
 
-  createrelease:
+jobs:
+  create_release:
     name: Create Release
     runs-on: ubuntu-latest
     outputs:
@@ -26,7 +28,7 @@ jobs:
 
   build:
     name: Build packages
-    needs: createrelease
+    needs: create_release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -34,23 +36,23 @@ jobs:
           - os: ubuntu-latest
             TARGET: linux
             CMD_BUILD: >
-                pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_linux_ubuntu_latest audible
             OUT_FILE_NAME: audible_linux_ubuntu_latest.zip
             ASSET_MIME: application/zip  # application/octet-stream
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             TARGET: linux
             CMD_BUILD: >
-                pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
-                zip -r9 audible_linux_ubuntu_20_04 audible
-            OUT_FILE_NAME: audible_linux_ubuntu_20_04.zip
+                zip -r9 audible_linux_ubuntu_22_04 audible
+            OUT_FILE_NAME: audible_linux_ubuntu_22_04.zip
             ASSET_MIME: application/zip  # application/octet-stream
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_mac audible
             OUT_FILE_NAME: audible_mac.zip
@@ -58,7 +60,7 @@ jobs:
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_mac_dir audible
             OUT_FILE_NAME: audible_mac_dir.zip
@@ -66,7 +68,7 @@ jobs:
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
-                pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 powershell Compress-Archive audible audible_win_dir.zip
             OUT_FILE_NAME: audible_win_dir.zip
@@ -74,22 +76,25 @@ jobs:
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
-                pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 powershell Compress-Archive audible.exe audible_win.zip
             OUT_FILE_NAME: audible_win.zip
             ASSET_MIME: application/zip
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v4
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.11
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip .[pyi] && pip list
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+
     - name: Build with pyinstaller for ${{matrix.TARGET}}
       run: ${{matrix.CMD_BUILD}}
+
     - name: Upload Release Asset
       id: upload-release-asset
       uses: actions/upload-release-asset@v1

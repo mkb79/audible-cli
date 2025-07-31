@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+### Misc
+
+- switch from setup.py to pyproject.toml
+- use uv for development package management
+
+## [0.3.2] - 2025-05-24
+
 ### Bugfix
 
 - Fixing `[Errno 18] Invalid cross-device link` when downloading files using the `--output-dir` option. This error is fixed by creating the resume file on the same location as the target file.
@@ -30,6 +37,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Update httpx version range to >=0.23.3 and <0.28.0.
 - fix typo from `resolve_podcats` to `resolve_podcasts`
 - `models.Library.resolve_podcats` is now deprecated and will be removed in a future version
+
+### Removed
+
+- Python 3.6 - 3.9 compatibility
 
 ## [0.3.1] - 2024-03-19
 
