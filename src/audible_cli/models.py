@@ -95,7 +95,7 @@ class BaseItem:
         elif "unicode" in mode:
             base_filename = unicodedata.normalize("NFKD", self.full_title or "")
         else:
-            base_filename = ""
+            raise AudibleCliException(f"Unsupported mode {mode} for name creation")
 
         if "asin" in mode:
             base_filename = self.asin + "_" + base_filename
