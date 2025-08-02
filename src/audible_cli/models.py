@@ -106,7 +106,7 @@ class BaseItem:
 
         # limiting 230 bytes, so that a suffix (e.g. -annotations.json) can be added easily
         limited_bytes = encoded[:max_length]
-        return limited_bytes.decode("utf-8", errors="replace")
+        return limited_bytes.decode("utf-8", errors="ignore")
 
     def substring_in_title_accuracy(self, substring):
         match = LongestSubString(substring, self.full_title)
