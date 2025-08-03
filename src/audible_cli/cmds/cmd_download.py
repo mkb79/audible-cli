@@ -590,7 +590,8 @@ def queue_job(
             "quality": quality,
             "overwrite_existing": overwrite_existing,
             "aax_fallback": aax_fallback,
-            "filename_mode": filename_mode
+            "filename_mode": filename_mode,
+            "filename_length": filename_length
         }
         QUEUE.put_nowait((cmd, kwargs))
 
@@ -603,7 +604,8 @@ def queue_job(
             "item": item,
             "quality": quality,
             "overwrite_existing": overwrite_existing,
-            "filename_mode": filename_mode
+            "filename_mode": filename_mode,
+            "filename_length": filename_length
         }
         QUEUE.put_nowait((cmd, kwargs))
 
