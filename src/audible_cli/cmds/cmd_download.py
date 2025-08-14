@@ -273,7 +273,7 @@ async def _get_audioparts(item):
 
 
 async def _add_audioparts_to_queue(
-    client, output_dir, filename_mode, item, quality, overwrite_existing,
+    client, output_dir, filename_mode, filename_length, item, quality, overwrite_existing,
     aax_fallback, download_mode
 ):
     parts = await _get_audioparts(item)
@@ -297,6 +297,7 @@ async def _add_audioparts_to_queue(
             client=client,
             output_dir=output_dir,
             filename_mode=filename_mode,
+            filename_length=filename_length,
             item=part,
             cover_sizes=None,
             quality=quality,
@@ -307,7 +308,7 @@ async def _add_audioparts_to_queue(
 
 async def download_aax(
         client, output_dir, base_filename, item, quality, overwrite_existing,
-        aax_fallback, filename_mode
+        aax_fallback, filename_mode, filename_length
 ):
     # url, codec = await item.get_aax_url(quality)
     try:
@@ -322,7 +323,8 @@ async def download_aax(
                 item=item,
                 quality=quality,
                 overwrite_existing=overwrite_existing,
-                filename_mode=filename_mode
+                filename_mode=filename_mode,
+                filename_length=filename_length
             )
         raise
 
@@ -348,6 +350,7 @@ async def download_aax(
             client=client,
             output_dir=output_dir,
             filename_mode=filename_mode,
+            filename_length=filename_length,
             item=item,
             quality=quality,
             overwrite_existing=overwrite_existing,
@@ -408,7 +411,7 @@ async def _reuse_voucher(lr_file, item):
 
 async def download_aaxc(
     client, output_dir, base_filename, item, quality, overwrite_existing,
-    filename_mode
+    filename_mode, filename_length
 ):
     lr, url, codec = None, None, None
 
@@ -489,6 +492,7 @@ async def download_aaxc(
             client=client,
             output_dir=output_dir,
             filename_mode=filename_mode,
+            filename_length=filename_length,
             item=item,
             quality=quality,
             overwrite_existing=overwrite_existing,
@@ -520,6 +524,7 @@ def queue_job(
         client,
         output_dir,
         filename_mode,
+        filename_length,
         item,
         cover_sizes,
         chapter_type,
@@ -527,7 +532,7 @@ def queue_job(
         overwrite_existing,
         aax_fallback
 ):
-    base_filename = item.create_base_filename(filename_mode)
+    base_filename = item.create_base_filename(filename_mode, filename_length)
 
     if get_cover:
         for cover_size in cover_sizes:
@@ -585,7 +590,8 @@ def queue_job(
             "quality": quality,
             "overwrite_existing": overwrite_existing,
             "aax_fallback": aax_fallback,
-            "filename_mode": filename_mode
+            "filename_mode": filename_mode,
+            "filename_length": filename_length
         }
         QUEUE.put_nowait((cmd, kwargs))
 
@@ -598,7 +604,8 @@ def queue_job(
             "item": item,
             "quality": quality,
             "overwrite_existing": overwrite_existing,
-            "filename_mode": filename_mode
+            "filename_mode": filename_mode,
+            "filename_length": filename_length
         }
         QUEUE.put_nowait((cmd, kwargs))
 
@@ -729,10 +736,17 @@ def display_counter():
 @click.option(
     "--filename-mode", "-f",
     type=click.Choice(
-        ["config", "ascii", "asin_ascii", "unicode", "asin_unicode"]
+        ["config", "ascii", "asin_ascii", "unicode", "asin_unicode", "asin_only"]
     ),
     default="config",
     help="Filename mode to use. [default: config]"
+)
+@click.option(
+    "--filename-length",
+    "-l",
+    default=230,
+    show_default=True,
+    help="Maximum filename length.",
 )
 @timeout_option
 @click.option(
@@ -829,6 +843,8 @@ async def cli(session, api_client, **params):
     if filename_mode == "config":
         filename_mode = session.config.get_profile_option(
             session.selected_profile, "filename_mode") or "ascii"
+
+    filename_length = params.get("filename_length")
 
     # fetch the user library
     library = await Library.from_api_full_sync(
@@ -934,6 +950,7 @@ async def cli(session, api_client, **params):
                 client=client,
                 output_dir=odir,
                 filename_mode=filename_mode,
+                filename_length=filename_length,
                 item=item,
                 cover_sizes=cover_sizes,
                 chapter_type=chapter_type,
