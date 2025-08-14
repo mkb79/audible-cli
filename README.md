@@ -44,7 +44,7 @@ or as the best solution using [uvx](https://github.com/astral-sh/uv)
 
 ```shell
 
-uvx --with audible-cli audible
+uvx --from audible-cli audible
 
 ```
 
