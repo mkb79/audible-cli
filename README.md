@@ -215,9 +215,15 @@ To download all of your audiobooks in the aaxc format use:
 ```shell
 audible download --all --aaxc
 ```
+
 To download all of your audiobooks after the Date 2022-07-21 in aax format use: 
 ```shell
 audible download --start-date "2022-07-21" --aax --all
+```
+
+To download an audiobook with chapter-information that can by used by aaxtomp3 use:
+```shell
+audible --aaxc --chapter --chapter-type Flat --asin <YOUR_ASIN>
 ```
 
 ## Verbosity option
