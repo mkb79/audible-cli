@@ -12,8 +12,6 @@ jobs:
   create_release:
     name: Create Release
     runs-on: ubuntu-latest
-    outputs:
-      release_url: ${{ steps.create-release.outputs.upload_url }}
     steps:
     - name: Create Release
       id: create-release
@@ -21,7 +19,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
         name: Release ${{ github.ref }}
         draft: false
         prerelease: false
@@ -97,11 +94,8 @@ jobs:
 
     - name: Upload Release Asset
       id: upload-release-asset
-      uses: actions/upload-release-asset@v1
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ needs.createrelease.outputs.release_url }}
-        asset_path: ./dist/${{ matrix.OUT_FILE_NAME}}
-        asset_name: ${{ matrix.OUT_FILE_NAME}}
-        asset_content_type: ${{ matrix.ASSET_MIME}}
+        files: ./dist/${{ matrix.OUT_FILE_NAME}}
