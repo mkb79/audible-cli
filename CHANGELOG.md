@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+### Added
+
+- The `—-filename-length` option is added to the download command. Defaults to 230.
+- Added the `asin_only` mode to function `models.BaseItem.create_base_filename` to output the asin as the base filename. 
+
+### Changed
+
+- The function `models.BaseItem.create_base_filename` now limits the output length to 230 chars by default. The output length can be changed by using the `max_length` argument.
+- The `—-filename-mode` option of the download command now accepts `asin_only` as mode. 
+
 ### Misc
 
 - switch from setup.py to pyproject.toml
