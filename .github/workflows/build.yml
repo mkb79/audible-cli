@@ -12,8 +12,6 @@ jobs:
   create_release:
     name: Create Release
     runs-on: ubuntu-latest
-    outputs:
-      release_url: ${{ steps.create-release.outputs.upload_url }}
     steps:
     - name: Create Release
       id: create-release
@@ -21,7 +19,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
         name: Release ${{ github.ref }}
         draft: false
         prerelease: false
@@ -101,5 +98,4 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
         files: ./dist/${{ matrix.OUT_FILE_NAME}}
