@@ -503,8 +503,9 @@ async def download_aaxc(
 
 async def consume(ignore_errors):
     while True:
-        cmd, kwargs = await QUEUE.get()
+        item, entity_type, cmd, kwargs = await QUEUE.get()
         try:
+            logger.info(f"--- Downloading {entity_type} for: {item.title}")
             await cmd(**kwargs)
         except Exception as e:
             logger.error(e)
@@ -545,7 +546,7 @@ def queue_job(
                 "res": cover_size,
                 "overwrite_existing": overwrite_existing
             }
-            QUEUE.put_nowait((cmd, kwargs))
+            QUEUE.put_nowait((item, "cover", cmd, kwargs))
 
     if get_pdf:
         cmd = download_pdf
@@ -556,7 +557,7 @@ def queue_job(
             "item": item,
             "overwrite_existing": overwrite_existing
         }
-        QUEUE.put_nowait((cmd, kwargs))
+        QUEUE.put_nowait((item, "pdf", cmd, kwargs))
 
     if get_chapters:
         cmd = download_chapters
@@ -568,7 +569,7 @@ def queue_job(
             "overwrite_existing": overwrite_existing,
             "chapter_type": chapter_type
         }
-        QUEUE.put_nowait((cmd, kwargs))
+        QUEUE.put_nowait((item, "chapters", cmd, kwargs))
 
     if get_annotation:
         cmd = download_annotations
@@ -578,7 +579,7 @@ def queue_job(
             "item": item,
             "overwrite_existing": overwrite_existing
         }
-        QUEUE.put_nowait((cmd, kwargs))
+        QUEUE.put_nowait((item, "annotation", cmd, kwargs))
 
     if get_aax:
         cmd = download_aax
@@ -593,7 +594,7 @@ def queue_job(
             "filename_mode": filename_mode,
             "filename_length": filename_length
         }
-        QUEUE.put_nowait((cmd, kwargs))
+        QUEUE.put_nowait((item, "aax", cmd, kwargs))
 
     if get_aaxc:
         cmd = download_aaxc
@@ -607,7 +608,7 @@ def queue_job(
             "filename_mode": filename_mode,
             "filename_length": filename_length
         }
-        QUEUE.put_nowait((cmd, kwargs))
+        QUEUE.put_nowait((item, "aaxc", cmd, kwargs))
 
 
 def display_counter():
