@@ -505,7 +505,7 @@ async def consume(ignore_errors):
     while True:
         item, entity_type, cmd, kwargs = await QUEUE.get()
         try:
-            logger.info(f"--- Downloading {entity_type} for: {item.title}")
+            logger.info(f"--- Downloading {entity_type} for: {item.asin}: {item.title}")
             await cmd(**kwargs)
         except Exception as e:
             logger.error(e)
