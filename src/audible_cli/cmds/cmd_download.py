@@ -1086,8 +1086,6 @@ async def cli(session: Session, api_client: AsyncClient, **params: Any):
         for task in pending:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-    except Exception as ex:
-        logger.error("Unknown error: ", exc_info=ex)
     finally:
         await queue.shutdown()
         display_counter(counter)
