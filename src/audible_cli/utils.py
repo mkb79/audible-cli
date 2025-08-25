@@ -4,6 +4,9 @@ import logging
 import pathlib
 from difflib import SequenceMatcher
 from typing import List, Optional, Union
+from collections.abc import Awaitable, Callable
+import asyncio
+import traceback
 
 import aiofiles
 import click
@@ -316,3 +319,152 @@ def export_to_csv(
 
         for i in data:
             writer.writerow(i)
+
+
+class SmartQueue:
+    def __init__(self, maxsize: int = 0):
+        self.queue = asyncio.Queue(maxsize=maxsize)
+        self.tasks: set[asyncio.Task] = set()
+        self._shutdown = asyncio.Event()
+        # Track producer tasks so we don't exit before they finish (Py3.10-safe)
+        self._producers: set[asyncio.Task] = set()
+        self._producers_done = asyncio.Event()
+        self._producers_done.set()  # no producers initially
+
+    @property
+    def shutdown_event(self) -> asyncio.Event:
+        """Public access to the shutdown event (read-only)."""
+        return self._shutdown
+
+    def is_shutdown(self) -> bool:
+        """Check if shutdown has been triggered."""
+        return self._shutdown.is_set()
+
+    def _track(self, coro: Awaitable, *, name: str | None = None) -> asyncio.Task:
+        task = asyncio.create_task(coro, name=name)
+        self.tasks.add(task)
+
+        def _done_callback(t: asyncio.Task):
+            self.tasks.discard(t)
+            try:
+                exc = t.exception()
+                if exc:
+                    logger.error("Task %r failed with: %r", t, exc)
+                    # Py3.10-safe traceback logging
+                    tb_lines = traceback.format_exception(type(exc), exc, exc.__traceback__)
+                    logger.error("".join(tb_lines).rstrip())
+                    # Exit on first exception
+                    asyncio.create_task(self.shutdown())
+            except asyncio.CancelledError:
+                pass
+
+        task.add_done_callback(_done_callback)
+        return task
+
+    def add_producer(
+        self,
+        producer_func: Callable[..., Awaitable],
+        *args,
+        name: str | None = None,
+        **kwargs,
+    ) -> asyncio.Task:
+        # Register producer task and signal not-done
+        self._producers_done.clear()
+        task = self._track(producer_func(self, *args, **kwargs), name=name)
+        self._producers.add(task)
+
+        def _producer_done(_t: asyncio.Task):
+            self._producers.discard(_t)
+            if not self._producers:
+                # No more producers running
+                self._producers_done.set()
+
+        task.add_done_callback(_producer_done)
+        return task
+
+    def add_consumer(
+        self,
+        consumer_func: Callable[..., Awaitable],
+        *args,
+        name: str | None = None,
+        **kwargs,
+    ) -> asyncio.Task:
+        return self._track(consumer_func(self, *args, **kwargs), name=name)
+
+    async def shutdown(self):
+        if not self._shutdown.is_set():
+            self._shutdown.set()
+            for t in list(self.tasks):
+                t.cancel()
+            await asyncio.gather(*self.tasks, return_exceptions=True)
+
+    # Queue proxies
+    async def put(self, item):
+        await self.queue.put(item)
+
+    async def get(self):
+        return await self.queue.get()
+
+    def task_done(self):
+        self.queue.task_done()
+
+    async def join(self):
+        await self.queue.join()
+
+    async def wait_until_complete(self):
+        """
+        Wait until:
+          - the queue is drained, and
+          - all producers (including dynamically spawned) have finished,
+        or until shutdown is triggered (on first exception).
+        """
+        while not self.is_shutdown():
+            # Wait for the queue to drain or shutdown
+            join_task = asyncio.create_task(self.join())
+            shutdown_task = asyncio.create_task(self._shutdown.wait())
+            done, pending = await asyncio.wait(
+                {join_task, shutdown_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for t in pending:
+                t.cancel()
+                await asyncio.gather(t, return_exceptions=True)
+            if self.is_shutdown():
+                return
+
+            # Wait for all producers to complete or shutdown
+            prod_done_task = asyncio.create_task(self._producers_done.wait())
+            shutdown_task = asyncio.create_task(self._shutdown.wait())
+            done, pending = await asyncio.wait(
+                {prod_done_task, shutdown_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for t in pending:
+                t.cancel()
+                await asyncio.gather(t, return_exceptions=True)
+            if self.is_shutdown():
+                return
+
+            # If queue still empty and no producers left, we're done
+            if self.queue.empty() and not self._producers:
+                return
+
+    async def run(self):
+        """
+        High-level runner:
+          - Waits until all work completes OR shutdown occurs (first exception).
+          - Guarantees shutdown in a finally block.
+        """
+        try:
+            done, pending = await asyncio.wait(
+                {
+                    asyncio.create_task(self.wait_until_complete()),
+                    asyncio.create_task(self.shutdown_event.wait()),
+                },
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+        finally:
+            await self.shutdown()
