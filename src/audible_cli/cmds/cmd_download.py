@@ -520,6 +520,7 @@ async def create_download_jobs(
 
 
 async def download_covers(job: DownloadJob) -> None:
+    log_job("cover", job)
     base_filename = job.create_base_filename()
 
     for cover_size in job.options.cover_sizes:
@@ -541,6 +542,7 @@ async def download_covers(job: DownloadJob) -> None:
 
 
 async def download_pdf(job: DownloadJob) -> None:
+    log_job("PDF", job)
     url = job.item.get_pdf_url()
     if url is None:
         logger.info("No PDF found for %s", job.item.full_title)
@@ -561,6 +563,7 @@ async def download_pdf(job: DownloadJob) -> None:
 
 
 async def download_chapters(job: DownloadJob) -> None:
+    log_job("chapters", job)
     options = job.options
     if not options.output_dir.is_dir():
         raise DirectoryDoesNotExists(options.output_dir)
@@ -587,6 +590,7 @@ async def download_chapters(job: DownloadJob) -> None:
 
 
 async def download_annotations(job: DownloadJob) -> None:
+    log_job("annotations", job)
     options = job.options
     if not options.output_dir.is_dir():
         raise DirectoryDoesNotExists(options.output_dir)
@@ -669,6 +673,7 @@ async def _add_audioparts_to_queue(job: DownloadJob, download_mode: str) -> None
 
 
 async def download_aax(job: DownloadJob, retry: int = 0) -> None:
+    log_job("aax", job)
     # url, codec = await item.get_aax_url(quality)
     options = job.options
 
@@ -763,7 +768,11 @@ async def _reuse_voucher(lr_file, job: DownloadJob) -> tuple[dict, httpx.URL, st
     return lr, url, codec
 
 
+def log_job(type_name: str, job: DownloadJob):
+    logger.info("Downloading %s for: %s", type_name, job.item.full_title)
+
 async def download_aaxc(job: DownloadJob) -> None:
+    log_job("aaxc", job)
     lr, url, codec = None, None, None
     options = job.options
     base_filename = job.create_base_filename()
