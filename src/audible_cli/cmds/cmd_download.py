@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import pathlib
+import traceback
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, fields
 from datetime import datetime, timezone
@@ -383,6 +384,10 @@ class SmartQueue:
         self.queue = asyncio.Queue(maxsize=maxsize)
         self.tasks: set[asyncio.Task] = set()
         self._shutdown = asyncio.Event()
+        # Track producer tasks so we don't exit before they finish (Py3.10-safe)
+        self._producers: set[asyncio.Task] = set()
+        self._producers_done = asyncio.Event()
+        self._producers_done.set()  # no producers initially
 
     @property
     def shutdown_event(self) -> asyncio.Event:
@@ -402,8 +407,11 @@ class SmartQueue:
             try:
                 exc = t.exception()
                 if exc:
-                    logger.error(exc)
-                    logger.exception(t.print_stack(limit=None))
+                    logger.error("Task %r failed with: %r", t, exc)
+                    # Py3.10-safe traceback logging
+                    tb_lines = traceback.format_exception(type(exc), exc, exc.__traceback__)
+                    logger.error("".join(tb_lines).rstrip())
+                    # Exit on first exception
                     asyncio.create_task(self.shutdown())
             except asyncio.CancelledError:
                 pass
@@ -418,7 +426,19 @@ class SmartQueue:
         name: str | None = None,
         **kwargs,
     ) -> asyncio.Task:
-        return self._track(producer_func(self, *args, **kwargs), name=name)
+        # Register producer task and signal not-done
+        self._producers_done.clear()
+        task = self._track(producer_func(self, *args, **kwargs), name=name)
+        self._producers.add(task)
+
+        def _producer_done(_t: asyncio.Task):
+            self._producers.discard(_t)
+            if not self._producers:
+                # No more producers running
+                self._producers_done.set()
+
+        task.add_done_callback(_producer_done)
+        return task
 
     def add_consumer(
         self,
@@ -448,6 +468,44 @@ class SmartQueue:
 
     async def join(self):
         await self.queue.join()
+
+    async def wait_until_complete(self):
+        """
+        Wait until:
+          - the queue is drained, and
+          - all producers (including dynamically spawned) have finished,
+        or until shutdown is triggered (on first exception).
+        """
+        while not self.is_shutdown():
+            # Wait for the queue to drain or shutdown
+            join_task = asyncio.create_task(self.join())
+            shutdown_task = asyncio.create_task(self._shutdown.wait())
+            done, pending = await asyncio.wait(
+                {join_task, shutdown_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for t in pending:
+                t.cancel()
+                await asyncio.gather(t, return_exceptions=True)
+            if self.is_shutdown():
+                return
+
+            # Wait for all producers to complete or shutdown
+            prod_done_task = asyncio.create_task(self._producers_done.wait())
+            shutdown_task = asyncio.create_task(self._shutdown.wait())
+            done, pending = await asyncio.wait(
+                {prod_done_task, shutdown_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for t in pending:
+                t.cancel()
+                await asyncio.gather(t, return_exceptions=True)
+            if self.is_shutdown():
+                return
+
+            # If queue still empty and no producers left, we're done
+            if self.queue.empty() and not self._producers:
+                return
 
 
 @dataclass
@@ -629,11 +687,11 @@ async def _get_audioparts(job: DownloadJob) -> list[LibraryItem]:
     return parts
 
 
-async def _add_audioparts_to_queue(job: DownloadJob, download_mode: str) -> None:
+async def _add_audioparts_to_queue(queue: SmartQueue, job: DownloadJob, download_mode: str) -> None:
     parts = await _get_audioparts(job)
 
     for part in parts:
-        logger.info("Item %s has audio parts. Adding parts to queue.",part.full_title)
+        logger.info("Item %s has audio parts. Adding parts to queue.", part.full_title)
 
         if download_mode == "aax":
             options = job.options.copy_with(
@@ -645,7 +703,6 @@ async def _add_audioparts_to_queue(job: DownloadJob, download_mode: str) -> None
                 cover=False,
                 pdf=False
             )
-
         else:
             options = job.options.copy_with(
                 aax=False,
@@ -661,23 +718,24 @@ async def _add_audioparts_to_queue(job: DownloadJob, download_mode: str) -> None
             item=part,
             options=options,
             client=job.client,
-            queue=job.queue,
+            queue=queue,
             counter=job.counter
         )
 
-        job.queue.add_producer(produce_jobs, [part_job])
+        queue.add_producer(produce_jobs, [part_job])
+
 
 
 async def download_aax(job: DownloadJob, retry: int = 0) -> None:
     # url, codec = await item.get_aax_url(quality)
     options = job.options
-
     try:
         url, codec = await job.item.get_aax_url_old(options.quality)
     except NotDownloadableAsAAX:
         if options.aax_fallback:
             logger.info("Fallback to aaxc for %s", job.item.full_title)
-            return await download_aaxc(job)
+            await job.queue.put((download_aax, job))
+            return None
         raise
     except httpx.RemoteProtocolError:
         if retry == 3:
@@ -687,9 +745,10 @@ async def download_aax(job: DownloadJob, retry: int = 0) -> None:
             logger.warning("Failed to get AAX URL for %s, retrying", job.item.full_title)
             await asyncio.sleep(5)
             next_retry = retry + 1
-            asyncio.create_task(job.queue.put((download_aax, job, next_retry)))
+            await job.queue.put((download_aax, job, next_retry))
             await asyncio.sleep(1)
             return None
+
 
     base_filename = job.create_base_filename()
     filename = base_filename + f"-{codec}.aax"
@@ -708,7 +767,8 @@ async def download_aax(job: DownloadJob, retry: int = 0) -> None:
         job.counter.count("aax")
     elif downloaded.status == Status.DownloadIndividualParts:
         logger.info("Item %s must be downloaded in parts. Adding parts to queue", filepath)
-        asyncio.create_task(_add_audioparts_to_queue(job, download_mode="aax"))
+        # Ensure new producers are tracked by SmartQueue (Py3.10-safe)
+        job.queue.add_producer(_add_audioparts_to_queue, job, download_mode="aax")
         await asyncio.sleep(1)
     return None
 
@@ -833,7 +893,7 @@ async def download_aaxc(job: DownloadJob) -> None:
             job.counter.count("aycl")
     elif downloaded.status == Status.DownloadIndividualParts:
         logger.info("Item %s must be downloaded in parts. Adding parts to queue", filepath)
-        asyncio.create_task(_add_audioparts_to_queue(job, download_mode="aaxc"))
+        job.queue.add_producer(_add_audioparts_to_queue, job, download_mode="aaxc")
         await asyncio.sleep(1)
     return None
 
@@ -1025,7 +1085,6 @@ async def consume_jobs(queue: SmartQueue, name: str) -> None:
 async def cli(session: Session, api_client: AsyncClient, **params: Any):
     """Download audiobook(s) from an Audible library."""
     options = parse_options(session, params)
-
     library = await fetch_library(api_client, options)
 
     # collect items to download
@@ -1045,7 +1104,8 @@ async def cli(session: Session, api_client: AsyncClient, **params: Any):
     queue = SmartQueue(options.sim_jobs)
     counter = DownloadCounter()
 
-    download_jobs = await create_download_jobs(items, options, api_client.session, queue, counter)
+    download_jobs = await create_download_jobs(items, options, api_client.session, queue,
+                                               counter)
 
     for i in range(options.sim_jobs):
         name = f"consumer-{i}"
@@ -1054,19 +1114,18 @@ async def cli(session: Session, api_client: AsyncClient, **params: Any):
     queue.add_producer(produce_jobs, download_jobs, name="producer-1")
 
     try:
-        # Wait until queue drained OR shutdown triggered
+        # Wait until all work completes OR shutdown occurs (on the first exception)
         done, pending = await asyncio.wait(
             {
-                asyncio.create_task(queue.join()),
+                asyncio.create_task(queue.wait_until_complete()),
                 asyncio.create_task(queue.shutdown_event.wait()),
             },
             return_when=asyncio.FIRST_COMPLETED,
         )
-
         for task in pending:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-
     finally:
         await queue.shutdown()
         display_counter(counter)
+
