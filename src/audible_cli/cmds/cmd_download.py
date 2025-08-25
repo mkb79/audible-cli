@@ -518,9 +518,13 @@ async def create_download_jobs(
 
     return processed_items
 
+def item_info(item):
+    """returns a string made from atim asin and full_title"""
+    return ("[%s] %s" % (item.asin, item.full_title))
 
 def log_job(type_name: str, job: DownloadJob):
-    logger.info("Checking %s for: [%s] %s", type_name, job.item.asin, job.item.full_title)
+    """logs info about the download job"""
+    logger.info("Checking %s for: %s", type_name, item_info(job.item))
 
 
 async def download_covers(job: DownloadJob) -> None:
@@ -614,6 +618,9 @@ async def download_annotations(job: DownloadJob) -> None:
     except RequestError:
         logger.error("Failed to get annotations for %s.", job.item.full_title)
         return None
+    #except:
+    #    logger.error("Bug", exc_info=True)
+    #    return None
 
     annotation = json.dumps(annotation, indent=4)
     async with aiofiles.open(file, "w") as f:
@@ -890,15 +897,18 @@ async def consume_jobs(queue: SmartQueue, name: str) -> None:
     try:
         while not queue.is_shutdown():
             cmd, job, *args = await queue.get()
-            await cmd(job, *args)
+            try:
+                await cmd(job, *args)
+            except asyncio.CancelledError:
+                logger.debug("job cancelled for: %s", item_info(job.item))
+                raise
             queue.task_done()
     except asyncio.CancelledError:
         raise
-    except Exception as e:
+    except BaseException as e:
+        logger.error("error: %s", str(e))
         if job and not job.options.ignore_errors:
             raise
-        else:
-            logger.error(e)
 
 
 @click.command("download")
@@ -1076,7 +1086,8 @@ async def cli(session: Session, api_client: AsyncClient, **params: Any):
         for task in pending:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-
+    except Exception as ex:
+        logger.error("Unknown error: ", exc_info=ex)
     finally:
         await queue.shutdown()
         display_counter(counter)
