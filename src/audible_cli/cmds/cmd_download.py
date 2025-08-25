@@ -519,6 +519,10 @@ async def create_download_jobs(
     return processed_items
 
 
+def log_job(type_name: str, job: DownloadJob):
+    logger.info("Checking %s for: [%s] %s", type_name, job.item.asin, job.item.full_title)
+
+
 async def download_covers(job: DownloadJob) -> None:
     log_job("cover", job)
     base_filename = job.create_base_filename()
@@ -767,9 +771,6 @@ async def _reuse_voucher(lr_file, job: DownloadJob) -> tuple[dict, httpx.URL, st
 
     return lr, url, codec
 
-
-def log_job(type_name: str, job: DownloadJob):
-    logger.info("Downloading %s for: %s", type_name, job.item.full_title)
 
 async def download_aaxc(job: DownloadJob) -> None:
     log_job("aaxc", job)
