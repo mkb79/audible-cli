@@ -509,7 +509,7 @@ async def create_download_jobs(
             # Add child items to processing queue with custom output directory
             for child_item in item._children:
                 # Add to the process queue if not already included
-                if child_item.asin not in [i.asin for i in processed_items]:
+                if child_item.asin not in [i.item.asin for i in processed_items]:
                     download_job = DownloadJob(child_item, options_for_children, client, queue, counter)
                     processed_items.append(download_job)
         else:
