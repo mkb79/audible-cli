@@ -576,8 +576,17 @@ async def create_download_jobs(
 
     return processed_items
 
+def item_info(item):
+    """returns a string made from atim asin and full_title"""
+    return ("[%s] %s" % (item.asin, item.full_title))
+
+def log_job(type_name: str, job: DownloadJob):
+    """logs info about the download job"""
+    logger.info("Checking %s for: %s", type_name, item_info(job.item))
+
 
 async def download_covers(job: DownloadJob) -> None:
+    log_job("cover", job)
     base_filename = job.create_base_filename()
 
     for cover_size in job.options.cover_sizes:
@@ -599,6 +608,7 @@ async def download_covers(job: DownloadJob) -> None:
 
 
 async def download_pdf(job: DownloadJob) -> None:
+    log_job("PDF", job)
     url = job.item.get_pdf_url()
     if url is None:
         logger.info("No PDF found for %s", job.item.full_title)
@@ -619,6 +629,7 @@ async def download_pdf(job: DownloadJob) -> None:
 
 
 async def download_chapters(job: DownloadJob) -> None:
+    log_job("chapters", job)
     options = job.options
     if not options.output_dir.is_dir():
         raise DirectoryDoesNotExists(options.output_dir)
@@ -645,6 +656,7 @@ async def download_chapters(job: DownloadJob) -> None:
 
 
 async def download_annotations(job: DownloadJob) -> None:
+    log_job("annotations", job)
     options = job.options
     if not options.output_dir.is_dir():
         raise DirectoryDoesNotExists(options.output_dir)
@@ -664,6 +676,9 @@ async def download_annotations(job: DownloadJob) -> None:
     except RequestError:
         logger.error("Failed to get annotations for %s.", job.item.full_title)
         return None
+    #except:
+    #    logger.error("Bug", exc_info=True)
+    #    return None
 
     annotation = json.dumps(annotation, indent=4)
     async with aiofiles.open(file, "w") as f:
@@ -727,6 +742,7 @@ async def _add_audioparts_to_queue(queue: SmartQueue, job: DownloadJob, download
 
 
 async def download_aax(job: DownloadJob, retry: int = 0) -> None:
+    log_job("aax", job)
     # url, codec = await item.get_aax_url(quality)
     options = job.options
     try:
@@ -824,6 +840,7 @@ async def _reuse_voucher(lr_file, job: DownloadJob) -> tuple[dict, httpx.URL, st
 
 
 async def download_aaxc(job: DownloadJob) -> None:
+    log_job("aaxc", job)
     lr, url, codec = None, None, None
     options = job.options
     base_filename = job.create_base_filename()
@@ -940,15 +957,18 @@ async def consume_jobs(queue: SmartQueue, name: str) -> None:
     try:
         while not queue.is_shutdown():
             cmd, job, *args = await queue.get()
-            await cmd(job, *args)
+            try:
+                await cmd(job, *args)
+            except asyncio.CancelledError:
+                logger.debug("job cancelled for: %s", item_info(job.item))
+                raise
             queue.task_done()
     except asyncio.CancelledError:
         raise
-    except Exception as e:
+    except BaseException as e:
+        logger.error("error: %s", str(e))
         if job and not job.options.ignore_errors:
             raise
-        else:
-            logger.error(e)
 
 
 @click.command("download")
