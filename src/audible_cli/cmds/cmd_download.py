@@ -297,6 +297,10 @@ def parse_options(session: Session, options: dict[str, Any]) -> DownloadOptions:
 
 
 async def fetch_library(api_client: AsyncClient, options: DownloadOptions) -> Library:
+    logger.debug(
+        "Fetching library: cover_sizes=%s, bunch_size=%s, start_date=%s, end_date=%s, status=Active",
+        options.cover_sizes, options.bunch_size, options.start_date, options.end_date
+    )
     # fetch the user library
     library = await Library.from_api_full_sync(
         api_client,
@@ -310,10 +314,30 @@ async def fetch_library(api_client: AsyncClient, options: DownloadOptions) -> Li
         end_date=options.end_date,
         status="Active",
     )
+    try:
+        size = len(library.data)  # type: ignore[attr-defined]
+    except Exception:
+        try:
+            size = len(list(library))
+        except Exception:
+            size = -1
+    logger.debug("Library fetched with %d items", size)
 
     if options.resolve_podcasts:
+        logger.debug(
+            "Resolving podcasts (start_date=%s, end_date=%s) and removing parent podcast containers",
+            options.start_date, options.end_date
+        )
         await library.resolve_podcasts(start_date=options.start_date, end_date=options.end_date)
         [library.data.remove(i) for i in library if i.is_parent_podcast()]
+        try:
+            size_after = len(library.data)  # type: ignore[attr-defined]
+        except Exception:
+            try:
+                size_after = len(list(library))
+            except Exception:
+                size_after = -1
+        logger.debug("Library size after podcast resolution/filtering: %d", size_after)
 
     return library
 
@@ -378,9 +402,6 @@ async def collect_items_by_title(
     return items
 
 
-
-
-
 @dataclass
 class DownloadJob:
     item: LibraryItem
@@ -409,20 +430,37 @@ async def create_download_jobs(
     directories for podcast content.
     """
     processed_items = []
+    logger.debug("Preparing download jobs for %d item(s)", len(items))
+
+    # Limit detailed per-item logs to avoid overwhelming output on large libraries
+    detail_limit = 50
+    detail_count = 0
+
+    def log_detail(msg: str, *args) -> None:
+        nonlocal detail_count
+        if detail_count < detail_limit:
+            logger.debug(msg, *args)
+            detail_count += 1
 
     # Process all items in the list
     for item in items:
         # Skip already processed items
         if item.asin in [i.item.asin for i in processed_items]:
+            log_detail("Skipping duplicate item %s", item.asin)
             continue
 
         # Handle parent podcasts
         if item.is_parent_podcast():
             if options.ignore_podcasts:
+                log_detail(
+                    "Ignoring parent podcast %s (%s) due to option --ignore-podcasts",
+                    item.full_title, item.asin
+                )
                 continue
 
             # Fetch child items if needed
             if item._children is None:
+                log_detail("Fetching podcast child items for %s (%s)", item.full_title, item.asin)
                 await item.get_child_items(
                     start_date=options.start_date,
                     end_date=options.end_date
@@ -432,30 +470,45 @@ async def create_download_jobs(
             podcast_dir = item.create_base_filename(options.filename_mode)
             output_dir = options.output_dir / podcast_dir
             if not output_dir.is_dir():
+                log_detail("Creating podcast output directory %s", output_dir)
                 output_dir.mkdir(parents=True)
 
             # Set up custom options for podcast children
             options_for_children = options.copy_with(output_dir=output_dir)
+            log_detail(
+                "Prepared child options with output_dir=%s for podcast %s (%s)",
+                output_dir, item.full_title, item.asin
+            )
 
             # Add child items to processing queue with custom output directory
             for child_item in item._children:
                 # Add to the process queue if not already included
                 if child_item.asin not in [i.item.asin for i in processed_items]:
+                    log_detail(
+                        "Adding child item %s (%s) to download queue",
+                        child_item.full_title, child_item.asin
+                    )
                     download_job = DownloadJob(child_item, options_for_children, client, queue, counter)
                     processed_items.append(download_job)
         else:
+            log_detail("Adding item %s (%s) to download queue", item.full_title, item.asin)
             download_job = DownloadJob(item, options, client, queue, counter)
             processed_items.append(download_job)
 
+    if detail_count >= detail_limit:
+        logger.debug("Detailed job-preparation logs truncated at %d events", detail_limit)
+    logger.debug("Prepared total of %d download job(s)", len(processed_items))
     return processed_items
 
 
 async def download_covers(job: DownloadJob) -> None:
+    logger.debug("Starting cover downloads for %s with sizes %s", job.item.asin, job.options.cover_sizes)
     base_filename = job.create_base_filename()
 
     for cover_size in job.options.cover_sizes:
         filename = f"{base_filename}_({cover_size!s}).jpg"
         filepath = job.options.output_dir / filename
+        logger.debug("Downloading cover size %s to %s", cover_size, filepath)
 
         url = job.item.get_cover_url(cover_size)
         if url is None:
@@ -466,12 +519,14 @@ async def download_covers(job: DownloadJob) -> None:
 
         dl = Downloader(url, filepath, job.client, job.options.overwrite_existing, "image/jpeg")
         downloaded = await dl.run(stream=False, pb=False)
+        logger.debug("Cover size %s download for %s finished: %s", cover_size, job.item.asin, bool(downloaded))
         if downloaded:
             job.counter.count("cover")
     return None
 
 
 async def download_pdf(job: DownloadJob) -> None:
+    logger.debug("Starting PDF download for %s", job.item.asin)
     url = job.item.get_pdf_url()
     if url is None:
         logger.info("No PDF found for %s", job.item.full_title)
@@ -480,11 +535,13 @@ async def download_pdf(job: DownloadJob) -> None:
     base_filename = job.create_base_filename()
     filename = base_filename + ".pdf"
     filepath = job.options.output_dir / filename
+    logger.debug("Downloading PDF to %s", filepath)
     dl = Downloader(
         url, filepath, job.client, job.options.overwrite_existing,
         ["application/octet-stream", "application/pdf"]
     )
     downloaded = await dl.run(stream=False, pb=False)
+    logger.debug("PDF download for %s finished: %s", job.item.asin, bool(downloaded))
 
     if downloaded:
         job.counter.count("pdf")
@@ -493,12 +550,14 @@ async def download_pdf(job: DownloadJob) -> None:
 
 async def download_chapters(job: DownloadJob) -> None:
     options = job.options
+    logger.debug("Starting chapter export for %s (type=%s)", job.item.asin, options.chapter_type)
     if not options.output_dir.is_dir():
         raise DirectoryDoesNotExists(options.output_dir)
 
     base_filename = job.create_base_filename()
     filename = base_filename + "-chapters.json"
     file = options.output_dir / filename
+    logger.debug("Chapter file target is %s (overwrite=%s)", file, options.overwrite_existing)
     if file.exists() and not options.overwrite_existing:
         logger.info("File %s already exists. Skip saving chapters", file)
         return None
@@ -512,6 +571,7 @@ async def download_chapters(job: DownloadJob) -> None:
     metadata = json.dumps(metadata, indent=4)
     async with aiofiles.open(file, "w") as f:
         await f.write(metadata)
+    logger.debug("Chapter export for %s finished", job.item.asin)
     logger.info("Chapter file saved in style '%s' to %s.", options.chapter_type.upper(), file)
     job.counter.count("chapter")
     return None
@@ -519,12 +579,14 @@ async def download_chapters(job: DownloadJob) -> None:
 
 async def download_annotations(job: DownloadJob) -> None:
     options = job.options
+    logger.debug("Starting annotation export for %s", job.item.asin)
     if not options.output_dir.is_dir():
         raise DirectoryDoesNotExists(options.output_dir)
 
     base_filename = job.create_base_filename()
     filename = base_filename + "-annotations.json"
     file = options.output_dir / filename
+    logger.debug("Annotation file target is %s (overwrite=%s)", file, options.overwrite_existing)
     if file.exists() and not options.overwrite_existing:
         logger.info("File %s already exists. Skip saving annotations", file)
         return None
@@ -541,12 +603,14 @@ async def download_annotations(job: DownloadJob) -> None:
     annotation = json.dumps(annotation, indent=4)
     async with aiofiles.open(file, "w") as f:
         await f.write(annotation)
+    logger.debug("Annotation export for %s finished", job.item.asin)
     logger.info("Annotation file saved to %s.", file)
     job.counter.count("annotation")
     return None
 
 
 async def _get_audioparts(job: DownloadJob) -> list[LibraryItem]:
+    logger.debug("Fetching audio parts for %s", job.item.asin)
     parts = []
     child_library: Library = await job.item.get_child_items()
     if child_library is not None:
@@ -556,12 +620,16 @@ async def _get_audioparts(job: DownloadJob) -> list[LibraryItem]:
                 and child.content_delivery_type == "AudioPart"
             ):
                 parts.append(child)
-
+    logger.debug("Found %d audio part(s) for %s", len(parts), job.item.asin)
     return parts
 
 
 async def _add_audioparts_to_queue(queue: SmartQueue, job: DownloadJob, download_mode: str) -> None:
     parts = await _get_audioparts(job)
+    logger.debug(
+        "Enqueuing %d audio part(s) for %s using mode=%s",
+        len(parts), job.item.asin, download_mode
+    )
 
     for part in parts:
         logger.info("Item %s has audio parts. Adding parts to queue.", part.full_title)
@@ -596,10 +664,12 @@ async def _add_audioparts_to_queue(queue: SmartQueue, job: DownloadJob, download
         )
 
         queue.add_producer(produce_jobs, [part_job])
+        logger.debug("Enqueued audio part %s for parent %s", part.asin, job.item.asin)
 
 
 
 async def download_aax(job: DownloadJob, retry: int = 0) -> None:
+    logger.debug("Starting AAX download for %s (retry=%d)", job.item.asin, retry)
     # url, codec = await item.get_aax_url(quality)
     options = job.options
     try:
@@ -635,6 +705,11 @@ async def download_aax(job: DownloadJob, retry: int = 0) -> None:
         ]
     )
     downloaded = await dl.run(target=filepath, force_reload=options.overwrite_existing)
+    try:
+        status_name = downloaded.status.name
+    except Exception:
+        status_name = str(getattr(downloaded, "status", "unknown"))
+    logger.debug("AAX run finished for %s with status %s", job.item.asin, status_name)
 
     if downloaded.status == Status.Success:
         job.counter.count("aax")
@@ -697,6 +772,7 @@ async def _reuse_voucher(lr_file, job: DownloadJob) -> tuple[dict, httpx.URL, st
 
 
 async def download_aaxc(job: DownloadJob) -> None:
+    logger.debug("Starting AAXC download for %s", job.item.asin)
     lr, url, codec = None, None, None
     options = job.options
     base_filename = job.create_base_filename()
@@ -759,6 +835,11 @@ async def download_aaxc(job: DownloadJob) -> None:
         ],
     )
     downloaded = await dl.run(target=filepath, force_reload=options.overwrite_existing)
+    try:
+        status_name = downloaded.status.name
+    except Exception:
+        status_name = str(getattr(downloaded, "status", "unknown"))
+    logger.debug("AAXC run finished for %s with status %s", job.item.asin, status_name)
 
     if downloaded.status == Status.Success:
         job.counter.count("aaxc")
@@ -813,7 +894,19 @@ async def consume_jobs(queue: SmartQueue, name: str) -> None:
     try:
         while not queue.is_shutdown():
             cmd, job, *args = await queue.get()
+            logger.debug(
+                "[%s] Received job: %s for %s",
+                name,
+                getattr(cmd, "__name__", str(cmd)),
+                getattr(job.item, "asin", "unknown"),
+            )
             await cmd(job, *args)
+            logger.debug(
+                "[%s] Completed job: %s for %s",
+                name,
+                getattr(cmd, "__name__", str(cmd)),
+                getattr(job.item, "asin", "unknown"),
+            )
             queue.task_done()
     except asyncio.CancelledError:
         raise
@@ -979,6 +1072,21 @@ async def cli(session: Session, api_client: AsyncClient, **params: Any):
 
     download_jobs = await create_download_jobs(items, options, api_client.session, queue,
                                                counter)
+    logger.debug(
+        "Prepared %d download jobs from %d selected items (sim_jobs=%d)",
+        len(download_jobs), len(items), options.sim_jobs
+    )
+    try:
+        job_asins = [j.item.asin for j in download_jobs]
+        sample_n = 20
+        sample = job_asins[:sample_n]
+        extra = len(job_asins) - len(sample)
+        if extra > 0:
+            logger.debug("Download job ASINs (first %d): %s ... and %d more", sample_n, sample, extra)
+        else:
+            logger.debug("Download job ASINs: %s", sample)
+    except Exception:
+        logger.debug("Unable to build list of job ASINs for debug output")
 
     for i in range(options.sim_jobs):
         name = f"consumer-{i}"
