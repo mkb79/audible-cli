@@ -507,6 +507,27 @@ class SmartQueue:
             if self.queue.empty() and not self._producers:
                 return
 
+    async def run(self):
+        """
+        High-level runner:
+          - Waits until all work completes OR shutdown occurs (first exception).
+          - Guarantees shutdown in a finally block.
+        """
+        try:
+            done, pending = await asyncio.wait(
+                {
+                    asyncio.create_task(self.wait_until_complete()),
+                    asyncio.create_task(self.shutdown_event.wait()),
+                },
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+        finally:
+            await self.shutdown()
+
+
 
 @dataclass
 class DownloadJob:
@@ -1114,18 +1135,6 @@ async def cli(session: Session, api_client: AsyncClient, **params: Any):
     queue.add_producer(produce_jobs, download_jobs, name="producer-1")
 
     try:
-        # Wait until all work completes OR shutdown occurs (on the first exception)
-        done, pending = await asyncio.wait(
-            {
-                asyncio.create_task(queue.wait_until_complete()),
-                asyncio.create_task(queue.shutdown_event.wait()),
-            },
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        for task in pending:
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+        await queue.run()
     finally:
-        await queue.shutdown()
         display_counter(counter)
-
