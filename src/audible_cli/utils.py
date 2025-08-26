@@ -11,12 +11,12 @@ import traceback
 import aiofiles
 import click
 import httpx
-import tqdm
 from PIL import Image
 from audible import Authenticator
 from audible.client import raise_for_status
 from audible.login import default_login_url_callback
 from click import echo, secho, prompt
+from .downloader import RichProgressBar, _format_mmss
 
 from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
 
@@ -190,12 +190,10 @@ class Downloader:
         self._expected_content_type = content_type
 
     def _progressbar(self, total: int):
-        return tqdm.tqdm(
-            desc=click.format_filename(self._file, shorten=True),
+        return RichProgressBar(
+            description=click.format_filename(self._file, shorten=True),
             total=total,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024
+            start=0,
         )
 
     def _file_okay(self):
@@ -261,8 +259,9 @@ class Downloader:
                 i += 1
             file.rename(file.with_suffix(f"{file.suffix}.old.{i}"))
         tmp_file.rename(file)
+        elapsed_mmss = _format_mmss(elapsed)
         logger.info(
-            f"File {self._file} downloaded in {elapsed}."
+            f"File {self._file} downloaded in {elapsed_mmss}."
         )
         return True
 

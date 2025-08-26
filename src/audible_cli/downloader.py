@@ -7,13 +7,41 @@ from typing import Any, Callable, Dict, List, Literal, NamedTuple, Optional, Uni
 import aiofiles
 import click
 import httpx
-import tqdm
 from aiofiles.os import path, unlink
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn, DownloadColumn
+from typing import Protocol, runtime_checkable
 
 
 FileMode = Literal["ab", "wb"]
 
 logger = logging.getLogger("audible_cli.downloader")
+
+
+def _format_bytes(num_bytes: int) -> str:
+    units = ["B", "KB", "MB", "GB", "TB", "PB"]
+    size = float(num_bytes)
+    for unit in units:
+        if size < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(size)} B"
+            return f"{size:.2f} {unit}"
+        size /= 1024
+
+
+def _format_mmss(duration: Any) -> str:
+    """Format a duration (timedelta or seconds) as M:SS without hours/milliseconds.
+    Minutes can exceed 59; seconds are zero-padded to two digits.
+    """
+    try:
+        # httpx.Response.elapsed is datetime.timedelta
+        total_seconds = int(getattr(duration, "total_seconds")())
+    except Exception:
+        try:
+            total_seconds = int(float(duration))
+        except Exception:
+            return str(duration)
+    minutes, seconds = divmod(total_seconds, 60)
+    return f"{minutes:02d}:{seconds:02d}"
 
 ACCEPT_RANGES_HEADER = "Accept-Ranges"
 ACCEPT_RANGES_NONE_VALUE = "none"
@@ -258,24 +286,82 @@ class DummyProgressBar:
         pass
 
 
+@runtime_checkable
+class ProgressLike(Protocol):
+    def __enter__(self) -> "ProgressLike":
+        ...
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        ...
+
+    def update(self, n: int) -> None:
+        ...
+
+
+class RichProgressBar:
+    _shared_progress: Optional[Progress] = None
+    _active_tasks: int = 0
+
+    def __init__(self, description: str, total: int, start: int = 0) -> None:
+        self._description = description
+        self._total = total
+        self._start = start
+        self._progress: Optional[Progress] = None
+        self._task_id: Optional[int] = None
+
+    def __enter__(self) -> "RichProgressBar":
+        # Create and start a shared Progress instance on first usage
+        if RichProgressBar._shared_progress is None:
+            RichProgressBar._shared_progress = Progress(
+                TextColumn("{task.description}"),
+                BarColumn(),
+                DownloadColumn(binary_units=True),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+                transient=True,  # clear all bars when the last task stops
+            )
+            RichProgressBar._shared_progress.start()
+        self._progress = RichProgressBar._shared_progress
+        # Create a task for this bar
+        self._task_id = self._progress.add_task(self._description, total=self._total)
+        if self._start and self._task_id is not None:
+            self._progress.advance(self._task_id, self._start)
+        RichProgressBar._active_tasks += 1
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        if self._progress is not None and self._task_id is not None:
+            try:
+                # Ensure the task is marked as complete when leaving
+                self._progress.update(self._task_id, completed=self._total)
+                # Remove the finished task so its bar disappears while others continue
+                self._progress.remove_task(self._task_id)
+            except Exception:
+                pass
+        # Decrement active task count and stop shared progress if this was the last
+        RichProgressBar._active_tasks = max(0, RichProgressBar._active_tasks - 1)
+        if RichProgressBar._active_tasks == 0 and RichProgressBar._shared_progress is not None:
+            try:
+                RichProgressBar._shared_progress.stop()
+            finally:
+                RichProgressBar._shared_progress = None
+        # Cleanup references
+        self._progress = None
+        self._task_id = None
+
+    def update(self, n: int) -> None:
+        if self._progress is not None and self._task_id is not None:
+            self._progress.advance(self._task_id, n)
+
+
 def get_progressbar(
     destination: pathlib.Path, total: Optional[int], start: int = 0
-) -> Union[tqdm.tqdm, DummyProgressBar]:
+) -> Union["ProgressLike", DummyProgressBar]:
     if total is None:
         return DummyProgressBar()
 
     description = click.format_filename(destination, shorten=True)
-    progressbar = tqdm.tqdm(
-        desc=description,
-        total=total,
-        unit="B",
-        unit_scale=True,
-        unit_divisor=1024
-    )
-    if start > 0:
-        progressbar.update(start)
-
-    return progressbar
+    return RichProgressBar(description=description, total=total, start=start)
 
 
 class Downloader:
@@ -375,9 +461,28 @@ class Downloader:
             target_path.rename(target_path.with_suffix(f"{target_path.suffix}.old.{i}"))
 
         tmp_file.path.rename(target_path)
-        logger.info(
-            f"File {target_path} downloaded in {response.response.elapsed}."
-        )
+        # Log info about name, size and time for AAX/AAXC; otherwise keep generic message
+        elapsed_mmss = _format_mmss(response.response.elapsed)
+        try:
+            suffix = target_path.suffix.lower()
+            if suffix in (".aax", ".aaxc", ".mpg", ".mpeg"):
+                size_bytes = target_path.stat().st_size
+                size_hr = _format_bytes(size_bytes)
+                logger.info(
+                    "Download completed: name=%s, size=%s, time=%s",
+                    target_path.name,
+                    size_hr,
+                    elapsed_mmss,
+                )
+            else:
+                logger.info(
+                    f"File {target_path} downloaded in {elapsed_mmss}."
+                )
+        except Exception:
+            # Fallback to generic message on any error
+            logger.info(
+                f"File {target_path} downloaded in {elapsed_mmss}."
+            )
         return Status.Success
 
     @staticmethod
@@ -446,7 +551,7 @@ class Downloader:
         tmp_file: File,
         target_file: File,
         start: int,
-        progressbar: Union[tqdm.tqdm, DummyProgressBar],
+        progressbar: Union[ProgressLike, DummyProgressBar],
         force_reload: bool = True
     ) -> DownloadResult:
         headers = self._additional_headers.copy()
