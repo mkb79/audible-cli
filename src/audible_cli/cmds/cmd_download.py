@@ -13,7 +13,7 @@ import httpx
 import questionary
 from audible import AsyncClient
 from audible.exceptions import NotFoundError, RequestError
-from click import echo
+from rich import print as rprint
 
 from ..config import Session
 from ..decorators import (
@@ -83,10 +83,10 @@ class DownloadCounter:
 
 def display_counter(counter: DownloadCounter) -> None:
     if not counter.has_downloads():
-        echo("No new files downloaded.")
+        rprint("No new files downloaded.")
         return None
 
-    echo("The download ended with the following result:")
+    rprint("The download ended with the following result:")
 
     data = counter.to_dict()
     for k, v in data.items():
@@ -95,12 +95,12 @@ def display_counter(counter: DownloadCounter) -> None:
         elif k == "voucher":
             unsaved_vouchers = counter.voucher - counter.voucher_saved
             if unsaved_vouchers > 0:
-                echo(f"Unsaved voucher: {unsaved_vouchers}")
+                rprint(f"Unsaved voucher: {unsaved_vouchers}")
             continue
         else:
             key_label = COUNTER_LABELS[k]
 
-        echo(f"New {key_label}: {v}")
+        rprint(f"New {key_label}: {v}")
     return None
 
 

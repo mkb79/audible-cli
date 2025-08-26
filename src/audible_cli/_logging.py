@@ -4,6 +4,9 @@ from typing import Optional, Union
 from warnings import warn
 
 import click
+from rich import print as rprint
+from rich.logging import RichHandler
+import sys
 from tqdm import tqdm
 
 
@@ -104,10 +107,13 @@ class ClickHandler(logging.Handler):
 
             # Avoid tqdm progress bar interruption by logger's output to console
             with tqdm.external_write_mode():
-                if self.echo_kwargs.get(level):
-                    click.echo(msg, **self.echo_kwargs[level])
+                kwargs = self.echo_kwargs.get(level)
+                if kwargs:
+                    end = "" if (not kwargs.get("nl", True)) else "\n"
+                    target = sys.stderr if kwargs.get("err") else None
+                    rprint(msg, end=end, file=target)
                 else:
-                    click.echo(msg)
+                    rprint(msg)
         except Exception:
             self.handleError(record)
 
@@ -145,8 +151,9 @@ def click_basic_config(logger=None, style_kwargs=None, echo_kwargs=None):
     style_kwargs = _normalize_style_kwargs(style_kwargs)
     echo_kwargs = _normalize_echo_kwargs(echo_kwargs)
 
-    handler = ClickHandler(echo_kwargs)
-    handler.formatter = ColorFormatter(style_kwargs)
+    # handler = ClickHandler(echo_kwargs)
+    # handler.formatter = ColorFormatter(style_kwargs)
+    handler = RichHandler(rich_tracebacks=True, show_time=False, show_path=False)
     logger.handlers = [handler]
     logger.propagate = False
 
