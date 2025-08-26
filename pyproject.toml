@@ -37,6 +37,7 @@ dependencies = [
     "toml",
     "tqdm",
     "questionary",
+    "rich>=13",
 ]
 homepage = "https://github.com/mkb79/audible-cli"
 repository = "https://github.com/mkb79/audible-cli"
