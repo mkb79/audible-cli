@@ -152,6 +152,9 @@ class BaseItem:
             now = datetime.utcnow()
             return now > pub_date
 
+    def __str__(self):
+        return f"{getattr(self, "asin", "UNKNOWN")} ({getattr(self, "title", "UNKNOWN")})"
+
 
 class LibraryItem(BaseItem):
     def _prepare_data(self, data: dict) -> dict:
