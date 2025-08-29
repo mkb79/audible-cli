@@ -3,6 +3,7 @@ import click
 from . import (
     cmd_activation_bytes,
     cmd_api,
+    cmd_db,
     cmd_download,
     cmd_library,
     cmd_manage,
@@ -13,6 +14,7 @@ from . import (
 cli_cmds = [
     cmd_activation_bytes.cli,
     cmd_api.cli,
+    cmd_db.cli,
     cmd_download.cli,
     cmd_library.cli,
     cmd_manage.cli,

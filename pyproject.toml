@@ -37,6 +37,8 @@ dependencies = [
     "toml",
     "tqdm",
     "questionary",
+    "aiosqlite>=0.21.0",
+    "filelock>=3.19.1",
 ]
 homepage = "https://github.com/mkb79/audible-cli"
 repository = "https://github.com/mkb79/audible-cli"
