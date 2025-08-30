@@ -4,11 +4,13 @@ import asyncio
 import datetime
 import json
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Tuple
 
 import aiosqlite
 from filelock import FileLock
+
 
 # ------------------ Schema & SQL ------------------
 
@@ -160,7 +162,8 @@ class AsyncFileLock:
 # ------------------ Helpers ------------------
 
 def now_iso_utc() -> str:
-    return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    return datetime.now(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 
 def epoch_ms_to_iso(token: Optional[str | int | float]) -> Tuple[Optional[str], Optional[str]]:
     if token is None:
@@ -169,10 +172,11 @@ def epoch_ms_to_iso(token: Optional[str | int | float]) -> Tuple[Optional[str], 
     try:
         val = int(raw)
         seconds = val / 1000.0 if val > 10_000_000_000 else float(val)
-        dt = datetime.datetime.utcfromtimestamp(seconds).replace(microsecond=0)
-        return dt.isoformat() + "Z", raw
+        dt = datetime.fromtimestamp(seconds, timezone.utc).replace(microsecond=0)
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), raw
     except Exception:
         return None, raw
+
 
 def build_full_title(record: dict) -> str:
     """Return 'Title: Subtitle' (Subtitle optional). Title must be non-empty."""
@@ -185,6 +189,7 @@ def build_full_title(record: dict) -> str:
         return f"{title_s}: {str(subtitle).strip()}"
     return title_s
 
+
 def should_soft_delete_by_visibility(record: dict) -> bool:
     """
     Return True iff library_status.is_visible is explicitly False.
@@ -195,10 +200,12 @@ def should_soft_delete_by_visibility(record: dict) -> bool:
         return ls.get("is_visible") is False
     return False
 
+
 def normalize_items(payload: Any) -> list[dict]:
     if isinstance(payload, dict) and isinstance(payload.get("items"), list):
         return payload["items"]
     return payload if isinstance(payload, list) else []
+
 
 def extract_removed_asins(payload: Any) -> set[str]:
     out: set[str] = set()
@@ -230,8 +237,9 @@ async def open_db(db_path: Path):
     finally:
         await conn.close()
 
+
 async def ensure_schema(conn: aiosqlite.Connection) -> None:
-    """Create baseline schema and indices. Run lightweight migration for title/subtitle/full_title if missing, then FTS."""
+    """Create a baseline schema and indices. Run lightweight migration for title/subtitle/full_title if missing, then FTS."""
     await conn.executescript(SCHEMA_SQL)
 
     async def _have_col(table: str, column: str) -> bool:
@@ -291,7 +299,7 @@ async def ensure_initialized_async(
     statuses: Optional[str] = None,
 ) -> None:
     """
-    Ensure database file exists, schema is created, and settings row (id=1) is present.
+    Ensure the database file exists, schema is created, and settings row (id=1) is present.
     Safe to call repeatedly. Uses the same FileLock/transaction guarantees as init_db_async.
     """
     lock_path = db_path.with_suffix(".lock")
@@ -417,6 +425,7 @@ async def full_import_async(
             await conn.commit()
             return num_upserted
 
+
 async def delta_import_async(
     db_path: Path,
     payload: Any,
@@ -534,6 +543,7 @@ async def query_search_async(db_path: Path, needle: str, limit: int = 20) -> lis
         await cur.close()
         return [(r[0], r[1]) for r in rows]
 
+
 async def query_search_fts_async(db_path: Path, query: str, limit: int = 20) -> list[tuple[str, str]]:
     """
     FTS5 search across full_title/title/subtitle with ranking (bm25 if available).
@@ -577,11 +587,13 @@ async def query_search_fts_async(db_path: Path, query: str, limit: int = 20) -> 
             await cur.close()
             return [(r[0], r[1]) for r in rows]
 
+
 async def rebuild_fts_async(db_path: Path) -> None:
     """Rebuild the FTS index from 'items' content table."""
     async with open_db(db_path) as conn:
         await conn.execute("INSERT INTO items_fts(items_fts) VALUES('rebuild')")
         await conn.commit()
+
 
 async def explain_query_async(db_path: Path, sql: str, params: tuple = ()) -> list[str]:
     """Run EXPLAIN QUERY PLAN on the given SQL (with optional params)."""
@@ -630,7 +642,7 @@ async def get_docs_by_titles(
     include_deleted: bool = False,
 ) -> list[tuple[str, str, str]]:
     """
-    Return list of (asin, full_title, doc) by title needles.
+    Return the list of (asin, full_title, doc) by title needles.
     - If use_fts=True, query via items_fts MATCH; otherwise LIKE on title/subtitle/full_title.
     - limit_per limits matches per needle.
     - include_deleted controls is_deleted filter (default: only active).
@@ -717,17 +729,44 @@ async def get_docs_by_titles(
     return results
 
 
+async def get_settings_async(db_path: Path) -> dict | None:
+    """Return settings row (id=1) as a dict or None if missing."""
+    async with open_db(db_path) as conn:
+        cur = await conn.execute(
+            """
+            SELECT response_groups,
+                   last_request_statuses,
+                   last_state_token_raw,
+                   last_state_token_utc
+              FROM settings
+             WHERE id=1
+            """
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        if not row:
+            return None
+        return {
+            "response_groups": row[0],
+            "last_request_statuses": row[1],
+            "last_state_token_raw": row[2],
+            "last_state_token_utc": row[3],
+        }
+
+
 async def export_library_async(
     db_path: Path,
     *,
     include_deleted: bool = False,
     include_groups: bool = True,
+    include_state_token: bool = True,
 ) -> dict:
     """
     Export the current library contents back into a dict:
       {
         "items": [ <original-docs> ],
-        "response_groups": [ ... ]  # optional
+        "response_groups": [ ... ],  # optional (include_groups)
+        "state_token": "<raw token>",  # optional (include_state_token) - raw token as stored
       }
     """
     async with open_db(db_path) as conn:
@@ -738,11 +777,15 @@ async def export_library_async(
         await cur.close()
 
         resp_groups_raw = None
-        if include_groups:
-            cur = await conn.execute("SELECT response_groups FROM settings WHERE id=1")
+        last_state_token_raw = None
+        if include_groups or include_state_token:
+            cur = await conn.execute(
+                "SELECT response_groups, last_state_token_raw FROM settings WHERE id=1"
+            )
             row = await cur.fetchone()
             await cur.close()
-            resp_groups_raw = row[0] if row else ""
+            if row:
+                resp_groups_raw, last_state_token_raw = row
 
     items = [json.loads(doc) for (doc,) in rows if doc]
 
@@ -759,6 +802,10 @@ async def export_library_async(
         else:
             resp_groups = [s.strip() for s in rg.split(",") if s.strip()]
         result["response_groups"] = resp_groups
+
+    if include_state_token and (last_state_token_raw is not None):
+        # Export the raw token (as received from Audible headers)
+        result["state_token"] = str(last_state_token_raw)
 
     return result
 
@@ -802,6 +849,7 @@ async def restore_from_export_async(
     replace: bool = False,
     statuses: Optional[str] = None,
     note: Optional[str] = "restore-from-export",
+    state_token: Optional[str | int | float] = None,
 ) -> tuple[int, int]:
     """
     Restore from an exported library JSON:
@@ -809,6 +857,7 @@ async def restore_from_export_async(
       - Initializes settings from 'response_groups' (comma-joined if list)
       - Performs a full import of 'items'
       - If replace=True: soft-deletes any ASINs not present in the export (snapshot semantics)
+      - If state_token is provided (or present in export_payload['state_token']), it is stored in settings.
     Returns: (num_upserted, num_soft_deleted_by_replace)
     """
     # Validate required keys early
@@ -829,7 +878,26 @@ async def restore_from_export_async(
     # Ensure DB is initialized with these response_groups
     await ensure_initialized_async(db_path, response_groups=response_groups, statuses=statuses)
 
-    # Run full import (no state token when restoring exports)
+    # If no state_token explicitly passed, try to take it from export payload
+    eff_token = state_token if state_token is not None else export_payload.get("state_token")
+
+    # If we have a token, persist it in settings BEFORE or AFTER import (either is fine)
+    if eff_token is not None:
+        iso, raw = epoch_ms_to_iso(eff_token)
+        async with open_db(db_path) as conn:
+            await conn.execute(
+                """
+                UPDATE settings
+                   SET last_state_token_utc = ?,
+                       last_state_token_raw = ?,
+                       last_request_statuses = COALESCE(last_request_statuses, ?)
+                 WHERE id = 1
+                """,
+                (iso, raw, statuses),
+            )
+            await conn.commit()
+
+    # Run full import (no response token while restoring exports)
     upserted = await full_import_async(
         db_path,
         export_payload,  # expects {"items": [...]}
