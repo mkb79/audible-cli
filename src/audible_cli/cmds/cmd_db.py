@@ -5,10 +5,8 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlencode
 
 import click
-import httpx
 from audible import Authenticator
 from audible_cli.decorators import pass_session
 
@@ -489,3 +487,197 @@ def cmd_count(session, as_json: bool) -> None:
         click.echo(json.dumps(payload, ensure_ascii=False))
     else:
         click.echo(f"[count] {active} active items, {deleted} soft-deleted items (total {total})")
+
+
+@library_cmd.command("sync", help="Sync library from Audible API using state token")
+@pass_session
+@click.option(
+    "--init/--no-init",
+    default=False,
+    show_default=True,
+    help="Initialize (create) a new DB with provided --response-groups. Aborts if DB already exists.",
+)
+@click.option(
+    "--response-groups",
+    default=None,
+    help="Response groups for initial setup (CSV). Required with --init. Not allowed otherwise.",
+)
+@click.option(
+    "--statuses",
+    default="Active,Revoked",
+    show_default=True,
+    help="Statuses to request (CSV). Stored in settings.",
+)
+@click.option(
+    "--num-results",
+    type=int,
+    default=200,
+    show_default=True,
+    help="Page size to request from the API.",
+)
+@click.option(
+    "--image-sizes",
+    default="900,1215,252,558,408,500",
+    show_default=True,
+    help="Image sizes parameter passed through to API.",
+)
+@click.option(
+    "--include-pending/--no-include-pending",
+    default=True,
+    show_default=True,
+    help="Whether to include pending items.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Fetch but do not write to DB (debug).",
+)
+def cmd_sync(
+    session,
+    init: bool,
+    response_groups: str | None,
+    statuses: str,
+    num_results: int,
+    image_sizes: str,
+    include_pending: bool,
+    dry_run: bool,
+) -> None:
+    """
+    Behavior:
+      - --init: create schema + settings (requires --response-groups). Abort if DB already exists.
+                Then perform a FULL sync (no state token required).
+      - --no-init:
+          * DB must be initialized AND have a stored state token -> DELTA sync.
+          * If no state token -> abort with hint to use --init.
+    """
+    db_path = db_path_for_session(session, "library")
+    db_exists = db_path.exists()
+
+    # Enforce response_groups usage policy
+    if init:
+        if not response_groups:
+            raise click.ClickException("--response-groups is required when using --init.")
+        if db_exists:
+            raise click.ClickException(f"Database already exists at {db_path}. Aborting --init.")
+    else:
+        if response_groups:
+            raise click.ClickException("--response-groups is only allowed with --init.")
+
+    # Initialize when requested, or load settings otherwise
+    if init:
+        asyncio.run(ensure_initialized_async(db_path, response_groups=response_groups, statuses=statuses))
+        settings = asyncio.run(get_settings_async(db_path))
+    else:
+        settings = asyncio.run(get_settings_async(db_path))
+        if settings is None:
+            raise click.ClickException(
+                "Database is not initialized. Run with --init and provide --response-groups."
+            )
+
+    # Determine response_groups to send
+    if not response_groups:
+        response_groups = settings.get("response_groups") or ""
+    if response_groups.strip().startswith("["):
+        try:
+            arr = json.loads(response_groups)
+            response_groups = ",".join([str(x).strip() for x in arr if str(x).strip()])
+        except Exception:
+            pass
+
+    # Delta requires last token present
+    last_token = settings.get("last_state_token_raw")
+    if not init and not last_token:
+        raise click.ClickException(
+            "No state token stored for this database. Please re-sync with --init and provide --response-groups."
+        )
+
+    # ---- Only one call: you implement fetch_library_api() ----
+    # Contract suggestion (you can change it in your own implementation):
+    # fetch_library_api(...) -> tuple[str mode, list[dict] pages, Optional[str] response_token, Optional[str] request_token]
+    #   mode in {"full","delta"}
+    #   pages: list of payload dicts shaped like Audible's /1.0/library response(s)
+    #   response_token: the newest State-Token to persist (header value)
+    #   request_token:  the state token that was sent (for delta_import bookkeeping)
+    try:
+        mode, pages, response_token, request_token = asyncio.run(fetch_library_api(
+            session=session,
+            init=init,
+            response_groups=response_groups,
+            statuses=statuses,
+            num_results=num_results,
+            image_sizes=image_sizes,
+            include_pending=include_pending,
+            last_state_token=None if init else str(last_token),
+            dry_run=dry_run,
+        ))
+    except Exception as e:
+        raise click.ClickException(f"fetch_library_api failed: {e}")
+
+    if dry_run:
+        total_items = sum(len((p or {}).get("items", [])) for p in (pages or []))
+        click.echo(f"[sync:dry] mode={mode} pages={len(pages or [])} items_total={total_items} new_state={response_token}")
+        return
+
+    total_upserted = 0
+    total_deleted = 0
+
+    if mode == "full":
+        # Apply full pages (each page is a 'full' payload)
+        for idx, body in enumerate(pages or [], start=1):
+            up = asyncio.run(
+                full_import_async(
+                    db_path,
+                    body,
+                    response_token=response_token,   # persist latest known token
+                    statuses=statuses,
+                    note=f"sync-full-page-{idx}",
+                )
+            )
+            total_upserted += up
+
+    elif mode == "delta":
+        # Apply delta pages (usually 1)
+        for idx, body in enumerate(pages or [], start=1):
+            up, deleted = asyncio.run(
+                delta_import_async(
+                    db_path,
+                    body,
+                    request_token=str(request_token) if request_token is not None else None,
+                    response_token=response_token,
+                    statuses=statuses,
+                    note=f"sync-delta-{idx}",
+                )
+            )
+            total_upserted += up
+            total_deleted += deleted
+    else:
+        raise click.ClickException(f"Unsupported sync mode returned by fetch_library_api: {mode!r}")
+
+    # Finish output
+    if response_token:
+        click.echo(f"[sync] mode={mode} Upserted={total_upserted}, Soft-deleted={total_deleted}, new state_token={response_token}")
+    else:
+        click.echo(f"[sync] mode={mode} Upserted={total_upserted}, Soft-deleted={total_deleted} (no state token)")
+
+
+async def fetch_library_api(
+    *,
+    session,
+    init: bool,
+    response_groups: str,
+    statuses: str,
+    num_results: int,
+    image_sizes: str,
+    include_pending: bool,
+    last_state_token: Optional[str],
+    dry_run: bool,
+) -> tuple[str, list[dict], Optional[str], Optional[str]]:
+    """
+    Return (mode, pages, response_token, request_token)
+      - mode: 'full' or 'delta'
+      - pages: list of response dicts (each like /1.0/library JSON)
+      - response_token: newest State-Token from headers
+      - request_token: token you used in the request (for delta bookkeeping)
+    """
+    raise NotImplementedError("Implement me")
