@@ -454,3 +454,38 @@ def cmd_restore(session, payload: Path, replace: bool, statuses: str, fresh: boo
         click.echo(f"[restore] Upserted {up}, soft-deleted (by replace) {deleted} → {db_path}")
     else:
         click.echo(f"[restore] Upserted {up} → {db_path} (merge mode)")
+
+
+@library_cmd.command("count", help="Show number of items in the library database")
+@click.option(
+    "--json",
+    "as_json",
+    is_flag=True,
+    default=False,
+    help="Output counts as JSON object (machine-readable).",
+)
+@pass_session
+def cmd_count(session, as_json: bool) -> None:
+    """Print how many items are active vs. soft-deleted (optionally as JSON)."""
+    db_path = db_path_for_session(session, "library")
+
+    async def _count():
+        async with open_db(db_path) as conn:
+            cur = await conn.execute("SELECT COUNT(*) FROM items WHERE is_deleted=0")
+            active = (await cur.fetchone())[0]
+            await cur.close()
+
+            cur = await conn.execute("SELECT COUNT(*) FROM items WHERE is_deleted=1")
+            deleted = (await cur.fetchone())[0]
+            await cur.close()
+
+            return active, deleted
+
+    active, deleted = asyncio.run(_count())
+    total = active + deleted
+
+    if as_json:
+        payload = {"active": active, "soft_deleted": deleted, "total": total}
+        click.echo(json.dumps(payload, ensure_ascii=False))
+    else:
+        click.echo(f"[count] {active} active items, {deleted} soft-deleted items (total {total})")
