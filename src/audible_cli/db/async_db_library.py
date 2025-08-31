@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
 import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -10,7 +9,6 @@ from typing import Any, Optional, Tuple
 
 import aiosqlite
 from filelock import FileLock
-
 
 # ------------------ Schema & SQL ------------------
 
@@ -31,7 +29,6 @@ CREATE TABLE IF NOT EXISTS settings (
   response_groups TEXT NOT NULL,       -- the one-and-only groups string for this DB
   last_state_token_utc TEXT,           -- last sync token (ISO-8601 UTC)
   last_state_token_raw TEXT,           -- raw token as received (e.g., epoch ms)
-  last_request_statuses TEXT,
   created_utc TEXT NOT NULL
 );
 
@@ -76,6 +73,10 @@ CREATE INDEX IF NOT EXISTS idx_items_title       ON items (lower(title));
 CREATE INDEX IF NOT EXISTS idx_items_subtitle    ON items (lower(subtitle));
 CREATE INDEX IF NOT EXISTS idx_items_full_title  ON items (lower(full_title));
 CREATE INDEX IF NOT EXISTS idx_items_is_deleted  ON items (is_deleted);
+"""
+
+# Indices continued (split to avoid editor confusion)
+SCHEMA_SQL += r"""
 CREATE INDEX IF NOT EXISTS idx_items_purchase    ON items (
   COALESCE(json_extract(doc,'$.purchase_date'),
            json_extract(doc,'$.library_status.date_added'))
@@ -144,6 +145,17 @@ CREATE TRIGGER IF NOT EXISTS trg_items_au AFTER UPDATE ON items BEGIN
 END;
 """
 
+SOFT_DELETED_LIST_SQL = """
+SELECT asin, title, subtitle, full_title, deleted_utc, updated_utc
+FROM items
+WHERE is_deleted = 1
+ORDER BY COALESCE(deleted_utc, updated_utc) DESC, asin
+LIMIT ? OFFSET ?;
+"""
+
+SOFT_DELETED_COUNT_SQL = "SELECT COUNT(*) FROM items WHERE is_deleted = 1;"
+
+
 # ------------------ Async FileLock wrapper ------------------
 
 class AsyncFileLock:
@@ -158,6 +170,7 @@ class AsyncFileLock:
 
     async def __aexit__(self, exc_type, exc, tb):
         await asyncio.to_thread(self._lock.release)
+
 
 # ------------------ Helpers ------------------
 
@@ -222,6 +235,7 @@ def extract_removed_asins(payload: Any) -> set[str]:
                     if asin:
                         out.add(str(asin))
     return out
+
 
 # ------------------ Connection helper ------------------
 
@@ -296,33 +310,31 @@ async def ensure_schema(conn: aiosqlite.Connection) -> None:
 async def ensure_initialized_async(
     db_path: Path,
     response_groups: str,
-    statuses: Optional[str] = None,
 ) -> None:
     """
     Ensure the database file exists, schema is created, and settings row (id=1) is present.
-    Safe to call repeatedly. Uses the same FileLock/transaction guarantees as init_db_async.
+    Safe to call repeatedly.
     """
     lock_path = db_path.with_suffix(".lock")
     async with AsyncFileLock(lock_path):
         async with open_db(db_path) as conn:
             await ensure_schema(conn)
             await conn.execute("BEGIN IMMEDIATE;")
-            await init_or_check_settings(conn, response_groups, statuses)
+            await init_or_check_settings(conn, response_groups)
             await conn.commit()
 
 
 async def init_or_check_settings(
     conn: aiosqlite.Connection,
     response_groups: str,
-    statuses: Optional[str],
 ) -> None:
     cur = await conn.execute("SELECT response_groups FROM settings WHERE id=1")
     row = await cur.fetchone()
     await cur.close()
     if row is None:
         await conn.execute(
-            "INSERT INTO settings(id, response_groups, created_utc, last_request_statuses) VALUES (1, ?, ?, ?)",
-            (response_groups, now_iso_utc(), statuses),
+            "INSERT INTO settings(id, response_groups, created_utc) VALUES (1, ?, ?)",
+            (response_groups, now_iso_utc()),
         )
     else:
         (existing,) = row
@@ -334,22 +346,23 @@ async def init_or_check_settings(
 
 # ------------------ WRITE paths (Filelock before any read) ------------------
 
-async def init_db_async(db_path: Path, response_groups: str, statuses: Optional[str] = None) -> None:
+async def init_db_async(db_path: Path, response_groups: str) -> None:
     lock_path = db_path.with_suffix(".lock")
     async with AsyncFileLock(lock_path):
         async with open_db(db_path) as conn:
             await ensure_schema(conn)
             await conn.execute("BEGIN IMMEDIATE;")
-            await init_or_check_settings(conn, response_groups, statuses)
+            await init_or_check_settings(conn, response_groups)
             await conn.commit()
+
 
 async def full_import_async(
     db_path: Path,
     payload: Any,
     *,
     response_token: Optional[str | int | float],
-    statuses: Optional[str],
     note: Optional[str],
+    request_statuses: Optional[str] = None,
 ) -> int:
     items = normalize_items(payload)
     resp_iso, resp_raw = epoch_ms_to_iso(response_token)
@@ -402,11 +415,10 @@ async def full_import_async(
                     """
                     UPDATE settings
                        SET last_state_token_utc = COALESCE(?, last_state_token_utc),
-                           last_state_token_raw = COALESCE(?, last_state_token_raw),
-                           last_request_statuses = COALESCE(?, last_request_statuses)
+                           last_state_token_raw = COALESCE(?, last_state_token_raw)
                      WHERE id = 1
                     """,
-                    (resp_iso, resp_raw, statuses),
+                    (resp_iso, resp_raw),
                 )
 
             note_parts = [note] if note else []
@@ -415,7 +427,7 @@ async def full_import_async(
             await conn.execute(
                 INSERT_SYNC_LOG_SQL,
                 (
-                    now_iso_utc(), None, statuses,
+                    now_iso_utc(), None, request_statuses,
                     now_iso_utc(), resp_iso,
                     200, num_upserted, num_deleted_vis,
                     " | ".join(n for n in note_parts if n),
@@ -432,8 +444,8 @@ async def delta_import_async(
     *,
     request_token: Optional[str | int | float],
     response_token: Optional[str | int | float],
-    statuses: Optional[str],
     note: Optional[str],
+    request_statuses: Optional[str] = None,
 ) -> tuple[int, int]:
     items = normalize_items(payload)
     removed = extract_removed_asins(payload)
@@ -488,16 +500,15 @@ async def delta_import_async(
                     await conn.execute(SOFT_DELETE_SQL, (ts_del, ts_del, asin))
                 num_deleted_total = len(to_soft_delete_all)
 
-            if resp_iso or req_iso or statuses:
+            if resp_iso or req_iso:
                 await conn.execute(
                     """
                     UPDATE settings
                        SET last_state_token_utc = COALESCE(?, last_state_token_utc),
-                           last_state_token_raw = COALESCE(?, last_state_token_raw),
-                           last_request_statuses = COALESCE(?, last_request_statuses)
+                           last_state_token_raw = COALESCE(?, last_state_token_raw)
                      WHERE id = 1
                     """,
-                    (resp_iso or req_iso, resp_raw or req_raw, statuses),
+                    (resp_iso or req_iso, resp_raw or req_raw),
                 )
 
             note_parts = [note] if note else []
@@ -511,7 +522,7 @@ async def delta_import_async(
             await conn.execute(
                 INSERT_SYNC_LOG_SQL,
                 (
-                    now_iso_utc(), req_iso, statuses,
+                    now_iso_utc(), req_iso, request_statuses,
                     now_iso_utc(), resp_iso,
                     200, num_upserted, num_deleted_total,
                     " | ".join(n for n in note_parts if n),
@@ -616,7 +627,6 @@ async def get_docs_by_asins(
     """
     if not asins:
         return []
-    # Build a parameterized IN (...) list safely
     placeholders = ",".join("?" for _ in asins)
     where_deleted = "" if include_deleted else "AND is_deleted = 0"
     sql = f"""
@@ -643,25 +653,19 @@ async def get_docs_by_titles(
 ) -> list[tuple[str, str, str]]:
     """
     Return the list of (asin, full_title, doc) by title needles.
-    - If use_fts=True, query via items_fts MATCH; otherwise LIKE on title/subtitle/full_title.
-    - limit_per limits matches per needle.
-    - include_deleted controls is_deleted filter (default: only active).
     De-duplicates by ASIN across needles.
     """
     if not titles:
         return []
 
     def to_prefix_match(q: str) -> str:
-        # Auto-transform a plain query into prefix-capable MATCH:
-        # "80 Tage" -> '80* Tage*'
-        # Preserve existing operators/asterisks; skip empty tokens.
         parts: list[str] = []
         for tok in q.strip().split():
             tok = tok.strip()
             if not tok:
                 continue
             if any(op in tok for op in ('"', "'", " NEAR/", " AND ", " OR ", " NOT ", "(", ")")):
-                parts.append(tok)  # assume expert MATCH syntax, keep as-is
+                parts.append(tok)
             else:
                 if not tok.endswith("*"):
                     tok = tok + "*"
@@ -697,9 +701,8 @@ async def get_docs_by_titles(
                     rows = await cur.fetchall()
                     await cur.close()
                 except Exception:
-                    rows = []  # fall back below
+                    rows = []
 
-            # Fallback to LIKE if FTS disabled OR 0 rows from FTS OR FTS errored
             if not use_fts or not rows:
                 sql_like = """
                     SELECT asin, full_title, doc
@@ -735,7 +738,6 @@ async def get_settings_async(db_path: Path) -> dict | None:
         cur = await conn.execute(
             """
             SELECT response_groups,
-                   last_request_statuses,
                    last_state_token_raw,
                    last_state_token_utc
               FROM settings
@@ -748,9 +750,8 @@ async def get_settings_async(db_path: Path) -> dict | None:
             return None
         return {
             "response_groups": row[0],
-            "last_request_statuses": row[1],
-            "last_state_token_raw": row[2],
-            "last_state_token_utc": row[3],
+            "last_state_token_raw": row[1],
+            "last_state_token_utc": row[2],
         }
 
 
@@ -762,15 +763,9 @@ async def export_library_async(
     include_state_token: bool = True,
 ) -> dict:
     """
-    Export the current library contents back into a dict:
-      {
-        "items": [ <original-docs> ],
-        "response_groups": [ ... ],  # optional (include_groups)
-        "state_token": "<raw token>",  # optional (include_state_token) - raw token as stored
-      }
+    Export the current library contents back into a dict.
     """
     async with open_db(db_path) as conn:
-        # items
         where = "" if include_deleted else "WHERE is_deleted = 0"
         cur = await conn.execute(f"SELECT doc FROM items {where}")
         rows = await cur.fetchall()
@@ -804,13 +799,39 @@ async def export_library_async(
         result["response_groups"] = resp_groups
 
     if include_state_token and (last_state_token_raw is not None):
-        # Export the raw token (as received from Audible headers)
         result["state_token"] = str(last_state_token_raw)
 
     return result
 
 
-# --- Restore helpers (append to async_db_library.py) -------------------------
+async def list_soft_deleted_async(db_path: Path, limit: int = 50, offset: int = 0) -> tuple[list[dict], int]:
+    """
+    Returns (rows, total), where rows is a list of dicts:
+      {asin, title, subtitle, full_title, deleted_utc, updated_utc}
+    """
+    async with open_db(db_path) as conn:
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='items'"
+        )
+        if await cur.fetchone() is None:
+            await cur.close()
+            raise RuntimeError("Library DB not initialized (missing 'items' table').")
+        await cur.close()
+
+        cur = await conn.execute(SOFT_DELETED_LIST_SQL, (limit, offset))
+        rows_raw = await cur.fetchall()
+        await cur.close()
+
+        cur = await conn.execute(SOFT_DELETED_COUNT_SQL)
+        total = int((await cur.fetchone())[0])
+        await cur.close()
+
+        cols = ["asin", "title", "subtitle", "full_title", "deleted_utc", "updated_utc"]
+        rows = [dict(zip(cols, r)) for r in rows_raw]
+        return rows, total
+
+
+# --- Restore helpers -------------------------------------------------
 
 async def get_all_asins_async(db_path: Path, include_deleted: bool = True) -> set[str]:
     """Return the set of ASINs in the DB (optionally only active)."""
@@ -847,41 +868,25 @@ async def restore_from_export_async(
     export_payload: dict,
     *,
     replace: bool = False,
-    statuses: Optional[str] = None,
     note: Optional[str] = "restore-from-export",
     state_token: Optional[str | int | float] = None,
 ) -> tuple[int, int]:
     """
-    Restore from an exported library JSON:
-      - Requires export_payload to contain 'items' and 'response_groups'
-      - Initializes settings from 'response_groups' (comma-joined if list)
-      - Performs a full import of 'items'
-      - If replace=True: soft-deletes any ASINs not present in the export (snapshot semantics)
-      - If state_token is provided (or present in export_payload['state_token']), it is stored in settings.
-    Returns: (num_upserted, num_soft_deleted_by_replace)
+    Restore from an exported library JSON.
     """
-    # Validate required keys early
     if "items" not in export_payload or "response_groups" not in export_payload:
         raise ValueError("export_payload must contain 'items' and 'response_groups'.")
 
-    # Normalize response_groups to the persisted string format
     rg_raw = export_payload.get("response_groups", [])
     if isinstance(rg_raw, list):
         response_groups = ",".join([str(x).strip() for x in rg_raw if str(x).strip()])
     else:
         response_groups = str(rg_raw or "").strip()
 
-    # Default statuses if not provided
-    if statuses is None:
-        statuses = "Active,Revoked"
+    await ensure_initialized_async(db_path, response_groups=response_groups)
 
-    # Ensure DB is initialized with these response_groups
-    await ensure_initialized_async(db_path, response_groups=response_groups, statuses=statuses)
-
-    # If no state_token explicitly passed, try to take it from export payload
     eff_token = state_token if state_token is not None else export_payload.get("state_token")
 
-    # If we have a token, persist it in settings BEFORE or AFTER import (either is fine)
     if eff_token is not None:
         iso, raw = epoch_ms_to_iso(eff_token)
         async with open_db(db_path) as conn:
@@ -889,24 +894,21 @@ async def restore_from_export_async(
                 """
                 UPDATE settings
                    SET last_state_token_utc = ?,
-                       last_state_token_raw = ?,
-                       last_request_statuses = COALESCE(last_request_statuses, ?)
+                       last_state_token_raw = ?
                  WHERE id = 1
                 """,
-                (iso, raw, statuses),
+                (iso, raw),
             )
             await conn.commit()
 
-    # Run full import (no response token while restoring exports)
     upserted = await full_import_async(
         db_path,
-        export_payload,  # expects {"items": [...]}
+        export_payload,
         response_token=None,
-        statuses=statuses,
         note=note,
+        request_statuses=None,
     )
 
-    # Optional snapshot replace: soft-delete anything not in export
     deleted = 0
     if replace:
         current_asins = await get_all_asins_async(db_path, include_deleted=False)
