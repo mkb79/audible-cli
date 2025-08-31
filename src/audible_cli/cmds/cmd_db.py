@@ -15,6 +15,7 @@ from audible_cli.config import Session
 from audible_cli.db.async_db_library import (
     ensure_initialized_async,
     list_soft_deleted_async,
+    list_sync_logs_async,
     get_settings_async,
     init_db_async,
     full_import_async,
@@ -109,7 +110,6 @@ def cmd_full(session, payload: Path, response_token, note: Optional[str]) -> Non
             data,
             response_token=response_token,
             note=note,
-            request_statuses="Active",
         )
     )
     click.echo(f"[full] Upserted {n} items → {db_path}.")
@@ -131,7 +131,6 @@ def cmd_delta(session, payload: Path, request_token, response_token, note: Optio
             request_token=request_token,
             response_token=response_token,
             note=note,
-            request_statuses="Active,Revoked",
         )
     )
     click.echo(f"[delta] Upserted {up}, soft-deleted {deleted} → {db_path}.")
@@ -401,6 +400,71 @@ def list_deleted_cmd(session, limit: int, offset: int, as_json: bool, pretty: bo
     click.echo(f"-- showing {shown} of {total} soft-deleted --", err=True)
 
 
+@library_cmd.command("logs", help="Show recent sync logs (from sync_log table)")
+@click.option("--limit", type=int, default=50, show_default=True, help="Max rows to display")
+@click.option("--offset", type=int, default=0, show_default=True, help="Offset for paging")
+@click.option("--order", type=click.Choice(["asc", "desc"], case_sensitive=False), default="desc", show_default=True, help="Sort by id ascending/descending")
+@click.option("--json/--no-json", "as_json", default=False, show_default=True, help="Emit JSON instead of line output")
+@click.option("--pretty/--no-pretty", default=True, show_default=True, help="Pretty-print JSON (only with --json)")
+@click.option("--include-asins/--no-include-asins", default=False, show_default=True, help="Include full ASIN lists in line output")
+@pass_session
+def cmd_logs(session, limit: int, offset: int, order: str, as_json: bool, pretty: bool, include_asins: bool) -> None:
+    """
+    Display rows from sync_log. Defaults to a compact line-oriented output.
+    With --json you get machine-readable details, including upserted/soft-deleted ASIN arrays.
+    """
+    db_path = db_path_for_session(session, "library")
+    rows, total = asyncio.run(list_sync_logs_async(db_path, limit=limit, offset=offset, order=order))
+
+    if as_json:
+        payload = {
+            "limit": limit,
+            "offset": offset,
+            "count": len(rows),
+            "total": total,
+            "order": order,
+            "items": rows,
+        }
+        click.echo(json.dumps(payload, ensure_ascii=False, indent=2 if pretty else None))
+        return
+
+    if not rows:
+        click.echo("(no logs)")
+        return
+
+    # Line output
+    for r in rows:
+        rid = r.get("id")
+        req = r.get("request_time_utc") or "-"
+        rsp = r.get("response_time_utc") or "-"
+        http = r.get("http_status")
+        up = r.get("num_upserted")
+        de = r.get("num_soft_deleted")
+        note = r.get("note") or ""
+
+        line = f"{rid:>5}  {req} → {rsp}  http={http}  up={up} del={de}"
+        if note:
+            note_short = note if len(note) <= 120 else (note[:117] + "...")
+            line += f'  note="{note_short}"'
+
+        if include_asins:
+            ups = r.get("upserted_asins") or []
+            dels = r.get("soft_deleted_asins") or []
+            if ups:
+                line += f"  upserted[{len(ups)}]={','.join(ups[:8])}"
+                if len(ups) > 8:
+                    line += "…"
+            if dels:
+                line += f"  deleted[{len(dels)}]={','.join(dels[:8])}"
+                if len(dels) > 8:
+                    line += "…"
+
+        click.echo(line)
+
+    shown = len(rows)
+    click.echo(f"-- showing {shown} of {total} logs (order={order}) --", err=True)
+
+
 @library_cmd.command("sync", help="Sync library from Audible API using state token")
 @pass_session
 @click.option("--init/--no-init", default=False, show_default=True,
@@ -480,7 +544,6 @@ def cmd_sync(session, init: bool, response_groups: str | None, num_results: int,
                     body,
                     response_token=response_token,
                     note=f"sync-full-page-{idx}",
-                    request_statuses=used_statuses,
                 )
             )
             total_upserted += up
@@ -493,7 +556,6 @@ def cmd_sync(session, init: bool, response_groups: str | None, num_results: int,
                     request_token=str(request_token) if request_token is not None else None,
                     response_token=response_token,
                     note=f"sync-delta-{idx}",
-                    request_statuses=used_statuses,
                 )
             )
             total_upserted += up

@@ -36,15 +36,16 @@ CREATE TABLE IF NOT EXISTS sync_log (
   id                        INTEGER PRIMARY KEY AUTOINCREMENT,
   request_time_utc          TEXT NOT NULL,
   request_state_token_utc   TEXT,
-  request_statuses          TEXT,
   response_time_utc         TEXT NOT NULL,
   response_state_token_utc  TEXT,
   http_status               INTEGER,
   num_upserted              INTEGER DEFAULT 0,
   num_soft_deleted          INTEGER DEFAULT 0,
-  note                      TEXT
+  note                      TEXT,
+  upserted_asins            TEXT,
+  soft_deleted_asins        TEXT
 );
-
+    
 -- View of active items with derived fields from JSON
 CREATE VIEW IF NOT EXISTS v_books AS
 SELECT
@@ -110,10 +111,17 @@ WHERE asin = ?;
 
 INSERT_SYNC_LOG_SQL = """
 INSERT INTO sync_log(
-  request_time_utc, request_state_token_utc, request_statuses,
-  response_time_utc, response_state_token_utc,
-  http_status, num_upserted, num_soft_deleted, note
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  request_time_utc,
+  request_state_token_utc,
+  response_time_utc,
+  response_state_token_utc,
+  http_status,
+  num_upserted,
+  num_soft_deleted,
+  note,
+  upserted_asins,
+  soft_deleted_asins
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 # FTS5 schema & triggers (external content indexing of 'items')
@@ -362,7 +370,6 @@ async def full_import_async(
     *,
     response_token: Optional[str | int | float],
     note: Optional[str],
-    request_statuses: Optional[str] = None,
 ) -> int:
     items = normalize_items(payload)
     resp_iso, resp_raw = epoch_ms_to_iso(response_token)
@@ -424,13 +431,22 @@ async def full_import_async(
             note_parts = [note] if note else []
             note_parts.append(f"vis_soft_deleted={num_deleted_vis}")
 
+            upserted_asins_list = [t[0] for t in batch]
+            soft_deleted_asins_list = sorted(to_soft_delete_by_visibility)
+
             await conn.execute(
                 INSERT_SYNC_LOG_SQL,
                 (
-                    now_iso_utc(), None, request_statuses,
-                    now_iso_utc(), resp_iso,
-                    200, num_upserted, num_deleted_vis,
-                    " | ".join(n for n in note_parts if n),
+                    now_iso_utc(),  # request_time_utc
+                    None,  # request_state_token_utc (full-sync → None)
+                    now_iso_utc(),  # response_time_utc
+                    resp_iso,  # response_state_token_utc
+                    200,  # http_status
+                    num_upserted,  # num_upserted
+                    num_deleted_vis,  # num_soft_deleted
+                    " | ".join(n for n in note_parts if n),  # note
+                    json.dumps(upserted_asins_list, ensure_ascii=False),  # upserted_asins
+                    json.dumps(soft_deleted_asins_list, ensure_ascii=False),  # soft_deleted_asins
                 ),
             )
 
@@ -445,7 +461,6 @@ async def delta_import_async(
     request_token: Optional[str | int | float],
     response_token: Optional[str | int | float],
     note: Optional[str],
-    request_statuses: Optional[str] = None,
 ) -> tuple[int, int]:
     items = normalize_items(payload)
     removed = extract_removed_asins(payload)
@@ -492,6 +507,7 @@ async def delta_import_async(
             num_deleted_removed = len(removed)
             num_deleted_vis = len(to_soft_delete_by_visibility)
             to_soft_delete_all = set(removed) | to_soft_delete_by_visibility
+            soft_deleted_asins_list = sorted(to_soft_delete_all)
 
             num_deleted_total = 0
             if to_soft_delete_all:
@@ -519,13 +535,23 @@ async def delta_import_async(
             note_parts.append(f"removed_asins={num_deleted_removed}")
             note_parts.append(f"vis_soft_deleted={num_deleted_vis}")
 
+            upserted_asins_list = [t[0] for t in batch]
+            soft_deleted_asins_list = sorted(to_soft_delete_all)
+
             await conn.execute(
                 INSERT_SYNC_LOG_SQL,
                 (
-                    now_iso_utc(), req_iso, request_statuses,
-                    now_iso_utc(), resp_iso,
-                    200, num_upserted, num_deleted_total,
-                    " | ".join(n for n in note_parts if n),
+                    now_iso_utc(),  # request_time_utc
+                    req_iso,  # request_state_token_utc
+                    now_iso_utc(),  # response_time_utc
+                    resp_iso,  # response_state_token_utc
+                    200,  # http_status
+                    num_upserted,  # num_upserted
+                    num_deleted_total,  # num_soft_deleted
+                    " | ".join(n for n in note_parts if n),  # note
+                    json.dumps(upserted_asins_list, ensure_ascii=False),  # upserted_asins
+                    json.dumps(soft_deleted_asins_list, ensure_ascii=False),
+                # soft_deleted_asins
                 ),
             )
 
@@ -831,6 +857,114 @@ async def list_soft_deleted_async(db_path: Path, limit: int = 50, offset: int = 
         return rows, total
 
 
+async def list_sync_logs_async(
+    db_path: Path,
+    limit: int = 50,
+    offset: int = 0,
+    order: str = "desc",
+) -> tuple[list[dict], int]:
+    """
+    Return (rows, total) from sync_log.
+    Each row is:
+      {
+        "id": int,
+        "request_time_utc": str,
+        "request_state_token_utc": Optional[str],
+        "response_time_utc": str,
+        "response_state_token_utc": Optional[str],
+        "http_status": int,
+        "num_upserted": int,
+        "num_soft_deleted": int,
+        "note": Optional[str],
+        "upserted_asins": Optional[list[str]],      # parsed from JSON text (may be None)
+        "soft_deleted_asins": Optional[list[str]],  # parsed from JSON text (may be None)
+      }
+    """
+    sort = "DESC" if (order or "").lower() != "asc" else "ASC"
+    async with open_db(db_path) as conn:
+        # ensure table exists (leeres DB-File / noch kein init)
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='sync_log'"
+        )
+        if await cur.fetchone() is None:
+            await cur.close()
+            return [], 0
+        await cur.close()
+
+        # Prüfe optionale JSON-Spalten (Migrationen rückwärtskompatibel)
+        cur = await conn.execute("PRAGMA table_info(sync_log)")
+        cols_info = await cur.fetchall()
+        await cur.close()
+        have_up = any(c[1] == "upserted_asins" for c in cols_info)
+        have_del = any(c[1] == "soft_deleted_asins" for c in cols_info)
+
+        select_cols = [
+            "id",
+            "request_time_utc",
+            "request_state_token_utc",
+            "response_time_utc",
+            "response_state_token_utc",
+            "http_status",
+            "num_upserted",
+            "num_soft_deleted",
+            "note",
+        ]
+        if have_up:
+            select_cols.append("upserted_asins")
+        else:
+            select_cols.append("NULL AS upserted_asins")
+        if have_del:
+            select_cols.append("soft_deleted_asins")
+        else:
+            select_cols.append("NULL AS soft_deleted_asins")
+
+        sql = f"""
+            SELECT {", ".join(select_cols)}
+            FROM sync_log
+            ORDER BY id {sort}
+            LIMIT ? OFFSET ?
+        """
+        cur = await conn.execute(sql, (limit, offset))
+        rows = await cur.fetchall()
+        await cur.close()
+
+        cur = await conn.execute("SELECT COUNT(*) FROM sync_log")
+        total = int((await cur.fetchone())[0])
+        await cur.close()
+
+        cols = [
+            "id",
+            "request_time_utc",
+            "request_state_token_utc",
+            "response_time_utc",
+            "response_state_token_utc",
+            "http_status",
+            "num_upserted",
+            "num_soft_deleted",
+            "note",
+            "upserted_asins",
+            "soft_deleted_asins",
+        ]
+
+        def _parse_json_list(txt: str | None):
+            if not txt:
+                return None
+            try:
+                val = json.loads(txt)
+                return val if isinstance(val, list) else None
+            except Exception:
+                return None
+
+        out: list[dict] = []
+        for r in rows:
+            d = dict(zip(cols, r))
+            d["upserted_asins"] = _parse_json_list(d.get("upserted_asins"))
+            d["soft_deleted_asins"] = _parse_json_list(d.get("soft_deleted_asins"))
+            out.append(d)
+
+        return out, total
+
+
 # --- Restore helpers -------------------------------------------------
 
 async def get_all_asins_async(db_path: Path, include_deleted: bool = True) -> set[str]:
@@ -906,7 +1040,6 @@ async def restore_from_export_async(
         export_payload,
         response_token=None,
         note=note,
-        request_statuses=None,
     )
 
     deleted = 0
