@@ -211,11 +211,21 @@ def build_full_title(record: dict) -> str:
     return title_s
 
 
-def should_soft_delete_by_visibility(record: dict) -> bool:
+def should_soft_delete_by_status(record: dict) -> bool:
     """
-    Return True iff library_status.is_visible is explicitly False.
-    If library_status is missing or None, returns False (no action).
+    Bevorzugt status-basiert:
+      - True, wenn record.status == "Revoked"
+      - False, wenn record.status == "Active"
+    Fallback (Legacy): Falls status fehlt/unbekannt → library_status.is_visible == False
+    (Großschreibung ist relevant: "Active"/"Revoked")
     """
+    s = record.get("status")
+    if isinstance(s, str):
+        if s == "Revoked":
+            return True
+        if s == "Active":
+            return False
+    # Fallback auf alte Logik
     ls = record.get("library_status")
     if isinstance(ls, dict):
         return ls.get("is_visible") is False
@@ -388,7 +398,7 @@ async def full_import_async(
 
             ts = now_iso_utc()
             batch = []
-            to_soft_delete_by_visibility: set[str] = set()
+            to_soft_delete_by_status: set[str] = set()
 
             for r in items:
                 asin = r.get("asin")
@@ -402,20 +412,20 @@ async def full_import_async(
                 doc = json.dumps(r, ensure_ascii=False)
                 batch.append((asin, doc, title, subtitle, full_title, ts))
 
-                if should_soft_delete_by_visibility(r):
-                    to_soft_delete_by_visibility.add(asin)
+                if should_soft_delete_by_status(r):
+                    to_soft_delete_by_status.add(asin)
 
             if batch:
                 await conn.executemany(UPSERT_SQL, batch)
             num_upserted = len(batch)
 
-            # soft-deletes by visibility=false
-            num_deleted_vis = 0
-            if to_soft_delete_by_visibility:
+            # soft-deletes by status
+            num_deleted_status = 0
+            if to_soft_delete_by_status:
                 ts_del = now_iso_utc()
-                for asin in to_soft_delete_by_visibility:
+                for asin in to_soft_delete_by_status:
                     await conn.execute(SOFT_DELETE_SQL, (ts_del, ts_del, asin))
-                num_deleted_vis = len(to_soft_delete_by_visibility)
+                num_deleted_status = len(to_soft_delete_by_status)
 
             if resp_iso or resp_raw:
                 await conn.execute(
@@ -429,10 +439,10 @@ async def full_import_async(
                 )
 
             note_parts = [note] if note else []
-            note_parts.append(f"vis_soft_deleted={num_deleted_vis}")
+            note_parts.append(f"status_soft_deleted={num_deleted_status}")
 
             upserted_asins_list = [t[0] for t in batch]
-            soft_deleted_asins_list = sorted(to_soft_delete_by_visibility)
+            soft_deleted_asins_list = sorted(to_soft_delete_by_status)
 
             await conn.execute(
                 INSERT_SYNC_LOG_SQL,
@@ -443,7 +453,7 @@ async def full_import_async(
                     resp_iso,  # response_state_token_utc
                     200,  # http_status
                     num_upserted,  # num_upserted
-                    num_deleted_vis,  # num_soft_deleted
+                    num_deleted_status,  # num_soft_deleted
                     " | ".join(n for n in note_parts if n),  # note
                     json.dumps(upserted_asins_list, ensure_ascii=False),  # upserted_asins
                     json.dumps(soft_deleted_asins_list, ensure_ascii=False),  # soft_deleted_asins
@@ -482,7 +492,7 @@ async def delta_import_async(
 
             ts = now_iso_utc()
             batch = []
-            to_soft_delete_by_visibility: set[str] = set()
+            to_soft_delete_by_status: set[str] = set()
 
             for r in items:
                 asin = r.get("asin")
@@ -496,8 +506,8 @@ async def delta_import_async(
                 doc = json.dumps(r, ensure_ascii=False)
                 batch.append((asin, doc, title, subtitle, full_title, ts))
 
-                if should_soft_delete_by_visibility(r):
-                    to_soft_delete_by_visibility.add(asin)
+                if should_soft_delete_by_status(r):
+                    to_soft_delete_by_status.add(asin)
 
             if batch:
                 await conn.executemany(UPSERT_SQL, batch)
@@ -505,8 +515,8 @@ async def delta_import_async(
 
             # combine server removals + visibility-based soft-deletes
             num_deleted_removed = len(removed)
-            num_deleted_vis = len(to_soft_delete_by_visibility)
-            to_soft_delete_all = set(removed) | to_soft_delete_by_visibility
+            num_deleted_status = len(to_soft_delete_by_status)
+            to_soft_delete_all = set(removed) | to_soft_delete_by_status
             soft_deleted_asins_list = sorted(to_soft_delete_all)
 
             num_deleted_total = 0
@@ -533,7 +543,7 @@ async def delta_import_async(
             if resp_iso is None and resp_raw:
                 note_parts.append(f"response_token_raw={resp_raw}")
             note_parts.append(f"removed_asins={num_deleted_removed}")
-            note_parts.append(f"vis_soft_deleted={num_deleted_vis}")
+            note_parts.append(f"status_soft_deleted={num_deleted_status}")
 
             upserted_asins_list = [t[0] for t in batch]
             soft_deleted_asins_list = sorted(to_soft_delete_all)
