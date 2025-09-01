@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+# Added
+
+- The `--page-size` option as a replacement for the now deprecated `--bunch-size` option.
+
+##} Changed
+
+- The `--bunch-size` option is now deprected and will be replaced with option `--page-size` some releases later.
+
 ## [0.3.3] - 2025-08-14
 
 ### Added
