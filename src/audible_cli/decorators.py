@@ -1,9 +1,12 @@
 import asyncio
 import logging
 from functools import partial, wraps
+from typing import Any, Callable
+from types import SimpleNamespace
 
 import click
 import httpx
+from click.core import Parameter, ParameterSource
 from packaging.version import parse
 
 from .config import Session
@@ -204,25 +207,113 @@ def timeout_option(func=None, **kwargs):
     return option
 
 
-def bunch_size_option(func=None, **kwargs):
+def page_size_option(
+    func: Callable[..., Any] | None = None, **kwargs: Any
+) -> Callable[..., Any]:
+    """Create a Click option for page size with a legacy alias.
+
+    Adds a primary ``--page-size`` option and accepts the legacy
+    ``--bunch-size`` during a transition period. The value is validated to
+    be within ``[10, 1000]``. If both flags are supplied, ``--page-size``
+    takes precedence. The value is stored under both keys (``page_size``,
+    ``bunch_size``) to keep older commands compatible.
+    """
+    # Primary option defaults
     kwargs.setdefault("type", click.IntRange(10, 1000))
     kwargs.setdefault("default", 1000)
     kwargs.setdefault("show_default", True)
+    kwargs.setdefault("metavar", "[10-1000]")
     kwargs.setdefault(
-        "help", ("How many library items should be requested per request. A "
-                 "lower size results in more requests to get the full library. "
-                 "A higher size can result in a TimeOutError on low internet "
-                 "connections.")
+        "help",
+        (
+            "Number of items to request per API call (10–1000). Larger values "
+            "reduce the number of requests but may cause timeouts or higher "
+            "memory usage on slow connections. Tip: Use smaller values if you "
+            "experience 408 timeouts or 429 rate limits."
+        ),
     )
-    kwargs.setdefault("callback", add_param_to_session)
-    kwargs.setdefault("expose_value", False)
 
-    option = click.option("--bunch-size", **kwargs)
+    def _page_size_callback(
+        ctx: click.Context, param: Parameter, value: int | None
+    ) -> None:
+        """Callback for ``--page-size``.
+
+        If the value came from the command line, always write it.
+        If it's the default, only write it when the session does not already
+        contain values (e.g., set by legacy ``--bunch-size``).
+        """
+        if value is None:
+            return
+
+        source = ctx.get_parameter_source("page_size")
+        session = ctx.ensure_object(Session)  # your app's Session
+
+        if source == ParameterSource.COMMANDLINE:
+            # Explicit --page-size: always set/override.
+            add_param_to_session(ctx, SimpleNamespace(name="page_size"), value)
+            add_param_to_session(ctx, SimpleNamespace(name="bunch_size"), value)
+            return
+
+        # Default value path: do not overwrite if legacy already populated.
+        if "page_size" in session.params or "bunch_size" in session.params:
+            # Skip to avoid clobbering a legacy value (or any pre-set value).
+            return
+
+        # Neither key set yet → apply default to both keys.
+        add_param_to_session(ctx, SimpleNamespace(name="page_size"), value)
+        add_param_to_session(ctx, SimpleNamespace(name="bunch_size"), value)
+
+    kwargs["callback"] = _page_size_callback
+    kwargs["expose_value"] = False
+
+    page_size = click.option("--page-size", **kwargs)
+
+    def _legacy_bunch_size_callback(
+        ctx: click.Context, param: Parameter, value: int | None
+    ) -> None:
+        """Handle ``--bunch-size`` as a deprecated alias.
+
+        If ``--page-size`` was explicitly provided, ignore legacy and note it.
+        Otherwise, store the legacy value under both keys and warn.
+        """
+        if value is None:
+            return
+
+        if ctx.get_parameter_source("page_size") == ParameterSource.COMMANDLINE:
+            click.echo(
+                "Note: --bunch-size is deprecated and ignored because --page-size was provided.",
+                err=True,
+            )
+            return
+
+        click.echo(
+            "Warning: --bunch-size is deprecated. Please use --page-size.",
+            err=True,
+        )
+        add_param_to_session(ctx, SimpleNamespace(name="page_size"), value)
+        add_param_to_session(ctx, SimpleNamespace(name="bunch_size"), value)
+
+    legacy = click.option(
+        "--bunch-size",
+        type=click.IntRange(10, 1000),
+        default=None,            # only active when explicitly provided
+        hidden=True,             # keep it out of --help
+        callback=_legacy_bunch_size_callback,
+        expose_value=False,
+    )
+
+    def decorator(f: Callable[..., Any]) -> Callable[..., Any]:
+        # Order doesn't matter now; guards in callbacks prevent overwrites.
+        return page_size(legacy(f))
 
     if callable(func):
-        return option(func)
+        return decorator(func)
 
-    return option
+    return decorator
+
+
+# Backward-compat alias for old imports
+bunch_size_option = page_size_option
 
 
 def start_date_option(func=None, **kwargs):
