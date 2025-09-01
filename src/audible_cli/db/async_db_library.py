@@ -1,34 +1,39 @@
 from __future__ import annotations
 
-import asyncio
 import json
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Tuple
 
 import aiosqlite
-from filelock import FileLock
+
+from audible_cli.db import (
+    AsyncFileLock,
+    now_iso_utc,
+    open_db,
+    register_schema,
+    with_txn_async,
+)
 
 # ------------------ Schema & SQL ------------------
 
 SCHEMA_SQL = r"""
 CREATE TABLE IF NOT EXISTS items (
   asin        TEXT PRIMARY KEY,
-  doc         TEXT NOT NULL,       -- full original JSON (current version)
-  title       TEXT NOT NULL,       -- extracted from JSON
-  subtitle    TEXT,                -- may be NULL
-  full_title  TEXT NOT NULL,       -- title[: subtitle]
-  updated_utc TEXT NOT NULL,       -- last upsert time
+  doc         TEXT NOT NULL,
+  title       TEXT NOT NULL,
+  subtitle    TEXT,
+  full_title  TEXT NOT NULL,
+  updated_utc TEXT NOT NULL,
   is_deleted  INTEGER NOT NULL DEFAULT 0,
   deleted_utc TEXT
 );
 
 CREATE TABLE IF NOT EXISTS settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  response_groups TEXT NOT NULL,       -- the one-and-only groups string for this DB
-  last_state_token_utc TEXT,           -- last sync token (ISO-8601 UTC)
-  last_state_token_raw TEXT,           -- raw token as received (e.g., epoch ms)
+  response_groups TEXT NOT NULL,
+  last_state_token_utc TEXT,
+  last_state_token_raw TEXT,
   created_utc TEXT NOT NULL
 );
 
@@ -45,8 +50,7 @@ CREATE TABLE IF NOT EXISTS sync_log (
   upserted_asins            TEXT,
   soft_deleted_asins        TEXT
 );
-    
--- View of active items with derived fields from JSON
+
 CREATE VIEW IF NOT EXISTS v_books AS
 SELECT
   asin,
@@ -69,15 +73,11 @@ SELECT
 FROM items
 WHERE is_deleted = 0;
 
--- Indices
 CREATE INDEX IF NOT EXISTS idx_items_title       ON items (lower(title));
 CREATE INDEX IF NOT EXISTS idx_items_subtitle    ON items (lower(subtitle));
 CREATE INDEX IF NOT EXISTS idx_items_full_title  ON items (lower(full_title));
 CREATE INDEX IF NOT EXISTS idx_items_is_deleted  ON items (is_deleted);
-"""
 
-# Indices continued (split to avoid editor confusion)
-SCHEMA_SQL += r"""
 CREATE INDEX IF NOT EXISTS idx_items_purchase    ON items (
   COALESCE(json_extract(doc,'$.purchase_date'),
            json_extract(doc,'$.library_status.date_added'))
@@ -88,43 +88,6 @@ CREATE INDEX IF NOT EXISTS idx_items_language    ON items (
 );
 """
 
-UPSERT_SQL = """
-INSERT INTO items(asin, doc, title, subtitle, full_title, updated_utc, is_deleted, deleted_utc)
-VALUES (?, ?, ?, ?, ?, ?, 0, NULL)
-ON CONFLICT(asin) DO UPDATE SET
-  doc         = excluded.doc,
-  title       = excluded.title,
-  subtitle    = excluded.subtitle,
-  full_title  = excluded.full_title,
-  updated_utc = excluded.updated_utc,
-  is_deleted  = 0,
-  deleted_utc = NULL;
-"""
-
-SOFT_DELETE_SQL = """
-UPDATE items
-SET is_deleted = 1,
-    deleted_utc = ?,
-    updated_utc = ?
-WHERE asin = ?;
-"""
-
-INSERT_SYNC_LOG_SQL = """
-INSERT INTO sync_log(
-  request_time_utc,
-  request_state_token_utc,
-  response_time_utc,
-  response_state_token_utc,
-  http_status,
-  num_upserted,
-  num_soft_deleted,
-  note,
-  upserted_asins,
-  soft_deleted_asins
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-"""
-
-# FTS5 schema & triggers (external content indexing of 'items')
 FTS_SQL = r"""
 CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
   full_title,
@@ -153,6 +116,27 @@ CREATE TRIGGER IF NOT EXISTS trg_items_au AFTER UPDATE ON items BEGIN
 END;
 """
 
+UPSERT_SQL = """
+INSERT INTO items(asin, doc, title, subtitle, full_title, updated_utc, is_deleted, deleted_utc)
+VALUES (?, ?, ?, ?, ?, ?, 0, NULL)
+ON CONFLICT(asin) DO UPDATE SET
+  doc         = excluded.doc,
+  title       = excluded.title,
+  subtitle    = excluded.subtitle,
+  full_title  = excluded.full_title,
+  updated_utc = excluded.updated_utc,
+  is_deleted  = 0,
+  deleted_utc = NULL;
+"""
+
+SOFT_DELETE_SQL = """
+UPDATE items
+SET is_deleted = 1,
+    deleted_utc = ?,
+    updated_utc = ?
+WHERE asin = ?;
+"""
+
 SOFT_DELETED_LIST_SQL = """
 SELECT asin, title, subtitle, full_title, deleted_utc, updated_utc
 FROM items
@@ -164,114 +148,33 @@ LIMIT ? OFFSET ?;
 SOFT_DELETED_COUNT_SQL = "SELECT COUNT(*) FROM items WHERE is_deleted = 1;"
 
 
-# ------------------ Async FileLock wrapper ------------------
-
-class AsyncFileLock:
-    """Async context manager wrapping filelock.FileLock via a thread to keep the loop non-blocking."""
-
-    def __init__(self, path: Path, timeout: float = 30.0):
-        self._lock = FileLock(str(path), timeout=timeout)
-
-    async def __aenter__(self):
-        await asyncio.to_thread(self._lock.acquire)
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        await asyncio.to_thread(self._lock.release)
-
-
-# ------------------ Helpers ------------------
-
-def now_iso_utc() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+INSERT_SYNC_LOG_SQL = """
+INSERT INTO sync_log(
+  request_time_utc,
+  request_state_token_utc,
+  response_time_utc,
+  response_state_token_utc,
+  http_status,
+  num_upserted,
+  num_soft_deleted,
+  note,
+  upserted_asins,
+  soft_deleted_asins
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
 
 
-def epoch_ms_to_iso(token: Optional[str | int | float]) -> Tuple[Optional[str], Optional[str]]:
-    if token is None:
-        return None, None
-    raw = str(token).strip()
-    try:
-        val = int(raw)
-        seconds = val / 1000.0 if val > 10_000_000_000 else float(val)
-        dt = datetime.fromtimestamp(seconds, timezone.utc).replace(microsecond=0)
-        return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), raw
-    except Exception:
-        return None, raw
+# ------------------ Schema ensure (Registry) ------------------
 
+async def ensure_library_schema(conn: aiosqlite.Connection) -> None:
+    """Create/migrate the core Library schema (items/settings/sync_log/FTS).
 
-def build_full_title(record: dict) -> str:
-    """Return 'Title: Subtitle' (Subtitle optional). Title must be non-empty."""
-    title = record.get("title")
-    if not title or not str(title).strip():
-        raise ValueError(f"Missing or empty title in record with asin={record.get('asin')}")
-    title_s = str(title).strip()
-    subtitle = record.get("subtitle")
-    if subtitle and str(subtitle).strip():
-        return f"{title_s}: {str(subtitle).strip()}"
-    return title_s
+    Args:
+        conn: Open aiosqlite connection.
 
-
-def should_soft_delete_by_status(record: dict) -> bool:
+    Returns:
+        None
     """
-    Bevorzugt status-basiert:
-      - True, wenn record.status == "Revoked"
-      - False, wenn record.status == "Active"
-    Fallback (Legacy): Falls status fehlt/unbekannt → library_status.is_visible == False
-    (Großschreibung ist relevant: "Active"/"Revoked")
-    """
-    s = record.get("status")
-    if isinstance(s, str):
-        if s == "Revoked":
-            return True
-        if s == "Active":
-            return False
-    # Fallback auf alte Logik
-    ls = record.get("library_status")
-    if isinstance(ls, dict):
-        return ls.get("is_visible") is False
-    return False
-
-
-def normalize_items(payload: Any) -> list[dict]:
-    if isinstance(payload, dict) and isinstance(payload.get("items"), list):
-        return payload["items"]
-    return payload if isinstance(payload, list) else []
-
-
-def extract_removed_asins(payload: Any) -> set[str]:
-    out: set[str] = set()
-    if isinstance(payload, dict):
-        for key in ("removed_asins", "deleted_asins", "revoked_asins"):
-            seq = payload.get(key)
-            if isinstance(seq, list):
-                out.update(str(x) for x in seq if x)
-        for key in ("deleted_items", "removed_items", "revoked_items"):
-            seq = payload.get(key)
-            if isinstance(seq, list):
-                for obj in seq:
-                    asin = (obj or {}).get("asin")
-                    if asin:
-                        out.add(str(asin))
-    return out
-
-
-# ------------------ Connection helper ------------------
-
-@asynccontextmanager
-async def open_db(db_path: Path):
-    conn = await aiosqlite.connect(db_path)
-    await conn.execute("PRAGMA journal_mode=WAL;")
-    await conn.execute("PRAGMA foreign_keys=ON;")
-    await conn.execute("PRAGMA busy_timeout=5000;")
-    await conn.execute("PRAGMA synchronous=NORMAL;")
-    try:
-        yield conn
-    finally:
-        await conn.close()
-
-
-async def ensure_schema(conn: aiosqlite.Connection) -> None:
-    """Create a baseline schema and indices. Run lightweight migration for title/subtitle/full_title if missing, then FTS."""
     await conn.executescript(SCHEMA_SQL)
 
     async def _have_col(table: str, column: str) -> bool:
@@ -307,45 +210,184 @@ async def ensure_schema(conn: aiosqlite.Connection) -> None:
     if changed:
         await conn.commit()
 
-    # Ensure FTS exists (triggers included)
     await conn.executescript(FTS_SQL)
 
-    # Ensure (or re-create) secondary indices (idempotent)
-    await conn.executescript("""
-    CREATE INDEX IF NOT EXISTS idx_items_title       ON items (lower(title));
-    CREATE INDEX IF NOT EXISTS idx_items_subtitle    ON items (lower(subtitle));
-    CREATE INDEX IF NOT EXISTS idx_items_full_title  ON items (lower(full_title));
-    CREATE INDEX IF NOT EXISTS idx_items_is_deleted  ON items (is_deleted);
-    CREATE INDEX IF NOT EXISTS idx_items_purchase    ON items (
-      COALESCE(json_extract(doc,'$.purchase_date'), json_extract(doc,'$.library_status.date_added'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_items_language    ON items (
-      COALESCE(json_extract(doc,'$.language'), json_extract(doc,'$.metadata.language'))
-    );
-    """)
+# Registrierung: Library zuerst laufen lassen
+register_schema("library", ensure_library_schema, order=10)
 
 
-async def ensure_initialized_async(
-    db_path: Path,
-    response_groups: str,
-) -> None:
+def epoch_ms_to_iso(token: Optional[str | int | float]) -> Tuple[Optional[str], Optional[str]]:
+    """Convert epoch milliseconds/seconds to ISO-8601 Z string.
+
+    Args:
+        token: Epoch value as str/int/float or None.
+
+    Returns:
+        Tuple of (iso_utc_or_None, raw_or_None).
     """
-    Ensure the database file exists, schema is created, and settings row (id=1) is present.
-    Safe to call repeatedly.
+    if token is None:
+        return None, None
+    raw = str(token).strip()
+    try:
+        val = int(raw)
+        seconds = val / 1000.0 if val > 10_000_000_000 else float(val)
+        dt = datetime.fromtimestamp(seconds, timezone.utc).replace(microsecond=0)
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ"), raw
+    except Exception:
+        return None, raw
+
+
+def build_full_title(record: dict) -> str:
+    """Return 'Title: Subtitle' (Subtitle optional). Title must be non-empty.
+
+    Args:
+        record: Parsed item dict.
+
+    Returns:
+        Normalized full title.
+
+    Raises:
+        ValueError: If title is missing or empty.
+    """
+    title = record.get("title")
+    if not title or not str(title).strip():
+        raise ValueError(f"Missing or empty title in record with asin={record.get('asin')}")
+    title_s = str(title).strip()
+    subtitle = record.get("subtitle")
+    if subtitle and str(subtitle).strip():
+        return f"{title_s}: {str(subtitle).strip()}"
+    return title_s
+
+
+def should_soft_delete_by_status(record: dict) -> bool:
+    """Decide soft-delete via status, fallback to legacy visibility.
+
+    Preferred:
+      - True if record.status == "Revoked"
+      - False if record.status == "Active"
+    Fallback (legacy): library_status.is_visible == False
+
+    Args:
+        record: Parsed item dict.
+
+    Returns:
+        True if item should be soft-deleted, else False.
+    """
+    s = record.get("status")
+    if isinstance(s, str):
+        if s == "Revoked":
+            return True
+        if s == "Active":
+            return False
+    ls = record.get("library_status")
+    if isinstance(ls, dict):
+        return ls.get("is_visible") is False
+    return False
+
+
+def normalize_items(payload: Any) -> list[dict]:
+    """Normalize payload to a list of item dicts.
+
+    Args:
+        payload: API payload or list.
+
+    Returns:
+        List of items (may be empty).
+    """
+    if isinstance(payload, dict) and isinstance(payload.get("items"), list):
+        return payload["items"]
+    return payload if isinstance(payload, list) else []
+
+
+def extract_removed_asins(payload: Any) -> set[str]:
+    """Extract removed/revoked ASINs from various payload shapes.
+
+    Args:
+        payload: API payload.
+
+    Returns:
+        Set of ASIN strings.
+    """
+    out: set[str] = set()
+    if isinstance(payload, dict):
+        for key in ("removed_asins", "deleted_asins", "revoked_asins"):
+            seq = payload.get(key)
+            if isinstance(seq, list):
+                out.update(str(x) for x in seq if x)
+        for key in ("deleted_items", "removed_items", "revoked_items"):
+            seq = payload.get(key)
+            if isinstance(seq, list):
+                for obj in seq:
+                    asin = (obj or {}).get("asin")
+                    if asin:
+                        out.add(str(asin))
+    return out
+
+
+def _build_upsert_batch(items: list[dict], ts: str) -> tuple[
+    list[tuple[str, str, str, str | None, str, str]], set[str]
+]:
+    """Prepare UPSERT tuples + detect status-based soft deletes.
+
+    Args:
+        items: Items to upsert.
+        ts: Timestamp for updated_utc.
+
+    Returns:
+        Tuple of (batch rows, set of asins to soft-delete).
+    """
+    batch: list[tuple[str, str, str, str | None, str, str]] = []
+    to_soft_delete: set[str] = set()
+    for r in items:
+        asin = r.get("asin")
+        if not asin:
+            continue
+        title = (r.get("title") or "").strip()
+        if not title:
+            raise ValueError(f"Empty title for asin={asin}")
+        subtitle = r.get("subtitle")
+        full_title = build_full_title(r)
+        doc = json.dumps(r, ensure_ascii=False)
+        batch.append((asin, doc, title, subtitle, full_title, ts))
+        if should_soft_delete_by_status(r):
+            to_soft_delete.add(asin)
+    return batch, to_soft_delete
+
+
+# -------------- Public API (unchanged signatures) --------------
+
+async def ensure_initialized_async(db_path: Path, response_groups: str) -> None:
+    """Ensure DB exists, schemas are present, and settings row is initialized.
+
+    Args:
+        db_path: SQLite database file path.
+        response_groups: Response groups string for settings row.
+
+    Returns:
+        None
     """
     lock_path = db_path.with_suffix(".lock")
     async with AsyncFileLock(lock_path):
         async with open_db(db_path) as conn:
-            await ensure_schema(conn)
+            await ensure_library_schema(conn)  # library schema
             await conn.execute("BEGIN IMMEDIATE;")
             await init_or_check_settings(conn, response_groups)
             await conn.commit()
 
 
-async def init_or_check_settings(
-    conn: aiosqlite.Connection,
-    response_groups: str,
-) -> None:
+async def init_or_check_settings(conn: aiosqlite.Connection, response_groups: str) -> None:
+    """Insert settings row (id=1) or validate response_groups.
+
+    Args:
+        conn: Open aiosqlite connection.
+        response_groups: Expected groups string.
+
+    Returns:
+        None
+
+    Raises:
+        RuntimeError: If groups mismatch on existing DB.
+    """
     cur = await conn.execute("SELECT response_groups FROM settings WHERE id=1")
     row = await cur.fetchone()
     await cur.close()
@@ -364,11 +406,32 @@ async def init_or_check_settings(
 
 # ------------------ WRITE paths (Filelock before any read) ------------------
 
+async def _with_conn_txn(
+    *,
+    db_path: Path,
+    conn: aiosqlite.Connection | None,
+    work: callable,  # (conn: aiosqlite.Connection) -> Awaitable[T]
+):
+    """Run `work(conn)` either on provided connection or managed txn via with_txn_async.
+
+    Args:
+        db_path: Path to SQLite file.
+        conn: Optional external connection (caller-managed).
+        work: Async function that receives a connection.
+
+    Returns:
+        Result of `work(conn)`.
+    """
+    if conn is not None:
+        return await work(conn)
+    return await with_txn_async(db_path, work)
+
+
 async def init_db_async(db_path: Path, response_groups: str) -> None:
     lock_path = db_path.with_suffix(".lock")
     async with AsyncFileLock(lock_path):
         async with open_db(db_path) as conn:
-            await ensure_schema(conn)
+            await ensure_library_schema(conn)
             await conn.execute("BEGIN IMMEDIATE;")
             await init_or_check_settings(conn, response_groups)
             await conn.commit()
@@ -378,99 +441,43 @@ async def full_import_async(
     db_path: Path,
     payload: Any,
     *,
-    response_token: Optional[str | int | float],
-    note: Optional[str],
+    response_token: str | int | float | None,
+    note: str | None,
+    conn: aiosqlite.Connection | None = None,
 ) -> int:
     items = normalize_items(payload)
     resp_iso, resp_raw = epoch_ms_to_iso(response_token)
 
-    lock_path = db_path.with_suffix(".lock")
-    async with AsyncFileLock(lock_path):
-        async with open_db(db_path) as conn:
-            await ensure_schema(conn)
-            cur = await conn.execute("SELECT 1 FROM settings WHERE id=1")
-            have = await cur.fetchone()
-            await cur.close()
-            if have is None:
-                raise RuntimeError("Settings not initialized. Run 'db library init' first with --response-groups.")
+    async def _work(c: aiosqlite.Connection) -> int:
+        ts = now_iso_utc()
+        batch, to_soft_delete_status = _build_upsert_batch(items, ts)
+        num_upserted = await _apply_upserts(c, batch)
+        num_deleted = await _apply_soft_deletes(c, to_soft_delete_status)
+        await _update_tokens(c, resp_iso=resp_iso, resp_raw=resp_raw)
+        await _log_page(
+            c,
+            http_status=200,
+            num_upserted=num_upserted,
+            num_soft_deleted=num_deleted,
+            note_parts=[note or "", f"status_soft_deleted={num_deleted}"],
+            upserted_asins=[t[0] for t in batch],
+            soft_deleted_asins=sorted(to_soft_delete_status),
+            req_iso=None,
+            resp_iso=resp_iso,
+        )
+        return num_upserted
 
-            await conn.execute("BEGIN IMMEDIATE;")
-
-            ts = now_iso_utc()
-            batch = []
-            to_soft_delete_by_status: set[str] = set()
-
-            for r in items:
-                asin = r.get("asin")
-                if not asin:
-                    continue
-                title = (r.get("title") or "").strip()
-                if not title:
-                    raise ValueError(f"Empty title for asin={asin}")
-                subtitle = r.get("subtitle")
-                full_title = build_full_title(r)
-                doc = json.dumps(r, ensure_ascii=False)
-                batch.append((asin, doc, title, subtitle, full_title, ts))
-
-                if should_soft_delete_by_status(r):
-                    to_soft_delete_by_status.add(asin)
-
-            if batch:
-                await conn.executemany(UPSERT_SQL, batch)
-            num_upserted = len(batch)
-
-            # soft-deletes by status
-            num_deleted_status = 0
-            if to_soft_delete_by_status:
-                ts_del = now_iso_utc()
-                for asin in to_soft_delete_by_status:
-                    await conn.execute(SOFT_DELETE_SQL, (ts_del, ts_del, asin))
-                num_deleted_status = len(to_soft_delete_by_status)
-
-            if resp_iso or resp_raw:
-                await conn.execute(
-                    """
-                    UPDATE settings
-                       SET last_state_token_utc = COALESCE(?, last_state_token_utc),
-                           last_state_token_raw = COALESCE(?, last_state_token_raw)
-                     WHERE id = 1
-                    """,
-                    (resp_iso, resp_raw),
-                )
-
-            note_parts = [note] if note else []
-            note_parts.append(f"status_soft_deleted={num_deleted_status}")
-
-            upserted_asins_list = [t[0] for t in batch]
-            soft_deleted_asins_list = sorted(to_soft_delete_by_status)
-
-            await conn.execute(
-                INSERT_SYNC_LOG_SQL,
-                (
-                    now_iso_utc(),  # request_time_utc
-                    None,  # request_state_token_utc (full-sync → None)
-                    now_iso_utc(),  # response_time_utc
-                    resp_iso,  # response_state_token_utc
-                    200,  # http_status
-                    num_upserted,  # num_upserted
-                    num_deleted_status,  # num_soft_deleted
-                    " | ".join(n for n in note_parts if n),  # note
-                    json.dumps(upserted_asins_list, ensure_ascii=False),  # upserted_asins
-                    json.dumps(soft_deleted_asins_list, ensure_ascii=False),  # soft_deleted_asins
-                ),
-            )
-
-            await conn.commit()
-            return num_upserted
+    return await _with_conn_txn(db_path=db_path, conn=conn, work=_work)
 
 
 async def delta_import_async(
     db_path: Path,
     payload: Any,
     *,
-    request_token: Optional[str | int | float],
-    response_token: Optional[str | int | float],
-    note: Optional[str],
+    request_token: str | int | float | None,
+    response_token: str | int | float | None,
+    note: str | None,
+    conn: aiosqlite.Connection | None = None,
 ) -> tuple[int, int]:
     items = normalize_items(payload)
     removed = extract_removed_asins(payload)
@@ -478,95 +485,38 @@ async def delta_import_async(
     req_iso, req_raw = epoch_ms_to_iso(request_token)
     resp_iso, resp_raw = epoch_ms_to_iso(response_token)
 
-    lock_path = db_path.with_suffix(".lock")
-    async with AsyncFileLock(lock_path):
-        async with open_db(db_path) as conn:
-            await ensure_schema(conn)
-            cur = await conn.execute("SELECT 1 FROM settings WHERE id=1")
-            have = await cur.fetchone()
-            await cur.close()
-            if have is None:
-                raise RuntimeError("Settings not initialized. Run 'db library init' first with --response-groups.")
+    async def _work(c: aiosqlite.Connection) -> tuple[int, int]:
+        ts = now_iso_utc()
+        batch, to_soft_delete_status = _build_upsert_batch(items, ts)
+        num_upserted = await _apply_upserts(c, batch)
 
-            await conn.execute("BEGIN IMMEDIATE;")
+        to_soft_delete_all = set(removed) | to_soft_delete_status
+        num_deleted_total = await _apply_soft_deletes(c, to_soft_delete_all)
 
-            ts = now_iso_utc()
-            batch = []
-            to_soft_delete_by_status: set[str] = set()
+        await _update_tokens(c, req_iso=req_iso, req_raw=req_raw, resp_iso=resp_iso, resp_raw=resp_raw)
 
-            for r in items:
-                asin = r.get("asin")
-                if not asin:
-                    continue
-                title = (r.get("title") or "").strip()
-                if not title:
-                    raise ValueError(f"Empty title for asin={asin}")
-                subtitle = r.get("subtitle")
-                full_title = build_full_title(r)
-                doc = json.dumps(r, ensure_ascii=False)
-                batch.append((asin, doc, title, subtitle, full_title, ts))
+        note_parts: list[str] = [note or ""]
+        if req_iso is None and req_raw:
+            note_parts.append(f"request_token_raw={req_raw}")
+        if resp_iso is None and resp_raw:
+            note_parts.append(f"response_token_raw={resp_raw}")
+        note_parts.append(f"removed_asins={len(removed)}")
+        note_parts.append(f"status_soft_deleted={len(to_soft_delete_status)}")
 
-                if should_soft_delete_by_status(r):
-                    to_soft_delete_by_status.add(asin)
+        await _log_page(
+            c,
+            http_status=200,
+            num_upserted=num_upserted,
+            num_soft_deleted=num_deleted_total,
+            note_parts=note_parts,
+            upserted_asins=[t[0] for t in batch],
+            soft_deleted_asins=sorted(to_soft_delete_all),
+            req_iso=req_iso,
+            resp_iso=resp_iso,
+        )
+        return num_upserted, num_deleted_total
 
-            if batch:
-                await conn.executemany(UPSERT_SQL, batch)
-            num_upserted = len(batch)
-
-            # combine server removals + visibility-based soft-deletes
-            num_deleted_removed = len(removed)
-            num_deleted_status = len(to_soft_delete_by_status)
-            to_soft_delete_all = set(removed) | to_soft_delete_by_status
-            soft_deleted_asins_list = sorted(to_soft_delete_all)
-
-            num_deleted_total = 0
-            if to_soft_delete_all:
-                ts_del = now_iso_utc()
-                for asin in to_soft_delete_all:
-                    await conn.execute(SOFT_DELETE_SQL, (ts_del, ts_del, asin))
-                num_deleted_total = len(to_soft_delete_all)
-
-            if resp_iso or req_iso:
-                await conn.execute(
-                    """
-                    UPDATE settings
-                       SET last_state_token_utc = COALESCE(?, last_state_token_utc),
-                           last_state_token_raw = COALESCE(?, last_state_token_raw)
-                     WHERE id = 1
-                    """,
-                    (resp_iso or req_iso, resp_raw or req_raw),
-                )
-
-            note_parts = [note] if note else []
-            if req_iso is None and req_raw:
-                note_parts.append(f"request_token_raw={req_raw}")
-            if resp_iso is None and resp_raw:
-                note_parts.append(f"response_token_raw={resp_raw}")
-            note_parts.append(f"removed_asins={num_deleted_removed}")
-            note_parts.append(f"status_soft_deleted={num_deleted_status}")
-
-            upserted_asins_list = [t[0] for t in batch]
-            soft_deleted_asins_list = sorted(to_soft_delete_all)
-
-            await conn.execute(
-                INSERT_SYNC_LOG_SQL,
-                (
-                    now_iso_utc(),  # request_time_utc
-                    req_iso,  # request_state_token_utc
-                    now_iso_utc(),  # response_time_utc
-                    resp_iso,  # response_state_token_utc
-                    200,  # http_status
-                    num_upserted,  # num_upserted
-                    num_deleted_total,  # num_soft_deleted
-                    " | ".join(n for n in note_parts if n),  # note
-                    json.dumps(upserted_asins_list, ensure_ascii=False),  # upserted_asins
-                    json.dumps(soft_deleted_asins_list, ensure_ascii=False),
-                # soft_deleted_asins
-                ),
-            )
-
-            await conn.commit()
-            return num_upserted, num_deleted_total
+    return await _with_conn_txn(db_path=db_path, conn=conn, work=_work)
 
 # ------------------ READ-ONLY helpers (no file lock) ------------------
 
@@ -973,6 +923,68 @@ async def list_sync_logs_async(
             out.append(d)
 
         return out, total
+
+
+async def _apply_upserts(conn: aiosqlite.Connection, batch: list[tuple[str, ...]]) -> int:
+    if batch:
+        await conn.executemany(UPSERT_SQL, batch)
+    return len(batch)
+
+async def _apply_soft_deletes(conn: aiosqlite.Connection, asins: set[str]) -> int:
+    if not asins:
+        return 0
+    ts_del = now_iso_utc()
+    for a in asins:
+        await conn.execute(SOFT_DELETE_SQL, (ts_del, ts_del, a))
+    return len(asins)
+
+async def _update_tokens(
+    conn: aiosqlite.Connection,
+    *,
+    req_iso: str | None = None,
+    req_raw: str | None = None,
+    resp_iso: str | None = None,
+    resp_raw: str | None = None,
+) -> None:
+    if any([req_iso, resp_iso, req_raw, resp_raw]):
+        await conn.execute(
+            """
+            UPDATE settings
+               SET last_state_token_utc = COALESCE(?, last_state_token_utc),
+                   last_state_token_raw = COALESCE(?, last_state_token_raw)
+             WHERE id = 1
+            """,
+            (resp_iso or req_iso, resp_raw or req_raw),
+        )
+
+
+async def _log_page(
+    conn: aiosqlite.Connection,
+    *,
+    http_status: int,
+    num_upserted: int,
+    num_soft_deleted: int,
+    note_parts: list[str],
+    upserted_asins: list[str],
+    soft_deleted_asins: list[str],
+    req_iso: str | None,
+    resp_iso: str | None,
+) -> None:
+    await conn.execute(
+        INSERT_SYNC_LOG_SQL,
+        (
+            now_iso_utc(),      # request_time_utc
+            req_iso,            # request_state_token_utc
+            now_iso_utc(),      # response_time_utc
+            resp_iso,           # response_state_token_utc
+            http_status,
+            num_upserted,
+            num_soft_deleted,
+            " | ".join(n for n in note_parts if n),
+            json.dumps(upserted_asins, ensure_ascii=False),
+            json.dumps(soft_deleted_asins, ensure_ascii=False),
+        ),
+    )
 
 
 # --- Restore helpers -------------------------------------------------
