@@ -1,319 +1,335 @@
-# audible-cli
+<h1 align="center" style="font-size: 2em; font-weight: 600; margin-bottom: 0.5em;">
+  AUDIBLE-CLI
+</h1>
 
-**audible-cli** is a command line interface for the 
-[Audible](https://github.com/mkb79/Audible) package. 
-Both are written with Python.
+<p align="center">
+  <picture>
+    <!-- For large screens -->
+    <source media="(min-width: 768px)" srcset="assets/banner-1536x384.png" />
+    <!-- Fallback (small screens) -->
+    <img src="assets/logo-500x500.png" 
+         alt="audible-cli logo" 
+         class="picture-img" />
+  </picture>
+</p>
 
-## Requirements
+<style>
+  /* Default: small logo (no changes) */
+  .picture-img {
+    width: 300px;
+    height: 300px;
+  }
 
-audible-cli needs at least *Python 3.10* and *Audible v0.8.2*.
+  /* When the banner is active (min-width: 768px) */
+  @media (min-width: 768px) {
+    .picture-img {
+      width: auto;
+      max-width: 1200px;  /* limit width */
+      max-height: 300px;  /* limit height */
+      height: auto;       /* keep aspect ratio */
+    }
+  }
 
-It depends on the following packages:
+  /* Subtitle under the banner */
+  .sub-heading {
+    text-align: center;
+    font-size: 1rem;
+    color: #555;
+  }
+</style>
 
-* aiofiles
-* audible
-* click
-* colorama (on Windows machines)
-* httpx
-* Pillow
-* tabulate
-* toml
-* tqdm
+<p class="sub-heading">
+  A powerful command-line tool for managing and downloading your Audible audiobooks.<br>
+  Built with ❤️ in Python.
+</p>
 
-## Installation
+<p align="center">
+  <a href="https://pypi.org/project/audible-cli/"><img src="https://img.shields.io/pypi/v/audible-cli?color=blue&logo=pypi"></a>
+  <a href="https://pypi.org/project/audible-cli/"><img src="https://img.shields.io/pypi/pyversions/audible-cli?logo=python&logoColor=yellow"></a>
+  <a href="https://pypi.org/project/audible-cli/"><img src="https://img.shields.io/pypi/dm/audible-cli"></a>
+  <a href="https://github.com/mkb79/audible-cli/releases"><img src="https://img.shields.io/github/v/release/mkb79/audible-cli?logo=github"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/mkb79/audible-cli"></a>
+</p>
 
-You can install audible-cli from pypi with
+---
+
+## ✨ Features
+
+- 🔑 Manage multiple Audible accounts (profiles)
+- 📚 Browse and export your **library** and **wishlist**
+- 🎧 Download audiobooks in **AAXC** or **AAX** with metadata & chapters
+- ⚡ Fast HTTP requests powered by [httpx](https://www.python-httpx.org/)
+- 🛠️ Plugin system for custom commands & extensions
+- 💻 Cross-platform: Linux, macOS, Windows
+- 🚀 Prebuilt executables (no Python required)
+
+---
+
+## 📦 Installation
+
+**From PyPI**
 
 ```shell
-
 pip install audible-cli
-
 ```
 
-or install it directly from GitHub with
+**From GitHub**
 
 ```shell
-
 git clone https://github.com/mkb79/audible-cli.git
 cd audible-cli
 pip install .
-
 ```
 
-or as the best solution using [uvx](https://github.com/astral-sh/uv)
+**With [uvx](https://github.com/astral-sh/uv) (recommended)**
 
 ```shell
-
 uvx --from audible-cli audible
-
 ```
 
-## Standalone executables
+---
 
-If you don't want to install `Python` and `audible-cli` on your machine, you can
-find standalone exe files below or on the [releases](https://github.com/mkb79/audible-cli/releases) 
-page (including beta releases). At this moment Windows, Linux and macOS are supported.
+## 🖥️ Standalone executables
 
-### Links
+Don’t want to install Python?  
+Prebuilt binaries are available on the [releases page](https://github.com/mkb79/audible-cli/releases).
 
-1. Linux
-    - [ubuntu latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_latest.zip)
-    - [ubuntu 22.04 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_22_04.zip)
+- **Windows:** [onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win_dir.zip) (recommended), [onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win.zip)  
+- **Linux:** [Ubuntu 22.04](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_22_04.zip), [latest](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_latest.zip)  
+- **macOS:** [onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac.zip), [onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac_dir.zip)  
 
-2. macOS
-    - [macOS latest onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac.zip)
-    - [macOS latest onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac_dir.zip)
+⚠️ *On Windows, prefer the **onedir** build for faster startup.*
 
-3. Windows
-    - [Windows onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win.zip)
-    - [Windows onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win_dir.zip)
+---
 
-On every execution, the binary code must be extracted. On Windows machines this can result in a long start time. If you use `audible-cli` often, I would prefer the `directory` package for Windows!
+## 🚀 Quickstart
 
-### Creating executables on your own
+1. Run the interactive setup:
 
-You can create them yourself this way
+   ```shell
+   audible quickstart
+   ```
 
-```shell
+   → creates config, profile, and auth file.
 
-git clone https://github.com/mkb79/audible-cli.git
+2. List your library:
 
-# onefile output
-uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint
+   ```shell
+   audible library list
+   ```
 
-# onedir output
-uv run pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint
-```
+3. Download your entire library:
 
-### Hints
+   ```shell
+   audible download --all --aax
+   ```
 
-There are some limitations when using plugins. The binary maybe does not contain
-all the dependencies from your plugin script. 
+---
 
-## Tab Completion
+## 📚 Common use cases
 
-Tab completion can be provided for commands, options and choice values. Bash, 
-Zsh and Fish are supported. More information can be found 
-[here](https://github.com/mkb79/audible-cli/tree/master/utils/code_completion).
+| Goal | Command |
+|------|---------|
+| List all audiobooks | `audible library list` |
+| Export library to JSON | `audible library export --output library.json` |
+| Add to wishlist | `audible wishlist add --asin B004V00AEG` |
+| Download since date | `audible download --start-date "2023-01-01" --aaxc --all` |
+| Switch profile | `audible -P germany library list` |
 
+---
 
-## Basic information
+## ⚙️ Configuration & Profiles
 
-### App dir
+### App directory
 
-audible-cli use an app dir where it expects all necessary files.
-
-If the ``AUDIBLE_CONFIG_DIR`` environment variable is set, it uses the value 
-as config dir. Otherwise, it will use a folder depending on the operating 
-system.
+`audible-cli` stores its configuration files in an **app directory**.  
 
 | OS       | Path                                      |
 |----------|-------------------------------------------|
-| Windows  | ``C:\Users\<user>\AppData\Local\audible`` |
-| Unix     | ``~/.audible``                            |
-| Mac OS X | ``~/.audible``                            |
+| Windows  | `C:\Users\<user>\AppData\Local\audible`   |
+| Linux    | `~/.audible`                              |
+| macOS    | `~/.audible`                              |
 
-### The config file
+You can override this by setting the environment variable:
 
-The config data will be stored in the [toml](https://github.com/toml-lang/toml) 
-format as ``config.toml``.
+```shell
+export AUDIBLE_CONFIG_DIR=/path/to/dir
+```
 
-It has a main section named ``APP`` and sections for each profile created 
-named ``profile.<profile_name>``
+---
 
-### profiles
+### Config file
 
-audible-cli make use of profiles. Each profile contains the name of the 
-corresponding auth file and the country code for the audible marketplace. If 
-you have audiobooks on multiple marketplaces, you have to create a profile for 
-each one with the same auth file.
+- Name: `config.toml`  
+- Format: [TOML](https://toml.io/en/)  
+- Structure:
+  - `[APP]` section → global defaults  
+  - `[profile.<name>]` section → settings per Audible account  
 
-In the main section of the config file, a primary profile is defined. 
-This profile is used, if no other is specified. You can call 
-`audible -P PROFILE_NAME`, to select another profile.
+Example:
 
-### auth files
+```toml
+[APP]
+primary_profile = "default"
+filename_mode   = "ascii"
+chapter_type    = "tree"
 
-Like the config file, auth files are stored in the config dir too. If you 
-protected your auth file with a password call `audible -p PASSWORD`, to 
-provide the password.
+[profile.default]
+auth_file    = "auth.json"
+country_code = "us"
 
-If the auth file is encrypted, and you don’t provide the password, you will be 
-asked for it with a „hidden“ input field. 
+[profile.germany]
+auth_file    = "auth_de.json"
+country_code = "de"
+```
+
+---
+
+### Profiles
+
+- Each profile corresponds to an Audible account or marketplace  
+- Contains:  
+  - `auth_file` → authentication file  
+  - `country_code` → Audible marketplace (`us`, `de`, `uk`, …)  
+- Switch profiles with:  
+
+```shell
+audible -P germany library list
+```
+
+The `[APP].primary_profile` is used if no profile is specified.
+
+---
+
+### Auth files
+
+- Stored in the same app directory as the config file  
+- Can be password-protected:  
+
+```shell
+audible -p "mypassword" download --asin <ASIN>
+```
+
+- If no password is passed, you will be prompted with hidden input  
+
+---
 
 ### Config options
 
-An option in the config file is separated by an underline. In the CLI prompt,
-an option must be entered with a dash.
+🔧 **APP section**
+- `primary_profile`: default profile if none is specified  
+- `filename_mode`: filename handling for downloads  
+  - `ascii` (default)  
+  - override with `--filename-mode`  
+- `chapter_type`: chapter format for downloads  
+  - `tree` (default)  
+  - override with `--chapter-type`  
 
-#### APP section
+👤 **Profile section**
+- `auth_file`: authentication file for this profile  
+- `country_code`: Audible marketplace  
+- `filename_mode`: overrides `[APP].filename_mode`  
+- `chapter_type`: overrides `[APP].chapter_type`  
 
-The APP section supports the following options:
-- primary_profile: The profile to use, if no other is specified
-- filename_mode: When using the `download` command, a filename mode can be 
-  specified here. If not present, "ascii" will be used as default. To override
-  these option, you can provide a mode with the `--filename-mode` option of the
-  download command.
-- chapter_type: When using the `download` command, a chapter type can be specified 
-  here. If not present, "tree" will be used as default. To override
-  these option, you can provide a type with the `--chapter-type` option of the
-  download command.
+---
 
-#### Profile section
+## 🧩 Built-in commands
 
-- auth_file: The auth file for this profile
-- country_code: The marketplace for this profile
-- filename_mode: See APP section above. Will override the option in APP section.
-- chapter_type: See APP section above. Will override the option in APP section.
+- **activation-bytes** → Manage DRM activation keys  
+- **api** → Call raw Audible API endpoints  
+- **download** → Download audiobooks  
+- **library** → List, export your library  
+- **wishlist** → Manage wishlist (list, add, remove, export)  
+- **manage** → Profiles, configs, auth-files  
+- **quickstart** → Interactive setup  
 
-## Getting started
+Show help:
 
-Use the `audible-quickstart` or `audible quickstart` command in your shell 
-to create your first config, profile and auth file. `audible-quickstart` 
-runs on the interactive mode, so you have to answer multiple questions to finish.
-
-If you have used `audible quickstart` and want to add a second profile, you need to first create a new authfile and then update your config.toml file.
-
-So the correct order is:
-
-   1. add a new auth file using your second account using `audible manage auth-file add`
-   2. add a new profile to your config and use the second auth file using `audible manage profile add`
-
-
-## Commands
-
-Call `audible -h` to show the help and a list of all available subcommands. You can show the help for each subcommand like so: `audible <subcommand> -h`. If a subcommand has another subcommands, you csn do it the same way.
-
-At this time, there the following buildin subcommands: 
-
-- `activation-bytes`
-- `api`
-- `download`
-- `library`
-    - `export`
-    - `list`
-- `manage`
-    - `auth-file`
-        - `add`
-        - `remove`
-    - `config`
-        - `edit`
-    - `profile`
-        - `add`
-        - `list`
-        - `remove`
-- `quickstart`
-- `wishlist`
-    - `export`
-    - `list`
-    - `add`
-    - `remove`
-
-## Example Usage
-
-To download all of your audiobooks in the aaxc format use:
 ```shell
-audible download --all --aaxc
+audible <command> -h
 ```
 
-To download all of your audiobooks after the Date 2022-07-21 in aax format use: 
-```shell
-audible download --start-date "2022-07-21" --aax --all
-```
+---
 
-To download an audiobook with chapter-information that can by used by aaxtomp3 use:
-```shell
-audible --aaxc --chapter --chapter-type Flat --asin <YOUR_ASIN>
-```
+## 🔧 Plugins & Extensions
 
-## Verbosity option
+### Custom plugin commands
 
-There are 6 different verbosity levels:
-
-- debug
-- info
-- warning
-- error
-- critical
-
-By default, the verbosity level is set to `info`. You can provide another level like so: `audible -v <level> <subcommand> ...`.
-
-If you use the `download` subcommand with the `--all` flag there will be a huge output. Best practise is to set the verbosity level to `error` with `audible -v error download --all ...`
-
-## Plugins
-
-### Plugin Folder
-
-If the ``AUDIBLE_PLUGIN_DIR`` environment variable is set, it uses the value 
-as location for the plugin dir. Otherwise, it will use a the `plugins` subdir 
-of the app dir. Read above how Audible-cli searches the app dir.
-
-### Custom Commands
-
-You can provide own subcommands and execute them with `audible SUBCOMMAND`.
-All plugin commands must be placed in the plugin folder. Every subcommand must 
-have his own file. Every file have to be named ``cmd_{SUBCOMMAND}.py``. 
-Each subcommand file must have a function called `cli` as entrypoint. 
-This function has to be decorated with ``@click.group(name="GROUP_NAME")`` or  
-``@click.command(name="GROUP_NAME")``.
-
-Relative imports in the command files doesn't work. So you have to work with 
-absolute imports. Please take care about this. If you have any issues with 
-absolute imports please add your plugin path to the `PYTHONPATH` variable or 
-add this lines of code to the beginning of your command script:
+Create a file in the plugin folder, e.g. `cmd_hello.py`:
 
 ```python
-import sys
-import pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import click
+
+@click.command(name="hello")
+def cli():
+    click.echo("Hello from plugin!")
 ```
 
-Examples can be found 
-[here](https://github.com/mkb79/audible-cli/tree/master/plugin_cmds).
+Run:
 
-
-## Own Plugin Packages
-
-If you want to develop a complete plugin package for ``audible-cli`` you can
-do this on an easy way. You only need to register your sub-commands or 
-subgroups to an entry-point in your setup.py that is loaded by the core 
-package.
-
-Example for a setup.py
-
-```python
-from setuptools import setup
-
-setup(
-    name="yourscript",
-    version="0.1",
-    py_modules=["yourscript"],
-    install_requires=[
-        "click",
-        "audible_cli"
-    ],
-    entry_points="""
-        [audible.cli_plugins]
-        cool_subcommand=yourscript.cli:cool_subcommand
-        another_subcommand=yourscript.cli:another_subcommand
-    """,
-)
+```shell
+audible hello
 ```
 
-## Command priority order
+### Plugin packages
 
-Commands will be added in the following order:
+You can also distribute plugins as Python packages via entry points.  
+The entry point group is **`audible.cli_plugins`**.
 
-1. plugin dir commands
-2. plugin packages commands
-3. build-in commands
+#### Example: pyproject.toml
 
-If a command is added, all further commands with the same name will be ignored.
-This enables you to "replace" build-in commands very easy.
+```toml
+[project]
+name = "audible-myplugin"
+version = "0.1.0"
+dependencies = ["audible-cli", "click"]
 
-## List of known add-ons for `audible-cli`
+[project.entry-points."audible.cli_plugins"]
+my_command = "myplugin.cli:my_command"
+another    = "myplugin.cli:another"
+```
 
-- [audible-cli-flask](https://github.com/mkb79/audible-cli-flask)
-- [audible-series](https://pypi.org/project/audible-series/)
+After installation, your plugin commands will automatically be available in `audible`:
 
-If you want to add information about your add-on please open a PR or a new issue!
+```shell
+audible my-command
+audible another
+```
+
+---
+
+## 🔊 Verbosity
+
+Control logging output:
+
+```shell
+audible -v debug library list
+audible -v error download --all
+```
+
+Levels: `debug`, `info`, `warning`, `error`, `critical`  
+Default: `info`
+
+---
+
+## 🧩 Add-ons
+
+- [audible-cli-flask](https://github.com/mkb79/audible-cli-flask) → Run `audible-cli` in a Flask web server  
+- [audible-series](https://pypi.org/project/audible-series/) → Organize series from your library  
+
+Want your add-on listed? → Open a PR or issue 🚀
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome!  
+- File [issues](https://github.com/mkb79/audible-cli/issues)  
+- Open pull requests  
+- Share plugins and add-ons  
+
+---
+
+## 📜 License
+
+[MIT License](LICENSE) © 2025 [mkb79](https://github.com/mkb79)
