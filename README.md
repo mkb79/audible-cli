@@ -305,6 +305,7 @@ Contributions welcome!
 
 ---
 
-## 📜 License
+## License
 
-[MIT License](LICENSE) © 2025 [mkb79](https://github.com/mkb79)
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0-only)**.  
+See [LICENSE](./LICENSE) for details.
