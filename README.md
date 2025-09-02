@@ -42,6 +42,18 @@
 
 ## 📦 Installation
 
+**With [uv tool](https://docs.astral.sh/uv/guides/tools/#installing-tools) (recommended)**
+
+```shell
+uv tool install audible-cli
+```
+
+**With [uvx](https://docs.astral.sh/uv/guides/tools/#running-tools)**
+
+```shell
+uvx --from audible-cli audible
+```
+
 **From PyPI**
 
 ```shell
@@ -54,12 +66,6 @@ pip install audible-cli
 git clone https://github.com/mkb79/audible-cli.git
 cd audible-cli
 pip install .
-```
-
-**With [uvx](https://github.com/astral-sh/uv) (recommended)**
-
-```shell
-uvx --from audible-cli audible
 ```
 
 ---
