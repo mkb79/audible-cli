@@ -3,43 +3,18 @@
 </h1>
 
 <p align="center">
-  <picture>
-    <!-- For large screens -->
-    <source media="(min-width: 768px)" srcset="assets/banner-1536x384.png" />
-    <!-- Fallback (small screens) -->
-    <img src="assets/logo-500x500.png" 
-         alt="audible-cli logo" 
-         class="picture-img" />
-  </picture>
+  <img
+    alt="audible-cli banner or logo"
+    src="assets/logo-500x500.png"
+    srcset="
+      assets/banner-1536x384.png 1200w,
+      assets/logo-500x500.png 300w"
+    sizes="(min-width: 768px) 1200px, 300px"
+  />
 </p>
 
-<style>
-  /* Default: small logo (no changes) */
-  .picture-img {
-    width: 300px;
-    height: 300px;
-  }
-
-  /* When the banner is active (min-width: 768px) */
-  @media (min-width: 768px) {
-    .picture-img {
-      width: auto;
-      max-width: 1200px;  /* limit width */
-      max-height: 300px;  /* limit height */
-      height: auto;       /* keep aspect ratio */
-    }
-  }
-
-  /* Subtitle under the banner */
-  .sub-heading {
-    text-align: center;
-    font-size: 1rem;
-    color: #555;
-  }
-</style>
-
-<p class="sub-heading">
-  A powerful command-line tool for managing and downloading your Audible audiobooks.<br>
+<p align="center">
+  <b>A powerful command-line tool for managing and downloading your Audible audiobooks.</b><br>
   Built with ❤️ in Python.
 </p>
 
