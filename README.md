@@ -1,17 +1,10 @@
-<h1 align="center" style="font-size: 2em; font-weight: 600; margin-bottom: 0.5em;">
-  AUDIBLE-CLI
-</h1>
-
 <p align="center">
-  <img
-    alt="audible-cli banner or logo"
-    src="assets/logo-500x500.png"
-    srcset="
-      assets/banner-1536x384.png 1200w,
-      assets/logo-500x500.png 300w"
-    sizes="(min-width: 768px) 1200px, 300px"
-  />
+  <img src="assets/banner-1536x384.png" alt="audible-cli" style="max-width: 768; width: 100%; height: auto;">
 </p>
+
+<h1 align="center" style="font-size: 2em; font-weight: 600; margin-bottom: 0.5em;">
+  <strong>AUDIBLE-CLI</strong>
+</h1>
 
 <p align="center">
   <b>A powerful command-line tool for managing and downloading your Audible audiobooks.</b><br>
@@ -245,6 +238,8 @@ import click
 def cli():
     click.echo("Hello from plugin!")
 ```
+
+> **Important:** A **custom plugin must start with the prefix `cmd_`**. The loader scans for `cmd_*.py` files and attaches each command to the CLI.
 
 Run:
 
