@@ -32,7 +32,6 @@ from audible_cli.db.async_db_library import (
     query_search_fts_async,
     rebuild_fts_async,
 )
-from audible_cli.db.common import db_path_for_session
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +79,7 @@ def library() -> None:
 @pass_session
 def cmd_init(session: Session, response_groups: str) -> None:
     """Initialize the library DB file and settings row."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     asyncio.run(init_db_async(db_path, response_groups))
     click.echo(f"[init] DB ready at {db_path} with response_groups set.")
 
@@ -92,7 +91,7 @@ def cmd_init(session: Session, response_groups: str) -> None:
 @pass_session
 def cmd_full(session: Session, payload: Path, response_token: Optional[str], note: Optional[str]) -> None:
     """Apply a full export payload into the DB (initial load)."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     data = json.loads(payload.read_text(encoding="utf-8"))
     n = asyncio.run(
         full_import_async(
@@ -119,7 +118,7 @@ def cmd_delta(
     note: Optional[str],
 ) -> None:
     """Apply an incremental delta payload into the DB."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     data = json.loads(payload.read_text(encoding="utf-8"))
     up, deleted = asyncio.run(
         delta_import_async(
@@ -139,7 +138,7 @@ def cmd_delta(
 @pass_session
 def cmd_search(session: Session, needle: str, limit: int) -> None:
     """Case-insensitive LIKE search across title/subtitle/full_title."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     rows = asyncio.run(query_search_async(db_path, needle, limit))
     if not rows:
         click.echo("No matches found.")
@@ -154,7 +153,7 @@ def cmd_search(session: Session, needle: str, limit: int) -> None:
 @pass_session
 def cmd_search_fts(session: Session, query: str, limit: int) -> None:
     """FTS5 MATCH search across indexed columns."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     rows = asyncio.run(query_search_fts_async(db_path, query, limit))
     if not rows:
         click.echo("No matches found.")
@@ -167,7 +166,7 @@ def cmd_search_fts(session: Session, query: str, limit: int) -> None:
 @pass_session
 def cmd_fts_rebuild(session: Session) -> None:
     """Run an FTS index rebuild."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     asyncio.run(rebuild_fts_async(db_path))
     click.echo(f"[fts] Rebuilt items_fts → {db_path}.")
 
@@ -178,7 +177,7 @@ def cmd_fts_rebuild(session: Session) -> None:
 @pass_session
 def cmd_query_plan(session: Session, sql: str, params: Tuple[str, ...]) -> None:
     """Show EXPLAIN QUERY PLAN for an arbitrary SQL statement."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     rows = asyncio.run(explain_query_async(db_path, sql, tuple(params)))
     if not rows:
         click.echo("No plan output.")
@@ -209,7 +208,7 @@ def cmd_inspect(
     pretty: bool,
 ) -> None:
     """Inspect raw stored JSON documents by ASINs or title needles."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     results: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     if asins:
@@ -268,7 +267,7 @@ def cmd_export(
     no_token: bool,
 ) -> None:
     """Export the current library into a JSON file compatible with restore."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     data = asyncio.run(
         export_library_async(
             db_path,
@@ -286,7 +285,7 @@ def cmd_export(
 @pass_session
 def cmd_remove(session: Session, force: bool) -> None:
     """Delete the library DB file and its lock/journal sidecars."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     lock_path = db_path.with_suffix(".lock")
     if not db_path.exists():
         click.echo(f"[remove] No database found at {db_path}")
@@ -312,7 +311,7 @@ def cmd_restore(session: Session, payload: Path, replace: bool, fresh: bool, sta
     """Restore from a previously exported JSON snapshot."""
     from audible_cli.db.async_db_library import restore_from_export_async  # local import to avoid cycles
 
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     data = json.loads(payload.read_text(encoding="utf-8"))
     if "items" not in data:
         raise click.ClickException("Input file must contain an 'items' array.")
@@ -356,7 +355,7 @@ def cmd_restore(session: Session, payload: Path, replace: bool, fresh: bool, sta
 @pass_session
 def cmd_count(session: Session, as_json: bool) -> None:
     """Count active and soft-deleted items."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
 
     async def _count():
         async with open_db(db_path) as conn:
@@ -385,7 +384,7 @@ def cmd_count(session: Session, as_json: bool) -> None:
 @pass_session
 def list_deleted_cmd(session: Session, limit: int, offset: int, as_json: bool, pretty: bool) -> None:
     """Show soft-deleted items (line output by default, JSON with --json)."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     rows, total = asyncio.run(list_soft_deleted_async(db_path, limit=limit, offset=offset))
 
     if as_json:
@@ -429,7 +428,7 @@ def list_deleted_cmd(session: Session, limit: int, offset: int, as_json: bool, p
 @pass_session
 def cmd_logs(session: Session, limit: int, offset: int, order: str, as_json: bool, pretty: bool, include_asins: bool) -> None:
     """Display rows from sync_log with optional JSON output."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     rows, total = asyncio.run(list_sync_logs_async(db_path, limit=limit, offset=offset, order=order))
 
     if as_json:
@@ -501,7 +500,7 @@ def cmd_sync(
     dry_run: bool,
 ) -> None:
     """Synchronize the library with the Audible API in full/delta mode."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     db_exists = db_path.exists()
 
     if init:

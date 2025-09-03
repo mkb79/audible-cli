@@ -330,6 +330,16 @@ class Session:
         password = self.params.get("password")
         return self.get_auth_for_profile(profile, password)
 
+    def db_path_for(self, db_name: str) -> pathlib.Path:
+        """Return the path to a session-specific database file for db_name.
+
+        The path is derived using db.common.db_path_for_session based on the
+        current authenticated user and locale and is located under app_dir.
+        """
+        # Local import to avoid potential import cycles at module import time
+        from audible_cli.db.common import db_path_for_session
+        return db_path_for_session(self, db_name)
+
     def get_client_for_profile(
             self,
             profile: str,

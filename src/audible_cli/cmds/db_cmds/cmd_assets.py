@@ -9,7 +9,6 @@ import click
 
 from audible_cli.config import Session
 from audible_cli.decorators import pass_session
-from audible_cli.db.common import db_path_for_session
 from audible_cli.db import open_db
 from audible_cli.db.async_db_assets import (
     AssetKindName,
@@ -71,7 +70,7 @@ def cmd_upsert(
     meta_json: Optional[str],
 ) -> None:
     """Create or update a single asset row using a managed connection."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     meta: Optional[dict[str, Any]] = None
     if meta_json:
         try:
@@ -127,7 +126,7 @@ def cmd_list(
     pretty: bool,
 ) -> None:
     """List assets with their last download status if available."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
     rows = asyncio.run(
         list_assets_async(
             db_path,
@@ -176,7 +175,7 @@ def cmd_matrix(
     pretty: bool,
 ) -> None:
     """Show latest status per asset for the given ASIN."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
 
     async def _work() -> list[dict[str, Any]]:
         async with open_db(db_path) as conn:
@@ -260,7 +259,7 @@ def cmd_assets_missing(
                COVER:<sizes>; PDF:''; CHAPTERS:flat,tree; ANNOTATIONS:'')
                for every active item and report combinations without a SUCCESS download.
     """
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
 
     if not all_kinds:
         # Existing behavior: rely on asset rows already present.
@@ -399,7 +398,7 @@ def cmd_log_download(
     error_message: Optional[str],
 ) -> None:
     """Record a download attempt. If --asset-id is omitted, ensure the asset first using ASIN/KIND/VARIANT."""
-    db_path = db_path_for_session(session, "library")
+    db_path = session.db_path_for("library")
 
     # If no status is provided, run in lookup mode: show the latest download row(s)
     # for the selected asset(s) instead of inserting a new log entry.
