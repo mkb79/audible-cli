@@ -1,3 +1,11 @@
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from typing import Any, Mapping
+from urllib.parse import urlencode, urlunparse, quote
+
 import asyncio
 import logging
 import secrets
@@ -10,6 +18,8 @@ from warnings import warn
 
 import audible
 import httpx
+
+
 from audible.aescipher import decrypt_voucher_from_licenserequest
 from audible.client import convert_response_content
 
@@ -21,6 +31,9 @@ from .exceptions import (
     NotDownloadableAsAAX,
     ItemNotPublished
 )
+
+
+
 from .utils import full_response_callback, LongestSubString
 
 
@@ -422,15 +435,20 @@ class LibraryItem(BaseItem):
         return metadata
 
     async def get_annotations(self):
+        license = await self.get_license()
+        url = build_sidecar_url_from_full_response(license)
+
+        """
         url = f"https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/sidecar"
         params = {
             "type": "AUDI",
             "key": self.asin
         }
-
-        annotations = await self._client.get(url, params=params)
+        """
+        annotations = await self._client.get(url)
 
         return annotations
+        
 
 
 class WishlistItem(BaseItem):
@@ -742,3 +760,163 @@ class Wishlist(BaseList):
         resp = await fetch_wishlist(request_params)
 
         return cls(resp, api_client=api_client)
+
+
+
+
+
+
+
+
+@dataclass(frozen=True)
+class ContentReference:
+    """Typed view on 'content_license.content_metadata.content_reference'.
+
+    Only the fields required to build the Sidecar URL are enforced:
+    - acr
+    - version
+    - asin
+    - content_format
+
+    All other keys may or may not be present and are ignored.
+    """
+
+    acr: str
+    version: str
+    asin: str
+    content_format: str
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any]) -> ContentReference:
+        """Create a ``ContentReference`` from a mapping.
+
+        Args:
+            data (Mapping[str, Any]): Mapping of the ``content_reference`` node.
+
+        Returns:
+            ContentReference: A validated ``ContentReference`` instance.
+
+        Raises:
+            KeyError: If one or more required keys are missing or empty.
+        """
+        required = ("acr", "version", "asin", "content_format")
+        missing = [k for k in required if not data.get(k)]
+        if missing:
+            raise KeyError(f"Missing required content_reference keys: {', '.join(missing)}")
+
+        return cls(
+            acr=str(data["acr"]),
+            version=str(data["version"]),
+            asin=str(data["asin"]),
+            content_format=str(data["content_format"]),
+        )
+
+    @property
+    def guid(self) -> str:
+        """Assemble the GUID value as ``acr:version``.
+
+        Returns:
+            str: GUID string built from ``acr`` and ``version``.
+        """
+        return f"{self.acr}:{self.version}"
+
+
+def _urlencode_with_safe(params: Mapping[str, str]) -> str:
+    """Encode query parameters while keeping '!' and ':' unescaped.
+
+    This matches observed Sidecar URLs where these characters are not
+    percent-encoded.
+
+    Args:
+        params (Mapping[str, str]): Query parameters.
+
+    Returns:
+        str: Encoded query string.
+    """
+
+    def _quote(v: str, safe: str = "!:", encoding=None, errors=None) -> str:
+        return quote(v, safe=safe, encoding=encoding, errors=errors)
+
+    return urlencode(params, quote_via=_quote)
+
+
+def build_sidecar_url_from_full_response(
+    full_response: Mapping[str, Any] | str,
+    *,
+    base_host: str = "cde-ta-g7g.amazon.com",
+    service_path: str = "/FionaCDEServiceEngine/sidecar",
+    fixed_type: str = "AUDI",
+) -> str:
+    """Build the Sidecar URL from a complete Audible response body.
+
+    Example:
+
+        sample  = json.load(VOUCHER_FILE) # or directly license response as Python dict
+        print(build_sidecar_url_from_full_response(sample))
+
+    The function expects the following structure:
+
+        response["content_license"]["content_metadata"]["content_reference"]
+
+    Required keys inside ``content_reference`` are:
+    - acr
+    - version
+    - asin
+    - content_format
+
+    The resulting URL has the shape::
+
+        https://{base_host}{service_path}?format={content_format}&guid={acr}:{version}&key={asin}&type=AUDI
+
+    Args:
+        full_response (Mapping[str, Any] | str): Full response as mapping or
+            JSON string.
+        base_host (str, optional): Service host. Defaults to
+            ``cde-ta-g7g.amazon.com``.
+        service_path (str, optional): Service path component. Defaults to
+            ``/FionaCDEServiceEngine/sidecar``.
+        fixed_type (str, optional): Fixed ``type`` parameter. Defaults to
+            ``AUDI``.
+
+    Returns:
+        str: Fully-qualified Sidecar URL.
+
+    Raises:
+        ValueError: If JSON parsing fails.
+        TypeError: If structures are of unexpected types.
+        KeyError: If required nodes or fields are missing.
+    """
+    if isinstance(full_response, str):
+        try:
+            full_response = json.loads(full_response)
+        except json.JSONDecodeError as exc:
+            raise ValueError("full_response is not valid JSON") from exc
+
+    if not isinstance(full_response, Mapping):
+        raise TypeError("full_response must be a Mapping or JSON string")
+
+    cl = full_response.get("content_license")
+    if not isinstance(cl, Mapping):
+        raise KeyError("content_license is missing or not a mapping")
+
+    cm = cl.get("content_metadata")
+    if not isinstance(cm, Mapping):
+        raise KeyError("content_license.content_metadata is missing or not a mapping")
+
+    cref_raw = cm.get("content_reference")
+    if not isinstance(cref_raw, Mapping):
+        raise KeyError(
+            "content_license.content_metadata.content_reference is missing or not a mapping"
+        )
+
+    cref = ContentReference.from_mapping(cref_raw)
+
+    query = _urlencode_with_safe(
+        {
+            "format": cref.content_format,
+            "guid": cref.guid,  # always computed as acr:version
+            "key": cref.asin,
+            "type": fixed_type,
+        }
+    )
+    return urlunparse(("https", base_host, service_path, "", query, ""))
