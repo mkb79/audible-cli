@@ -6,7 +6,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import AsyncIterator, Optional, Tuple
+from typing import Any, AsyncIterator, Optional, Tuple
 
 import click
 import httpx
@@ -197,6 +197,12 @@ def cmd_query_plan(session: Session, sql: str, params: Tuple[str, ...]) -> None:
 @click.option("--limit-per", type=int, default=5, show_default=True, help="Max results per title needle.")
 @click.option("--all/--active-only", "include_deleted", default=False, show_default=True, help="Include soft-deleted items too.")
 @click.option("--pretty/--compact", default=True, show_default=True, help="Pretty-print JSON output.")
+@click.option(
+    "-J",
+    "--json-out",
+    type=click.Path(dir_okay=False, writable=True, path_type=Path),
+    help="Write results as a single JSON object to the given file path instead of printing.",
+)
 @pass_session
 def cmd_inspect(
     session: Session,
@@ -206,11 +212,31 @@ def cmd_inspect(
     limit_per: int,
     include_deleted: bool,
     pretty: bool,
+    json_out: Path | None,
 ) -> None:
-    """Inspect raw stored JSON documents by ASINs or title needles."""
+    """Inspect raw stored JSON documents by ASINs or title needles.
+
+    Behavior:
+        - If --json-out is provided, no CLI output is produced. Results are written
+          as a single JSON object mapping {ASIN: obj} to the specified file.
+        - If --json-out is NOT provided, results are printed to the console. Pretty
+          formatting is controlled by --pretty/--compact.
+
+    Args:
+        session: Active CLI session providing DB access.
+        asins: One or more ASINs to fetch.
+        titles: One or more title/full_title/subtitle needles.
+        fts: Whether to use FTS MATCH for title needles.
+        limit_per: Maximum results per title needle.
+        include_deleted: Include soft-deleted items when True.
+        pretty: Pretty-print JSON when True (indentation).
+        json_out: Destination file path for JSON output; disables CLI printing when set.
+    """
     db_path = session.db_path_for("library")
     results: list[tuple[str, str, str]] = []
     seen: set[str] = set()
+
+    # Collect by ASINs
     if asins:
         rows = asyncio.run(get_docs_by_asins(db_path, list(asins), include_deleted=include_deleted))
         for asin, full_title, doc in rows:
@@ -218,10 +244,16 @@ def cmd_inspect(
                 continue
             seen.add(asin)
             results.append((asin, full_title, doc))
+
+    # Collect by title needles
     if titles:
         rows = asyncio.run(
             get_docs_by_titles(
-                db_path, list(titles), use_fts=fts, limit_per=limit_per, include_deleted=include_deleted
+                db_path,
+                list(titles),
+                use_fts=fts,
+                limit_per=limit_per,
+                include_deleted=include_deleted,
             )
         )
         for asin, full_title, doc in rows:
@@ -229,14 +261,36 @@ def cmd_inspect(
                 continue
             seen.add(asin)
             results.append((asin, full_title, doc))
+
+    # If JSON file output is requested, write and return without any CLI noise.
+    if json_out is not None:
+        # Build mapping {asin: obj}, where obj is parsed JSON if possible, else raw string.
+        out_map: dict[str, Any] = {}
+        for idx, (_, _, doc) in enumerate(results, start=1):
+            try:
+                parsed = json.loads(doc)
+            except Exception:
+                parsed = doc
+            out_map[idx] = parsed
+
+        # Ensure parent directory exists.
+        json_out.parent.mkdir(parents=True, exist_ok=True)
+
+        with json_out.open("w", encoding="utf-8") as fh:
+            json.dump(out_map, fh, indent=2 if pretty else None, ensure_ascii=False)
+        return
+
+    # CLI printing mode
     if not results:
         click.echo("No matching items.")
         return
+
     for idx, (asin, full_title, doc) in enumerate(results, start=1):
         try:
-            obj = json.loads(doc)
+            obj: Any = json.loads(doc)
         except Exception:
             obj = doc
+
         click.echo(f"=== [{idx}] {asin} | {full_title}")
         if isinstance(obj, str):
             click.echo(obj)
