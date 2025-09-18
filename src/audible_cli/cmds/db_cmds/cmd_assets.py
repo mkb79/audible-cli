@@ -489,6 +489,7 @@ def cmd_log_download(
                 source_url=source_url,
                 etag=etag,
                 error_message=error_message,
+                autocommit=True,
             )
 
     row_id = asyncio.run(_work())

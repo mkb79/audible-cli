@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from pathlib import Path
@@ -229,29 +230,37 @@ async def log_download_async(
     source_url: str | None = None,
     etag: str | None = None,
     error_message: str | None = None,
+    autocommit: bool = False,
 ) -> int:
     """Append a download attempt to the downloads table.
 
+    Computing the checksum is off-loaded to a worker thread to keep the event loop responsive.
+    Optionally commits the transaction before returning.
+
     Args:
-        conn: Open aiosqlite connection (transaction managed by caller).
-        asset_id: Foreign key to `assets.id`.
-        status: 'SUCCESS' | 'FAILED' | 'SKIPPED'.
+        conn: Open aiosqlite connection (transaction managed by caller unless ``autocommit=True``).
+        asset_id: Foreign key to ``assets.id``.
+        status: ``'SUCCESS'`` | ``'FAILED'`` | ``'SKIPPED'``.
         storage_path: Final file path if applicable.
         http_status: HTTP response status.
         bytes_written: Final size in bytes.
         source_url: Source URL used for the download.
         etag: HTTP ETag header value.
         error_message: Error message for failures.
+        autocommit: If ``True``, call ``conn.commit()`` before returning.
 
     Returns:
-        Primary key of the inserted downloads row.
+        Primary key of the inserted ``downloads`` row.
+
+    Raises:
+        aiosqlite.Error: On SQL/constraint issues.
     """
-    checksum = None
+    checksum: str | None = None
     if status == "SUCCESS" and storage_path is not None:
         # Off-thread hashing keeps the event loop snappy.
-        checksum = await conn.run_in_executor(None, _sha256_file, storage_path)  # type: ignore[attr-defined]
+        checksum = await asyncio.to_thread(_sha256_file, storage_path)
 
-    cur = await conn.execute(
+    async with conn.execute(
         """
         INSERT INTO downloads (
           asset_id, finished_utc, status, http_status, bytes_written,
@@ -271,10 +280,16 @@ async def log_download_async(
             etag,
             error_message,
         ),
-    )
-    row = await cur.fetchone()
-    await cur.close()
-    return int(row[0])
+    ) as cur:
+        row = await cur.fetchone()
+        if row is None:
+            raise aiosqlite.Error("INSERT RETURNING yielded no row")
+        insert_id = int(row[0])
+
+    if autocommit:
+        await conn.commit()
+
+    return insert_id
 
 
 async def get_asset_matrix_for_asin_async(conn: aiosqlite.Connection, asin: str) -> list[dict]:
