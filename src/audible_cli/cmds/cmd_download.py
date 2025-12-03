@@ -798,7 +798,17 @@ async def cli(session, api_client, **params):
     ):
         raise click.BadOptionUsage(
             "",
-            "Please select an option what you want download."
+            "No download format specified. You must select at least one of:\n\n"
+            "  Audio formats:\n"
+            "    --aax          Download as AAX format\n"
+            "    --aaxc         Download as AAXC format (recommended)\n"
+            "    --aax-fallback Download as AAX with fallback to AAXC\n\n"
+            "  Additional content:\n"
+            "    --pdf          Download PDF (if available)\n"
+            "    --cover        Download cover image\n"
+            "    --chapter      Download chapter metadata\n"
+            "    --annotation   Download annotations/bookmarks\n\n"
+            "Example: audible download --aaxc -a <ASIN>"
         )
 
     # additional options
