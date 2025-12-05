@@ -651,7 +651,7 @@ def display_counter():
 @click.option(
     "--title", "-t",
     multiple=True,
-    help="tile of the audiobook (partial search)"
+    help="title of the audiobook (partial search)"
 )
 @click.option(
     "--aax",
@@ -757,7 +757,7 @@ def display_counter():
 @click.option(
     "--ignore-podcasts",
     is_flag=True,
-    help="Ignore a podcast if it have episodes"
+    help="Ignore a podcast if it has episodes"
 )
 @bunch_size_option
 @pass_session
@@ -788,7 +788,7 @@ async def cli(session, api_client, **params):
             )
         get_aax = True
         if get_aaxc:
-            logger.warning("Do not mix --aaxc with --aax-fallback option.")
+            logger.warning("--aaxc is redundant with --aax-fallback (fallback already uses aaxc).")
     get_annotation = params.get("annotation")
     get_chapters = params.get("chapter")
     get_cover = params.get("cover")
@@ -798,7 +798,17 @@ async def cli(session, api_client, **params):
     ):
         raise click.BadOptionUsage(
             "",
-            "Please select an option what you want download."
+            "No download format specified. You must select at least one of:\n\n"
+            "  Audio formats:\n"
+            "    --aax          Download as AAX format\n"
+            "    --aaxc         Download as AAXC format (recommended)\n"
+            "    --aax-fallback Download as AAX with fallback to AAXC\n\n"
+            "  Additional content:\n"
+            "    --pdf          Download PDF (if available)\n"
+            "    --cover        Download cover image\n"
+            "    --chapter      Download chapter metadata\n"
+            "    --annotation   Download annotations/bookmarks\n\n"
+            "Example: audible download --aaxc -a <ASIN>"
         )
 
     # additional options
@@ -813,7 +823,9 @@ async def cli(session, api_client, **params):
     if all([resolve_podcasts, ignore_podcasts]):
         raise click.BadOptionUsage(
             "",
-            "Do not mix *ignore-podcasts* with *resolve-podcasts* option."
+            "Cannot use --ignore-podcasts with --resolve-podcasts. "
+            "Choose one: either resolve podcasts to individual episodes, "
+            "or ignore them entirely."
         )
     bunch_size = session.params.get("bunch_size")
 
@@ -822,7 +834,7 @@ async def cli(session, api_client, **params):
     if all([start_date, end_date]) and start_date > end_date:
         raise click.BadOptionUsage(
             "",
-            "start date must be before or equal the end date"
+            "Start date must be before or equal to the end date."
         )
 
     if start_date is not None:
