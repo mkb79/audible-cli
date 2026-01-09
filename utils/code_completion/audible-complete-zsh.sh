@@ -1,0 +1,2 @@
+_AUDIBLE_COMPLETE=zsh_source audible
+_AUDIBLE_QUICKSTART_COMPLETE=zsh_source audible-quickstart

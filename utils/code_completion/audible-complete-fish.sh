@@ -1,0 +1,2 @@
+_AUDIBLE_COMPLETE=fish_source audible
+_AUDIBLE_QUICKSTART_COMPLETE=fish_source audible-quickstart
