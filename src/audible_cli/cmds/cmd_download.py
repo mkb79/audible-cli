@@ -156,6 +156,7 @@ class DownloadCounter:
             "voucher_saved": self.voucher_saved,
             "aycl": self.aycl,
             "aycl_voucher": self.aycl_voucher,
+            "errors": self.errors,
         }
 
     def has_downloads(self):
@@ -640,6 +641,9 @@ def display_counter():
                 diff = v - counter.voucher_saved
                 if diff > 0:
                     echo(f"Unsaved voucher: {diff}")
+                continue
+            elif k == "errors":
+                # Errors are already logged, skip displaying in counter
                 continue
             echo(f"New {k} files: {v}")
     else:
