@@ -19,6 +19,25 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/mkb79/audible-cli"></a>
 </p>
 
+> [!NOTE]
+> ### 🦀 audible-rs — a Rust rewrite in the making, experienced testers wanted
+>
+> A ground-up **Rust** reimplementation of `audible-cli` (and the
+> [`Audible`](https://github.com/mkb79/Audible) library) is in active
+> development: one fast, statically-linked binary — **no Python required** —
+> with a reworked command set, an encrypted auth format, a local library
+> database (SQLite/FTS5), and a capability-based plugin system.
+>
+> It is **pre-alpha** and I'm looking for **experienced users** to run it
+> against real accounts and report the rough edges. If you're comfortable on
+> the command line and don't mind occasional breakage, please help kick the
+> tyres → **[github.com/mkb79/audible-rs](https://github.com/mkb79/audible-rs)**
+> (the README there has a one-line installer for prebuilt Linux/macOS binaries).
+>
+> `audible-cli` stays fully supported — audible-rs is the future direction,
+> not an immediate replacement, and the two use separate config directories,
+> so you can run them side by side.
+
 ---
 
 ## ✨ Features
