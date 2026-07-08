@@ -33,6 +33,8 @@
 > the command line and don't mind occasional breakage, please help kick the
 > tyres → **[github.com/mkb79/audible-rs](https://github.com/mkb79/audible-rs)**
 > (the README there has a one-line installer for prebuilt Linux/macOS binaries).
+> Share feedback, questions and findings in the
+> **[audible-rs Discussions](https://github.com/mkb79/audible-rs/discussions)**.
 >
 > `audible-cli` stays fully supported — audible-rs is the future direction,
 > not an immediate replacement, and the two use separate config directories,
