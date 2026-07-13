@@ -495,6 +495,12 @@ class FfmpegFileDecrypter:
             except ChapterError:
                 if self._skip_rebuild_chapters:
                     echo("Skip rebuild chapters due to chapter mismatch.")
+                    base_cmd.extend(
+                        [
+                            "-i",
+                            str(self._source),
+                        ]
+                    )
                 else:
                     raise
             else:
