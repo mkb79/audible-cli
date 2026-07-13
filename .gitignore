@@ -3,6 +3,9 @@
 /src/audible_cli/*.bak
 library.csv
 
+result
+*.AppImage
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
