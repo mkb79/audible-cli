@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - The `--bunch-size` option is now deprected and will be replaced with option `--page-size` some releases later.
 
+### Fixed
+
+- Allow the `audio/mp4` content type when downloading audiobooks, so AAX/AAXC downloads are no longer rejected when Audible responds with `audio/mp4`.
+
 ## [0.3.3] - 2025-08-14
 
 ### Added
