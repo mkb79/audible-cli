@@ -21,6 +21,14 @@ Install from PyPI:
 pip install audible-cli
 ```
 
+For a faster, Rust-accelerated crypto backend (activation bytes, AAX/AAXC decryption), install the optional `cryptography` extra:
+
+```shell
+pip install "audible-cli[cryptography]"
+```
+
+The prebuilt [standalone binaries](https://github.com/mkb79/audible-cli/releases) already bundle this backend (statically linked), so they benefit from it out of the box.
+
 Initialize configuration:
 
 ```shell
