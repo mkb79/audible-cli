@@ -6,13 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
-# Added
+### Added
 
 - The `--page-size` option as a replacement for the now deprecated `--bunch-size` option.
+- Optional `cryptography` extra (`pip install "audible-cli[cryptography]"`) that enables audible's Rust-accelerated crypto backend for faster cryptographic operations (activation bytes, AAX/AAXC decryption).
+- Prebuilt release binaries now bundle the Rust-accelerated `cryptography` backend, statically linked via PyInstaller, so the standalone executables benefit from it out of the box.
 
-##} Changed
+### Changed
 
 - The `--bunch-size` option is now deprected and will be replaced with option `--page-size` some releases later.
+- Raised the minimum supported Python to `>=3.11,<3.15` (dropped Python 3.10, added 3.14).
+- Bumped `audible` to `>=0.11.0` and `httpx` to `>=0.27.2,<0.29`.
+- Raised minimum versions for `aiofiles`, `click`, `Pillow`, `tabulate`, `tqdm`, `questionary`, `packaging`, and `colorama`.
 
 ## [0.3.3] - 2025-08-14
 

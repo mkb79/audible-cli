@@ -6,7 +6,7 @@ on:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
 env:
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.14"
 
 jobs:
   create_release:
@@ -33,7 +33,7 @@ jobs:
           - os: ubuntu-latest
             TARGET: linux
             CMD_BUILD: >
-                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_linux_ubuntu_latest audible
             OUT_FILE_NAME: audible_linux_ubuntu_latest.zip
@@ -41,7 +41,7 @@ jobs:
           - os: ubuntu-22.04
             TARGET: linux
             CMD_BUILD: >
-                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_linux_ubuntu_22_04 audible
             OUT_FILE_NAME: audible_linux_ubuntu_22_04.zip
@@ -49,7 +49,7 @@ jobs:
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_mac audible
             OUT_FILE_NAME: audible_mac.zip
@@ -57,7 +57,7 @@ jobs:
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                uv run pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run --extra cryptography pyinstaller --clean -D --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_mac_dir audible
             OUT_FILE_NAME: audible_mac_dir.zip
@@ -65,7 +65,7 @@ jobs:
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
-                uv run pyinstaller --clean -D --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run --extra cryptography pyinstaller --clean -D --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 powershell Compress-Archive audible audible_win_dir.zip
             OUT_FILE_NAME: audible_win_dir.zip
@@ -73,7 +73,7 @@ jobs:
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
-                uv run pyinstaller --clean -F --hidden-import audible_cli -n audible -c pyi_entrypoint.py &&
+                uv run --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 powershell Compress-Archive audible.exe audible_win.zip
             OUT_FILE_NAME: audible_win.zip
