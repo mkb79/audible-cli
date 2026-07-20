@@ -82,12 +82,28 @@ cd audible-cli
 pip install .
 ```
 
+**⚡ Faster crypto (optional)**
+
+Install the optional `cryptography` extra to enable audible's Rust-accelerated
+crypto backend. It noticeably speeds up cryptographic operations such as fetching
+activation bytes and decrypting AAX/AAXC files:
+
+```shell
+pip install "audible-cli[cryptography]"
+# or, when installed as a tool:
+uv tool install "audible-cli[cryptography]"
+```
+
+Without the extra, audible-cli still works using the pure-Python fallback.
+
 ---
 
 ## 🖥️ Standalone executables
 
 Don’t want to install Python?  
 Prebuilt binaries are available on the [releases page](https://github.com/mkb79/audible-cli/releases).
+
+> ℹ️ The prebuilt binaries already **bundle the Rust-accelerated `cryptography` backend** (statically linked, no extra setup) — so cryptographic operations are fast out of the box.
 
 - **Windows:** [onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win_dir.zip) (recommended), [onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win.zip)  
 - **Linux:** [Ubuntu 22.04](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_22_04.zip), [latest](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_latest.zip)  
