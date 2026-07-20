@@ -335,7 +335,7 @@ async def download_aax(
         source=url,
         client=client,
         expected_types=[
-            "audio/aax", "audio/vnd.audible.aax", "audio/audible"
+            "audio/aax", "audio/vnd.audible.aax", "audio/audible", "audio/mp4"
         ]
     )
     downloaded = await dl.run(target=filepath, force_reload=overwrite_existing)
@@ -475,7 +475,7 @@ async def download_aaxc(
         client=client,
         expected_types=[
             "audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a",
-            "audio/audible"
+            "audio/audible", "audio/mp4"
         ],
     )
     downloaded = await dl.run(target=filepath, force_reload=overwrite_existing)

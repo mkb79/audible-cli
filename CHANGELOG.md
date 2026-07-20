@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Bumped `audible` to `>=0.11.0` and `httpx` to `>=0.27.2,<0.29`.
 - Raised minimum versions for `aiofiles`, `click`, `Pillow`, `tabulate`, `tqdm`, `questionary`, `packaging`, and `colorama`.
 
+### Fixed
+
+- Allow the `audio/mp4` content type when downloading audiobooks, so AAX/AAXC downloads are no longer rejected when Audible responds with `audio/mp4`.
+
 ## [0.3.3] - 2025-08-14
 
 ### Added
