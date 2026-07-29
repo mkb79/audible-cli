@@ -1,6 +1,8 @@
 from datetime import datetime
 from pathlib import Path
 
+from .utils import parse_api_datetime
+
 
 class AudibleCliException(Exception):
     """Base class for all errors"""
@@ -76,7 +78,7 @@ class ItemNotPublished(AudibleCliException):
     """Raised if a voucher reached his refresh date"""
 
     def __init__(self, asin: str, pub_date):
-        pub_date = datetime.strptime(pub_date, "%Y-%m-%dT%H:%M:%SZ")
+        pub_date = parse_api_datetime(pub_date)
         now = datetime.utcnow()
         published_in = pub_date - now
 
