@@ -2,6 +2,7 @@ import csv
 import io
 import logging
 import pathlib
+from datetime import datetime
 from difflib import SequenceMatcher
 from typing import List, Optional, Union
 
@@ -28,6 +29,34 @@ datetime_type = click.DateTime([
     "%Y-%m-%dT%H:%M:%S.%fZ",
     "%Y-%m-%dT%H:%M:%SZ"
 ])
+
+API_DATETIME_FORMATS = (
+    "%Y-%m-%dT%H:%M:%S.%fZ",
+    "%Y-%m-%dT%H:%M:%SZ"
+)
+
+
+def parse_api_datetime(value: str) -> datetime:
+    """Parse a timestamp as returned by the Audible API.
+
+    The API uses both variants, with and without fractional seconds
+    (``2019-11-29T11:40:49.000Z`` vs. ``2019-11-29T11:40:49Z``), sometimes
+    for the same field. Top-level library items usually carry the fraction,
+    child episodes of a podcast usually do not, so both have to be accepted.
+
+    Raises:
+        ValueError: If the value matches none of the known formats.
+    """
+    for fmt in API_DATETIME_FORMATS:
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"time data {value!r} does not match any known API datetime "
+        f"format {API_DATETIME_FORMATS}"
+    )
 
 
 def prompt_captcha_callback(captcha_url: str) -> str:

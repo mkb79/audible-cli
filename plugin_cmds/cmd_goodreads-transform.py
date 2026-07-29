@@ -1,6 +1,6 @@
 import logging
 import pathlib
-from datetime import datetime, timezone
+from datetime import timezone
 
 import click
 from audible_cli.decorators import (
@@ -10,7 +10,7 @@ from audible_cli.decorators import (
     pass_session
 )
 from audible_cli.models import Library
-from audible_cli.utils import export_to_csv
+from audible_cli.utils import export_to_csv, parse_api_datetime
 from isbntools.app import isbn_from_words
 
 
@@ -85,9 +85,9 @@ def _prepare_library_for_export(library):
         date_added = i.library_status
         if date_added is not None:
             date_added = date_added["date_added"]
-            date_added = datetime.strptime(
-                date_added, '%Y-%m-%dT%H:%M:%S.%fZ'
-            ).replace(tzinfo=timezone.utc).astimezone()    
+            date_added = parse_api_datetime(date_added).replace(
+                tzinfo=timezone.utc
+            )
             date_added = date_added.astimezone().date().isoformat()
 
         date_read = None

@@ -21,7 +21,7 @@ from .exceptions import (
     NotDownloadableAsAAX,
     ItemNotPublished
 )
-from .utils import full_response_callback, LongestSubString
+from .utils import full_response_callback, LongestSubString, parse_api_datetime
 
 
 logger = logging.getLogger("audible_cli.models")
@@ -146,9 +146,7 @@ class BaseItem:
             publication_datetime = self.publication_datetime
 
         if publication_datetime is not None:
-            pub_date = datetime.strptime(
-                publication_datetime, "%Y-%m-%dT%H:%M:%SZ"
-            )
+            pub_date = parse_api_datetime(publication_datetime)
             now = datetime.utcnow()
             return now > pub_date
 
@@ -502,14 +500,10 @@ class Library(BaseList):
     ):
         def filter_by_date(item):
             if item.purchase_date is not None:
-                date_added = datetime.strptime(
-                    item.purchase_date,
-                    "%Y-%m-%dT%H:%M:%S.%fZ"
-                )
+                date_added = parse_api_datetime(item.purchase_date)
             elif item.library_status.get("date_added") is not None:
-                date_added = datetime.strptime(
-                    item.library_status.get("date_added"),
-                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                date_added = parse_api_datetime(
+                    item.library_status.get("date_added")
                 )
             else:
                 logger.info(
