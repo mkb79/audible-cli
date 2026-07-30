@@ -4,7 +4,7 @@ import asyncio.sslproto
 import json
 import pathlib
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 import aiofiles
 import click
@@ -392,7 +392,7 @@ async def _reuse_voucher(lr_file, item):
     if "refresh_date" in content_license:
         refresh_date = content_license["refresh_date"]
         refresh_date = datetime_type.convert(refresh_date, None, None)
-        if refresh_date < datetime.utcnow():
+        if refresh_date < datetime.now(UTC):
             raise VoucherNeedRefresh(lr_file)
 
     content_metadata = content_license["content_metadata"]
@@ -401,8 +401,8 @@ async def _reuse_voucher(lr_file, item):
 
     expires = url.params.get("Expires")
     if expires:
-        expires = datetime.utcfromtimestamp(int(expires))
-        now = datetime.utcnow()
+        expires = datetime.fromtimestamp(int(expires), tz=UTC)
+        now = datetime.now(UTC)
         if expires < now:
             raise DownloadUrlExpired(lr_file)
 

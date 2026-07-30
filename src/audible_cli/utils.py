@@ -2,7 +2,7 @@ import csv
 import io
 import logging
 import pathlib
-from datetime import datetime
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from typing import List, Optional, Union
 
@@ -22,41 +22,69 @@ from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
 logger = logging.getLogger("audible_cli.utils")
 
 
-datetime_type = click.DateTime([
-    "%Y-%m-%d",
-    "%Y-%m-%dT%H:%M:%S",
-    "%Y-%m-%d %H:%M:%S",
-    "%Y-%m-%dT%H:%M:%S.%fZ",
-    "%Y-%m-%dT%H:%M:%SZ"
-])
+def to_utc_datetime(value: datetime) -> datetime:
+    """Normalize a datetime to timezone-aware UTC.
 
-API_DATETIME_FORMATS = (
-    "%Y-%m-%dT%H:%M:%S.%fZ",
-    "%Y-%m-%dT%H:%M:%SZ"
-)
+    Naive values are interpreted as UTC. That matches the documented
+    semantics of the ``--start-date`` and ``--end-date`` options, which ask
+    for a UTC date, and it keeps values coming from :data:`datetime_type`
+    comparable to the timestamps parsed from API responses.
+    """
+    if value.utcoffset() is None:
+        return value.replace(tzinfo=UTC)
+
+    return value.astimezone(UTC)
 
 
 def parse_api_datetime(value: str) -> datetime:
-    """Parse a timestamp as returned by the Audible API.
+    """Parse a timestamp as returned by the Audible API as UTC.
 
     The API uses both variants, with and without fractional seconds
     (``2019-11-29T11:40:49.000Z`` vs. ``2019-11-29T11:40:49Z``), sometimes
     for the same field. Top-level library items usually carry the fraction,
     child episodes of a podcast usually do not, so both have to be accepted.
 
-    Raises:
-        ValueError: If the value matches none of the known formats.
-    """
-    for fmt in API_DATETIME_FORMATS:
-        try:
-            return datetime.strptime(value, fmt)
-        except ValueError:
-            continue
+    Accepts anything :meth:`datetime.datetime.fromisoformat` understands as
+    long as it carries timezone information, and normalizes it to UTC. That
+    is deliberately wider than the two shapes above: an offset other than
+    ``Z`` denotes the same instant and is worth accepting, while a timestamp
+    without any offset is ambiguous and is not.
 
-    raise ValueError(
-        f"time data {value!r} does not match any known API datetime "
-        f"format {API_DATETIME_FORMATS}"
-    )
+    Raises:
+        ValueError: If the value is not a timestamp
+            :meth:`~datetime.datetime.fromisoformat` accepts, or if it does
+            not carry timezone information.
+    """
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid API datetime {value!r}") from exc
+
+    if parsed.utcoffset() is None:
+        raise ValueError(f"API datetime {value!r} has no timezone information")
+
+    return parsed.astimezone(UTC)
+
+
+class UTCDateTime(click.DateTime):
+    """A :class:`click.DateTime` that always yields UTC values.
+
+    The accepted formats either end in a literal ``Z`` or carry no timezone
+    at all, so :class:`click.DateTime` always returns a naive value. Both
+    cases mean UTC here, so the result is marked as such.
+    """
+
+    def convert(self, value, param, ctx):
+        return to_utc_datetime(super().convert(value, param, ctx))
+
+
+datetime_type = UTCDateTime([
+    "%Y-%m-%d",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S.%fZ",
+    "%Y-%m-%dT%H:%M:%SZ"
+])
 
 
 def prompt_captcha_callback(captcha_url: str) -> str:

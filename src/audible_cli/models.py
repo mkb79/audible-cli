@@ -3,7 +3,7 @@ import logging
 import secrets
 import string
 import unicodedata
-from datetime import datetime
+from datetime import UTC, datetime
 from math import ceil
 from typing import List, Optional, Union
 from warnings import warn
@@ -21,7 +21,12 @@ from .exceptions import (
     NotDownloadableAsAAX,
     ItemNotPublished
 )
-from .utils import full_response_callback, LongestSubString, parse_api_datetime
+from .utils import (
+    full_response_callback,
+    LongestSubString,
+    parse_api_datetime,
+    to_utc_datetime
+)
 
 
 logger = logging.getLogger("audible_cli.models")
@@ -147,7 +152,7 @@ class BaseItem:
 
         if publication_datetime is not None:
             pub_date = parse_api_datetime(publication_datetime)
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             return now > pub_date
 
 
@@ -498,6 +503,13 @@ class Library(BaseList):
             end_date: Optional[datetime] = None,
             **request_params
     ):
+        # Callers may pass naive datetimes, so normalize the bounds before
+        # they are compared against the aware timestamps from the API.
+        if start_date is not None:
+            start_date = to_utc_datetime(start_date)
+        if end_date is not None:
+            end_date = to_utc_datetime(end_date)
+
         def filter_by_date(item):
             if item.purchase_date is not None:
                 date_added = parse_api_datetime(item.purchase_date)

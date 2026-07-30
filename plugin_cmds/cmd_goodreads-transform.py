@@ -1,6 +1,5 @@
 import logging
 import pathlib
-from datetime import timezone
 
 import click
 from audible_cli.decorators import (
@@ -85,9 +84,7 @@ def _prepare_library_for_export(library):
         date_added = i.library_status
         if date_added is not None:
             date_added = date_added["date_added"]
-            date_added = parse_api_datetime(date_added).replace(
-                tzinfo=timezone.utc
-            )
+            date_added = parse_api_datetime(date_added)
             date_added = date_added.astimezone().date().isoformat()
 
         date_read = None

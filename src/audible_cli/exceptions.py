@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .utils import parse_api_datetime
@@ -79,7 +79,7 @@ class ItemNotPublished(AudibleCliException):
 
     def __init__(self, asin: str, pub_date):
         pub_date = parse_api_datetime(pub_date)
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         published_in = pub_date - now
 
         pub_str = ""

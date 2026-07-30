@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Breaking
+
+- `parse_api_datetime()` and `datetime_type` now return timezone-aware UTC values instead of naive ones. Plugins comparing them against naive datetimes raise `TypeError`, and `.isoformat()` output gains a `+00:00` suffix (#266)
+
+### Changed
+
+- API timestamps, library date filters and voucher deadlines are now timezone-aware UTC; naive `--start-date`/`--end-date` input is interpreted as UTC, as the option help already stated (#266)
+- Replaced `datetime.utcnow()` and `datetime.utcfromtimestamp()`, deprecated since Python 3.12 (#266)
+
 ### Fixed
 
 - Accept API timestamps with and without fractional seconds, fixing the `--start-date`/`--end-date` crash on podcast episodes and the mirror-image crash in `is_published()` (#264)
