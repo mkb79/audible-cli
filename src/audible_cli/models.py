@@ -142,18 +142,29 @@ class BaseItem:
                 return True
 
     def is_published(self):
+        publication_datetime = None
         if (
             self.content_delivery_type and self.content_delivery_type == "AudioPart"
             and self._parent
         ):
             publication_datetime = self._parent.publication_datetime
-        else:
+
+        # A part without a parent date can still carry its own one
+        if publication_datetime is None:
             publication_datetime = self.publication_datetime
 
-        if publication_datetime is not None:
-            pub_date = parse_api_datetime(publication_datetime)
-            now = datetime.now(UTC)
-            return now > pub_date
+        if publication_datetime is None:
+            # No publication date means unknown, not unpublished. Skipping the
+            # item on absent evidence would silently drop it, so let the
+            # download attempt itself decide.
+            logger.debug(
+                f"{self.asin}: no publication date, assuming it is published."
+            )
+            return True
+
+        pub_date = parse_api_datetime(publication_datetime)
+        now = datetime.now(UTC)
+        return now > pub_date
 
 
 class LibraryItem(BaseItem):
@@ -367,7 +378,7 @@ class LibraryItem(BaseItem):
         content_license = lr["content_license"]
 
         if content_license["status_code"] == "Denied":
-            if "license_denial_reasons" in content_license:
+            if content_license.get("license_denial_reasons"):
                 for reason in content_license["license_denial_reasons"]:
                     message = reason.get("message", "UNKNOWN")
                     rejection_reason = reason.get("rejectionReason", "UNKNOWN")
@@ -381,8 +392,8 @@ class LibraryItem(BaseItem):
             msg = content_license["message"]
             raise LicenseDenied(msg)
 
-        content_url = content_license["content_metadata"]\
-            .get("content_url", {}).get("offline_url")
+        content_metadata = content_license.get("content_metadata") or {}
+        content_url = (content_metadata.get("content_url") or {}).get("offline_url")
         if content_url is None:
             raise NoDownloadUrl(self.asin)
 
@@ -511,12 +522,13 @@ class Library(BaseList):
             end_date = to_utc_datetime(end_date)
 
         def filter_by_date(item):
+            # Items from a partial response can miss both fields entirely, and
+            # library_status can be null instead of a dict
+            library_status = item.library_status or {}
             if item.purchase_date is not None:
                 date_added = parse_api_datetime(item.purchase_date)
-            elif item.library_status.get("date_added") is not None:
-                date_added = parse_api_datetime(
-                    item.library_status.get("date_added")
-                )
+            elif library_status.get("date_added") is not None:
+                date_added = parse_api_datetime(library_status["date_added"])
             else:
                 logger.info(
                     f"{item.asin}: {item.full_title} can not determine date added."

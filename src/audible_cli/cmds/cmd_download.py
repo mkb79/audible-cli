@@ -389,7 +389,8 @@ async def _reuse_voucher(lr_file, item):
             logger.debug(f"{lr_file} does not contain allowed users key.")
 
     # Verification of voucher validity
-    if "refresh_date" in content_license:
+    # Test the value, not just the key: the field can be present but null
+    if content_license.get("refresh_date"):
         refresh_date = content_license["refresh_date"]
         refresh_date = datetime_type.convert(refresh_date, None, None)
         if refresh_date < datetime.now(UTC):
