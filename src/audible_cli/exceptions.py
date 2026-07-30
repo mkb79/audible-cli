@@ -78,7 +78,15 @@ class ItemNotPublished(AudibleCliException):
     """Raised if a voucher reached his refresh date"""
 
     def __init__(self, asin: str, pub_date):
-        pub_date = parse_api_datetime(pub_date)
+        # Never fail while building an error message. Without a usable
+        # publication date there is no countdown to report, but the item is
+        # still worth naming.
+        try:
+            pub_date = parse_api_datetime(pub_date)
+        except (ValueError, OverflowError):
+            super().__init__(f"{asin} is not published.")
+            return
+
         now = datetime.now(UTC)
         published_in = pub_date - now
 
