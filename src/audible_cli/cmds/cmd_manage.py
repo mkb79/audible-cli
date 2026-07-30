@@ -1,4 +1,5 @@
 import logging
+import os
 import pathlib
 
 import click
@@ -38,7 +39,7 @@ def manage_auth_files():
 @pass_session
 def config_editor(session):
     """Open the config file with default editor"""
-    click.edit(filename=session.config.filename)
+    click.edit(filename=os.fspath(session.config.filename))
 
 
 @manage_profiles.command("list")
