@@ -502,17 +502,89 @@ async def download_aaxc(
         )
 
 
-async def consume(ignore_errors):
+class DownloadRun:
+    """Tracks failures across all consumers of a single download run."""
+
+    def __init__(self, ignore_errors: bool):
+        self.ignore_errors = ignore_errors
+        # Set as soon as a job fails while --ignore-errors is not in effect
+        self.abort = asyncio.Event()
+        self.errors: list[Exception] = []
+        # Jobs dropped without running because the run was aborted
+        self.skipped = 0
+
+    def record(self, error: Exception) -> None:
+        self.errors.append(error)
+        if not self.ignore_errors:
+            # Let running downloads finish, but start no new ones
+            self.abort.set()
+
+    def raise_for_errors(self) -> None:
+        if not self.errors:
+            return
+
+        msg = f"{len(self.errors)} job(s) failed"
+        if self.skipped:
+            msg += f", {self.skipped} skipped after the abort"
+        if not self.ignore_errors:
+            msg += ". Use --ignore-errors to download the rest anyway"
+
+        raise AudibleCliException(msg)
+
+
+async def consume(run: DownloadRun):
     while True:
         cmd, kwargs = await QUEUE.get()
         try:
+            # Never leave this loop on error. A consumer that dies stops
+            # taking items, and once every consumer is gone QUEUE.join()
+            # waits forever for jobs nobody will pick up.
+            if run.abort.is_set():
+                run.skipped += 1
+                continue
+
             await cmd(**kwargs)
         except Exception as e:
             logger.error(e)
-            if not ignore_errors:
-                raise
+            run.record(e)
         finally:
             QUEUE.task_done()
+
+
+async def drain_queue(run: DownloadRun, sim_jobs: int):
+    """Work off QUEUE with `sim_jobs` consumers until it is empty."""
+    consumers = [
+        asyncio.create_task(consume(run)) for _ in range(sim_jobs)
+    ]
+    joiner = asyncio.create_task(QUEUE.join())
+    try:
+        # A consumer only ever finishes by dying. Waiting on them next to the
+        # join means such a death surfaces here, instead of leaving
+        # QUEUE.join() waiting for items that nobody will pick up anymore.
+        await asyncio.wait(
+            [joiner, *consumers], return_when=asyncio.FIRST_COMPLETED
+        )
+        if not joiner.done():
+            # A consumer ended while jobs were still queued. Surface why, so
+            # the run does not look like it merely finished early.
+            for consumer in consumers:
+                if consumer.done() and not consumer.cancelled():
+                    exc = consumer.exception()
+                    if exc is not None:
+                        raise exc
+
+            raise AudibleCliException(
+                "A download worker stopped unexpectedly, the remaining jobs "
+                "were not processed"
+            )
+    finally:
+        # the consumer is still awaiting an item, cancel it
+        joiner.cancel()
+        for consumer in consumers:
+            consumer.cancel()
+
+        await asyncio.gather(joiner, *consumers, return_exceptions=True)
+        display_counter()
 
 
 def queue_job(
@@ -729,7 +801,7 @@ def display_counter():
 )
 @click.option(
     "--jobs", "-j",
-    type=int,
+    type=click.IntRange(min=1),
     default=3,
     show_default=True,
     help="number of simultaneous downloads"
@@ -973,16 +1045,6 @@ async def cli(session, api_client, **params):
             )
 
     # schedule the consumer
-    consumers = [
-        asyncio.create_task(consume(ignore_errors)) for _ in range(sim_jobs)
-    ]
-    try:
-        # wait until the consumer has processed all items
-        await QUEUE.join()
-    finally:
-        # the consumer is still awaiting an item, cancel it
-        for consumer in consumers:
-            consumer.cancel()
-
-        await asyncio.gather(*consumers, return_exceptions=True)
-        display_counter()
+    run = DownloadRun(ignore_errors)
+    await drain_queue(run, sim_jobs)
+    run.raise_for_errors()

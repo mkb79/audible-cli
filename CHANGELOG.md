@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - API timestamps, library date filters and voucher deadlines are now timezone-aware UTC; naive `--start-date`/`--end-date` input is interpreted as UTC, as the option help already stated (#266)
 - Replaced `datetime.utcnow()` and `datetime.utcfromtimestamp()`, deprecated since Python 3.12 (#266)
+- Without `--ignore-errors`, the download command now really aborts on the first failure: running downloads finish, queued ones are skipped (#235)
+- The download command exits non-zero when a download job raised an error, also with `--ignore-errors`. Failures that are only logged, such as an unknown ASIN or a download rejected by its HTTP status, still exit zero for now (#256)
+- `--jobs` now rejects values below 1 instead of accepting `0`, which queued work that no consumer would ever pick up (#235)
 
 ### Fixed
 
@@ -23,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Treat an unknown `publication_datetime` as published rather than crashing, and let `ItemNotPublished` report the ASIN without a countdown when no usable date is available (#268)
 - Reach `LicenseDenied` and `NoDownloadUrl` as intended when `license_denial_reasons`, `content_metadata` or `content_url` are null, instead of raising a `TypeError` or `AttributeError` (#268)
 - `audible manage config edit` no longer crashes with `TypeError: 'PosixPath' object is not iterable`; `click.edit()` accepts a `str` or an iterable of them, but not a `pathlib.Path` (#248)
+- The download command no longer hangs forever after failed downloads. A failing job killed its consumer, and once every `--jobs` consumer had died the queue was never drained (#235, #239)
 
 ## [0.4.0] - 2026-07-20
 
