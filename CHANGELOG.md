@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Skip the voucher refresh check when `refresh_date` is empty or null rather than only when the key is absent, instead of raising a `TypeError` (#268)
 - Treat an unknown `publication_datetime` as published rather than crashing, and let `ItemNotPublished` report the ASIN without a countdown when no usable date is available (#268)
 - Reach `LicenseDenied` and `NoDownloadUrl` as intended when `license_denial_reasons`, `content_metadata` or `content_url` are null, instead of raising a `TypeError` or `AttributeError` (#268)
+- `audible manage config edit` no longer crashes with `TypeError: 'PosixPath' object is not iterable`; `click.edit()` accepts a `str` or an iterable of them, but not a `pathlib.Path` (#248)
 
 ## [0.4.0] - 2026-07-20
 
