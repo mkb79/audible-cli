@@ -143,7 +143,10 @@ def build_auth_file(
     echo()
     secho("Login with amazon to your audible account now.", bold=True)
 
-    file_options = {"filename": pathlib.Path(filename)}
+    # Normalize once: the signature allows a str, but the parent directory is
+    # created further down, after the login has already registered the device
+    filename = pathlib.Path(filename)
+    file_options = {"filename": filename}
     if file_password:
         file_options.update(
             password=file_password,
