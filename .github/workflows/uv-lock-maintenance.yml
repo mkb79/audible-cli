@@ -11,20 +11,28 @@ permissions:
 
 jobs:
   lock:
+    # Fork pull requests, Dependabot included, get no repository secrets and
+    # only a read-only token, and their head branch does not exist here. Skip
+    # them instead of failing the checkout below.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GH_PAT }}
+          # On pull_request, checkout defaults to the detached merge commit.
+          # git-auto-commit-action needs the actual branch to commit onto, and
+          # errors out on a detached HEAD since v6.
+          ref: ${{ github.head_ref }}
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
 
       - name: "Run uv lock command"
         run: uv lock
 
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - uses: stefanzweifel/git-auto-commit-action@v7
         id: auto-commit-action
         with:
           commit_message: Regenerate uv.lock
