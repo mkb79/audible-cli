@@ -11,10 +11,13 @@ permissions:
 
 jobs:
   lock:
-    # Fork pull requests, Dependabot included, get no repository secrets and
-    # only a read-only token, and their head branch does not exist here. Skip
-    # them instead of failing the checkout below.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # This job commits with GH_PAT, so it only works where that secret and a
+    # branch to push to both exist. Fork pull requests have neither. Dependabot
+    # branches do live here, but Dependabot-triggered runs read their secrets
+    # from a separate store, so GH_PAT would be empty — hence the second check.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
