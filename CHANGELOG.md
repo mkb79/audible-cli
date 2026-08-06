@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- `build_auth_file()` no longer raises an `AttributeError` when its `filename` is passed as a `str`, which its signature allows. The failure happened after the login had already registered the device, so the registration was lost without the auth file being written
+
 ## [0.5.0] - 2026-08-05
 
 ### Breaking
