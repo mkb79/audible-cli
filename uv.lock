@@ -35,7 +35,7 @@ wheels = [
 
 [[package]]
 name = "audible"
-version = "0.11.0"
+version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -45,9 +45,9 @@ dependencies = [
     { name = "pyaes" },
     { name = "rsa" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/03/fb/fab627ff8f73702aaa93904be0980bfbe3fcbe6bb0da21bac1f88a02beeb/audible-0.11.0.tar.gz", hash = "sha256:0be158985c8c395ce9165e68ee85ade5907a4a98c947a9aae59faea50b7dc0a7", size = 60006, upload-time = "2026-07-20T14:01:21.104Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/02/f2/ae93d76bae1dcb77484de0a1e5657b38cff1f436959fc0e4a86e8d543b6e/audible-0.12.0.tar.gz", hash = "sha256:f7a7bb07af34b81d8330a1919ccfb7e44faed91d4f965a072ef6449ddd42768b", size = 64600, upload-time = "2026-07-23T10:45:14.643Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d9/76/091dd484c9a91ad2bbb7e93c38d0210c17682d9af63a9fd20f68f8dd2b9a/audible-0.11.0-py3-none-any.whl", hash = "sha256:41e7b358122a2668948d09cdbfef809dd814a68d45c5b6aef2aad44f3ab559e4", size = 77574, upload-time = "2026-07-20T14:01:19.562Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/49/a7765d7a1a28c0e693d84ee3deb0e243799814eb3732dcf8ae3cdccc0a26/audible-0.12.0-py3-none-any.whl", hash = "sha256:c8065d30a99f5aef804d166264aac4eceb056ea662bb5a58ccff63a54c914f13", size = 80222, upload-time = "2026-07-23T10:45:13.279Z" },
 ]
 
 [package.optional-dependencies]
@@ -569,14 +569,14 @@ wheels = [
 
 [[package]]
 name = "tqdm"
-version = "4.69.0"
+version = "4.70.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8c/69/40407dfc835517f058b603dbf37a6df094d8582b015a51eddc988febbcb7/tqdm-4.69.0.tar.gz", hash = "sha256:700c5e85dcd5f009dd6222588a29180a193a748247a5d855b4d67db93d79a53b", size = 792569, upload-time = "2026-07-17T18:09:06.2Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/3b/6c24bec5be5e743ffd99576daa5cc077722fc7d5bbc00bd133fa0c698dc6/tqdm-4.70.0.tar.gz", hash = "sha256:55b0b0dbd97462d06ebee91e4dac24ed4d4702be82b24f07e6c1d27e08cea220", size = 795438, upload-time = "2026-07-27T11:33:15.271Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fe/21/99a0cdaf54eb35e77623c41b5a2c9472ee4404bba687052791fe2aba6773/tqdm-4.69.0-py3-none-any.whl", hash = "sha256:9979978912be667a6ef21fd5d8abf54e324e63d82f7f43c360792ebc2bc4e622", size = 676680, upload-time = "2026-07-17T18:09:04.172Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/1c/01bfd571a64e7f270e6bab5e33777debe0edc56759233ce84f27dec92d14/tqdm-4.70.0-py3-none-any.whl", hash = "sha256:7f585706bfddbdebf89daac705b2dfcc16890130727d3197ca62c732b4310953", size = 80184, upload-time = "2026-07-27T11:33:13.167Z" },
 ]
 
 [[package]]
