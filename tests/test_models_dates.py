@@ -86,10 +86,14 @@ def test_items_without_any_date_are_kept_not_crashed_on(fields):
 def test_date_added_branch_still_filters():
     items = [
         library_item(
-            "KEEP", purchase_date=None, library_status={"date_added": "2020-05-05T10:00:00Z"}
+            "KEEP",
+            purchase_date=None,
+            library_status={"date_added": "2020-05-05T10:00:00Z"},
         ),
         library_item(
-            "DROP", purchase_date=None, library_status={"date_added": "2001-01-01T10:00:00Z"}
+            "DROP",
+            purchase_date=None,
+            library_status={"date_added": "2001-01-01T10:00:00Z"},
         ),
     ]
 
