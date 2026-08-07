@@ -52,7 +52,8 @@ audible-quickstart = "audible_cli:quickstart"
 
 [dependency-groups]
 dev = [
-    "pyinstaller"
+    "pyinstaller",
+    "pytest>=8.4.2"
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -150,4 +151,4 @@ lines-after-imports = 2
 "tests/*" = ["S101"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "src/audible_cli"]
+testpaths = ["tests"]
