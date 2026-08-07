@@ -3,16 +3,12 @@ import pathlib
 import sys
 
 import click
-from click import echo, secho, prompt
+from click import echo, prompt, secho
 from tabulate import tabulate
 
 from .. import __version__
 from ..config import ConfigFile
-from ..constants import (
-    AVAILABLE_MARKETPLACES,
-    CONFIG_FILE,
-    DEFAULT_AUTH_FILE_EXTENSION
-)
+from ..constants import AVAILABLE_MARKETPLACES, CONFIG_FILE, DEFAULT_AUTH_FILE_EXTENSION
 from ..decorators import pass_session
 from ..utils import build_auth_file
 

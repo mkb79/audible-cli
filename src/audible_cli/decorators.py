@@ -1,18 +1,19 @@
 import asyncio
 import logging
+from collections.abc import Callable
 from functools import partial, wraps
-from typing import Any, Callable
 from types import SimpleNamespace
+from typing import Any
 
 import click
 import httpx
 from click.core import Parameter, ParameterSource
 from packaging.version import parse
 
+from . import __version__
+from ._logging import _normalize_logger
 from .config import Session
 from .utils import datetime_type
-from ._logging import _normalize_logger
-from . import __version__
 
 
 logger = logging.getLogger("audible_cli.options")
@@ -78,7 +79,7 @@ def version_option(func=None, **kwargs):
 
         url = "https://api.github.com/repos/mkb79/audible-cli/releases/latest"
         headers = {"Accept": "application/vnd.github.v3+json"}
-        logger.debug(f"Requesting Github API for latest release information")
+        logger.debug("Requesting Github API for latest release information")
         try:
             response = httpx.get(url, headers=headers, follow_redirects=True)
             response.raise_for_status()

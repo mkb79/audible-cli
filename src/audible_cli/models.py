@@ -5,7 +5,7 @@ import string
 import unicodedata
 from datetime import UTC, datetime
 from math import ceil
-from typing import List, Optional, Union
+from typing import Optional
 from warnings import warn
 
 import audible
@@ -16,16 +16,16 @@ from audible.client import convert_response_content
 from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
 from .exceptions import (
     AudibleCliException,
+    ItemNotPublished,
     LicenseDenied,
     NoDownloadUrl,
     NotDownloadableAsAAX,
-    ItemNotPublished
 )
 from .utils import (
-    full_response_callback,
     LongestSubString,
+    full_response_callback,
     parse_api_datetime,
-    to_utc_datetime
+    to_utc_datetime,
 )
 
 
@@ -38,13 +38,13 @@ class BaseItem:
             data: dict,
             api_client: audible.AsyncClient,
             parent: Optional["BaseItem"] = None,
-            response_groups: Optional[List] = None
+            response_groups: list | None = None
     ) -> None:
         self._data = self._prepare_data(data)
         self._client = api_client
         self._parent = parent
         self._response_groups = response_groups
-        self._children: Optional[BaseList] = None
+        self._children: BaseList | None = None
 
     def __iter__(self):
         return iter(self._data)
@@ -121,7 +121,7 @@ class BaseItem:
         accuracy = self.substring_in_title_accuracy(substring)
         return accuracy >= p
 
-    def get_cover_url(self, res: Union[str, int] = 500):
+    def get_cover_url(self, res: str | int = 500):
         images = self.product_images
         res = str(res)
         if images is not None and res in images:
@@ -220,8 +220,7 @@ class LibraryItem(BaseItem):
         With these all parts of a MultiPartBook or all episodes of a Podcasts
         can be shown.
         """
-
-        # Only items with content_delivery_type 
+        # Only items with content_delivery_type
         # MultiPartBook or Periodical have child elements
         if not self.has_children:
             return
@@ -327,7 +326,7 @@ class LibraryItem(BaseItem):
     async def get_aaxc_url(
             self,
             quality: str = "high",
-            license_response_groups: Optional[str] = None
+            license_response_groups: str | None = None
     ):
         if not self.is_published():
             raise ItemNotPublished(self.asin, self.publication_datetime)
@@ -348,7 +347,7 @@ class LibraryItem(BaseItem):
     async def get_license(
             self,
             quality: str = "high",
-            response_groups: Optional[str] = None
+            response_groups: str | None = None
     ):
         assert quality in ("best", "high", "normal",)
 
@@ -433,7 +432,7 @@ class LibraryItem(BaseItem):
         return metadata
 
     async def get_annotations(self):
-        url = f"https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/sidecar"
+        url = "https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/sidecar"
         params = {
             "type": "AUDI",
             "key": self.asin
@@ -451,7 +450,7 @@ class WishlistItem(BaseItem):
 class BaseList:
     def __init__(
             self,
-            data: Union[dict, list],
+            data: dict | list,
             api_client: audible.AsyncClient
     ):
         self._client = api_client
@@ -463,7 +462,7 @@ class BaseList:
     def __iter__(self):
         return iter(self._data)
 
-    def _prepare_data(self, data: Union[dict, list]) -> Union[dict, list]:
+    def _prepare_data(self, data: dict | list) -> dict | list:
         return data
 
     @property
@@ -489,7 +488,7 @@ class BaseList:
 
 
 class Library(BaseList):
-    def _prepare_data(self, data: Union[dict, list]) -> list:
+    def _prepare_data(self, data: dict | list) -> list:
         response_groups = None
         if isinstance(data, dict):
             response_groups = data.get("response_groups")
@@ -510,8 +509,8 @@ class Library(BaseList):
             cls,
             api_client: audible.AsyncClient,
             include_total_count_header: bool = False,
-            start_date: Optional[datetime] = None,
-            end_date: Optional[datetime] = None,
+            start_date: datetime | None = None,
+            end_date: datetime | None = None,
             **request_params
     ):
         # Callers may pass naive datetimes, so normalize the bounds before
@@ -538,7 +537,7 @@ class Library(BaseList):
             if start_date is not None and start_date > date_added:
                 return False
             # If a new episode is added to a parent podcast, the purchase_date
-            # and date_added is set to this date. This can makes things 
+            # and date_added is set to this date. This can makes things
             # difficult to get older podcast episodes
             # the end date will be filtered by the resolve_podcasts function later
             if item.is_parent_podcast():
@@ -625,8 +624,8 @@ class Library(BaseList):
 
     async def resolve_podcats(
             self,
-            start_date: Optional[datetime] = None,
-            end_date: Optional[datetime] = None
+            start_date: datetime | None = None,
+            end_date: datetime | None = None
     ):
         warn(
             "resolve_podcats is deprecated, use resolve_podcasts instead",
@@ -637,11 +636,11 @@ class Library(BaseList):
 
     async def resolve_podcasts(
             self,
-            start_date: Optional[datetime] = None,
-            end_date: Optional[datetime] = None
+            start_date: datetime | None = None,
+            end_date: datetime | None = None
     ):
         podcast_items = await asyncio.gather(
-            *[i.get_child_items(start_date=start_date, end_date=end_date) 
+            *[i.get_child_items(start_date=start_date, end_date=end_date)
               for i in self if i.is_parent_podcast()]
         )
         for i in podcast_items:
@@ -649,7 +648,7 @@ class Library(BaseList):
 
 
 class Catalog(BaseList):
-    def _prepare_data(self, data: Union[dict, list]) -> list:
+    def _prepare_data(self, data: dict | list) -> list:
         response_groups = None
         if isinstance(data, dict):
             response_groups = data.get("response_groups")
@@ -713,7 +712,7 @@ class Catalog(BaseList):
 
 
 class Wishlist(BaseList):
-    def _prepare_data(self, data: Union[dict, list]) -> list:
+    def _prepare_data(self, data: dict | list) -> list:
         response_groups = None
         if isinstance(data, dict):
             response_groups = data.get("response_groups")

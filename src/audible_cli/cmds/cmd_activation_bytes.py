@@ -3,7 +3,7 @@ import logging
 import click
 from audible.activation_bytes import (
     extract_activation_bytes,
-    fetch_activation_sign_auth
+    fetch_activation_sign_auth,
 )
 
 from ..decorators import pass_session
