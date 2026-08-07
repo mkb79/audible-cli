@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
+# Required by action-gh-release to create, upload to and publish the release
+permissions:
+  contents: write
+
 env:
   PYTHON_VERSION: "3.14"
 
@@ -13,14 +17,16 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     steps:
-    - name: Create Release
+    - name: Create draft release
       id: create-release
       uses: softprops/action-gh-release@v3
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         name: Release ${{ github.ref_name }}
-        draft: false
+        # Keep it a draft until every build has attached its asset. Updating
+        # an existing release keeps the draft state it already has, so this
+        # covers a new release and one that is still a draft, but not a tag
+        # that was published before.
+        draft: true
         prerelease: false
 
   build:
@@ -33,51 +39,45 @@ jobs:
           - os: ubuntu-latest
             TARGET: linux
             CMD_BUILD: >
-                uv run --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
+                uv run --locked --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_linux_ubuntu_latest audible
             OUT_FILE_NAME: audible_linux_ubuntu_latest.zip
-            ASSET_MIME: application/zip  # application/octet-stream
           - os: ubuntu-22.04
             TARGET: linux
             CMD_BUILD: >
-                uv run --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
+                uv run --locked --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_linux_ubuntu_22_04 audible
             OUT_FILE_NAME: audible_linux_ubuntu_22_04.zip
-            ASSET_MIME: application/zip  # application/octet-stream
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                uv run --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
+                uv run --locked --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_mac audible
             OUT_FILE_NAME: audible_mac.zip
-            ASSET_MIME: application/zip
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
-                uv run --extra cryptography pyinstaller --clean -D --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
+                uv run --locked --extra cryptography pyinstaller --clean -D --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 zip -r9 audible_mac_dir audible
             OUT_FILE_NAME: audible_mac_dir.zip
-            ASSET_MIME: application/zip 
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
-                uv run --extra cryptography pyinstaller --clean -D --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
+                uv run --locked --extra cryptography pyinstaller --clean -D --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 powershell Compress-Archive audible audible_win_dir.zip
             OUT_FILE_NAME: audible_win_dir.zip
-            ASSET_MIME: application/zip
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
-                uv run --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
+                uv run --locked --extra cryptography pyinstaller --clean -F --hidden-import audible_cli --collect-all cryptography --collect-submodules audible.crypto_provider -n audible -c pyi_entrypoint.py &&
                 cd dist/ &&
                 powershell Compress-Archive audible.exe audible_win.zip
             OUT_FILE_NAME: audible_win.zip
-            ASSET_MIME: application/zip
     steps:
     - uses: actions/checkout@v7
 
@@ -95,7 +95,25 @@ jobs:
     - name: Upload Release Asset
       id: upload-release-asset
       uses: softprops/action-gh-release@v3
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         files: ./dist/${{ matrix.OUT_FILE_NAME}}
+        # Without this the first upload would publish the draft
+        draft: true
+        fail_on_unmatched_files: true
+        # An asset of the same name is skipped rather than replaced, missing
+        # ones are still uploaded. Keeps a rerun on an already published tag
+        # from swapping good assets for ones no build step has verified.
+        overwrite_files: false
+
+  publish_release:
+    name: Publish Release
+    # Only reached when all six builds succeeded, so a failed matrix leaves
+    # the draft behind instead of a public release with missing assets
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Publish the draft release
+      uses: softprops/action-gh-release@v3
+      with:
+        # Name and body are kept from the draft when not passed again
+        draft: false
