@@ -8,7 +8,7 @@ from audible_cli.decorators import pass_client, timeout_option
 @timeout_option()
 @pass_client()
 async def cli(client, asin):
-    """Print out the image urls for different resolutions for a book"""
+    """Print out the image urls for different resolutions for a book."""
     r = await client.get(
         f"catalog/products/{asin}",
         response_groups="media",

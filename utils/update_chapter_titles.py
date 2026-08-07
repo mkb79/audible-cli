@@ -1,5 +1,5 @@
 """This script replaces the chapter titles from a ffmetadata file with the one
-extracted from an API metadata/voucher file
+extracted from an API metadata/voucher file.
 
 Example:
 
@@ -151,7 +151,7 @@ class FFMeta:
 
     def update_chapters_from_api_meta(self, api_meta, separate_branding=True):
         """Replace all chapter data from api meta file.
-        
+
         This replaces TIMEBASE, START, END and title. If api meta files contains
         more chapters than ffmetadata file, the additionell chapters are added.
         If separate_branding is True Audible Branding Intro and Outro will become
@@ -212,7 +212,7 @@ class FFMeta:
         self._ffmeta_parsed["CHAPTER"] = new_chapters
 
 
-CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 
 @click.command(context_settings=CONTEXT_SETTINGS)

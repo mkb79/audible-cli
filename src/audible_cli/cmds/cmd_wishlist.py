@@ -35,7 +35,7 @@ async def _get_wishlist(client):
 
 @click.group("wishlist")
 def cli():
-    """Interact with wishlist"""
+    """Interact with wishlist."""
 
 
 @cli.command("export")
@@ -56,7 +56,7 @@ def cli():
 )
 @pass_client
 async def export_wishlist(client, **params):
-    """Export wishlist"""
+    """Export wishlist."""
 
     @wrap_async
     def _prepare_item(item):
@@ -134,7 +134,7 @@ async def export_wishlist(client, **params):
 @timeout_option
 @pass_client
 async def list_wishlist(client):
-    """List titles in wishlist"""
+    """List titles in wishlist."""
 
     @wrap_async
     def _prepare_item(item):
@@ -179,7 +179,7 @@ async def list_wishlist(client):
 @timeout_option
 @pass_client(limits=limits)
 async def add_wishlist(client, asin, title):
-    """Add asin(s) to wishlist
+    """Add asin(s) to wishlist.
 
     Run the command without any option for interactive mode.
     """
@@ -262,7 +262,7 @@ async def add_wishlist(client, asin, title):
 @timeout_option
 @pass_client(limits=limits)
 async def remove_wishlist(client, asin, title):
-    """Remove asin(s) from wishlist
+    """Remove asin(s) from wishlist.
 
     Run the command without any option for interactive mode.
     """

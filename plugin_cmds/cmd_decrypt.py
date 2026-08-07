@@ -38,7 +38,7 @@ class SupportedFiles(Enum):
 
     @classmethod
     def get_supported_list(cls):
-        return list(set(item.value for item in cls))
+        return list({item.value for item in cls})
 
     @classmethod
     def is_supported_suffix(cls, value):
@@ -66,9 +66,9 @@ def _get_input_files(
             raise click.BadParameter("{filename}: file not found or supported.")
 
         expanded_filter = filter(
-            lambda x: SupportedFiles.is_supported_file(x), expanded
+            SupportedFiles.is_supported_file, expanded
         )
-        expanded = list(map(lambda x: pathlib.Path(x).resolve(), expanded_filter))
+        expanded = [pathlib.Path(x).resolve() for x in expanded_filter]
         filenames.extend(expanded)
 
     return filenames
@@ -135,7 +135,7 @@ class ApiChapterInfo:
             if "chapters" in current:
                 return initial + [current] + current["chapters"]
             else:
-                return initial + [current]
+                return [*initial, current]
 
         chapters = list(
             reduce(
@@ -630,7 +630,7 @@ def cli(
     FILES are the names of the file to decrypt.
     Wildcards `*` and recursive lookup with `**` are supported.
 
-    Only FILES with `aax` or `aaxc` suffix are processed. 
+    Only FILES with `aax` or `aaxc` suffix are processed.
     Other files are skipped silently.
     """
     if not which("ffmpeg"):
