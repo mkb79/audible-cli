@@ -9,13 +9,22 @@ Needs at least ffmpeg 4.4
 """
 
 
+import base64
+import concurrent.futures
+import io
 import json
+import logging
 import operator
+import os
 import pathlib
 import re
+import struct
 import subprocess  # noqa: S404
+import sys
 import tempfile
+import traceback
 import typing as t
+import unicodedata
 from enum import Enum
 from functools import reduce
 from glob import glob
@@ -23,10 +32,12 @@ from shutil import which
 
 import click
 from click import echo, secho
+from PIL import Image
 
 from audible_cli.decorators import pass_session
 from audible_cli.exceptions import AudibleCliException
 
+logger = logging.getLogger()
 
 class ChapterError(AudibleCliException):
     """Base class for all chapter errors."""
@@ -250,6 +261,37 @@ class FFMeta:
 
         return parsed_dict
 
+    def _clean(self, text):
+        text = re.sub(r'\([^)]*\)', ' ', text)
+        text = re.sub(r':', ' - ', text)
+        # Keep only Unicode letters, numbers, hyphen, underscore, space
+        text = ''.join(
+            c for c in text
+            if unicodedata.category(c)[0] in ('L', 'N') or c in ('-', '_', ' ')
+        )
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
+
+    def get_output_path(self):
+        """
+        Return the <author>/<title>/ folder path for this audiobook
+        """
+        lines = self._ffmeta_raw.splitlines()
+        title = ""
+        artist = ""
+        album = ""
+        for line in lines:
+            if not title and line.startswith("title="):
+                title = line.split("=", 1)[-1]
+            elif not artist and line.startswith("artist="):
+                artist = line.split("=", 1)[-1]
+            elif not album and line.startswith("album="):
+                album = line.split("=", 1)[-1]
+        title = self._clean(title)
+        artist = self._clean(artist)
+        album = self._clean(album)
+        return pathlib.Path(f"{artist}/{album if album else title}")
+
     def count_chapters(self):
         return len(self._ffmeta_parsed["CHAPTER"])
 
@@ -364,7 +406,10 @@ class FfmpegFileDecrypter:
         force_rebuild_chapters: bool,
         skip_rebuild_chapters: bool,
         separate_intro_outro: bool,
-        remove_intro_outro: bool
+        remove_intro_outro: bool,
+        output_opus_format: bool,
+        output_folders: bool,
+        bitrate: str,
     ) -> None:
         file_type = SupportedFiles(file.suffix)
 
@@ -393,6 +438,10 @@ class FfmpegFileDecrypter:
         self._api_chapter: t.Optional[ApiChapterInfo] = None
         self._ffmeta: t.Optional[FFMeta] = None
         self._is_rebuilded: bool = False
+        self._output_opus_format = output_opus_format
+        self._output_folders = output_folders
+        self._bitrate = bitrate
+        self._title = ""
 
     @property
     def api_chapter(self) -> ApiChapterInfo:
@@ -415,7 +464,6 @@ class FfmpegFileDecrypter:
                 "ffmpeg",
                 "-v",
                 "quiet",
-                "-stats",
             ]
             if isinstance(self._credentials, tuple):
                 key, iv = self._credentials
@@ -453,9 +501,243 @@ class FfmpegFileDecrypter:
             )
             self._is_rebuilded = True
 
+    def get_downloaded_cover(self, filename: str) -> str:
+        """
+        Return the pathname to a cover already downloaded, if one exists
+        """
+        filename = pathlib.Path(filename)
+        base_filename = filename.stem.rsplit("-", 1)[0]
+
+        # Look for jpg files in the same directory as the input file
+        parent_dir = filename.parent
+        potential_covers = list(parent_dir.glob(f"{base_filename}*.jpg"))
+
+        # If we found any matches, return the first one
+        if potential_covers:
+            return potential_covers[0]
+
+    def get_cover_image(self, m4b_file_path: str):
+        """
+        Extract the cover image from an M4B audiobook file using ffmpeg.
+        
+        Args:
+            m4b_file_path (str): Path to the M4B audiobook file.
+        
+        Returns:
+            str: Path to the temporary file containing the cover image, or None if extraction failed.
+        """
+        # First see if there is an already downloaded cover
+        try:
+            cover_filename = self.get_downloaded_cover(m4b_file_path)
+            if cover_filename:
+                return cover_filename
+        
+            # Create a temporary file for the cover image
+            temp_file = tempfile.NamedTemporaryFile(prefix="deleteme_", suffix='.jpg', delete=False)
+            temp_file.close()
+            output_image_path = temp_file.name
+            
+            # Run ffmpeg command to extract the cover image
+            cmd = [
+                'ffmpeg',
+                '-v',
+                'quiet',
+                '-nostats',
+                '-i', m4b_file_path,
+                '-an',  # Disable audio
+                '-vcodec', 'copy',
+                '-y',  # Overwrite output file if it exists
+                output_image_path
+            ]
+            
+            # Run the command
+            subprocess.run(cmd, capture_output=True, text=True)
+            
+            if os.path.exists(output_image_path) and os.path.getsize(output_image_path) > 0:
+                return output_image_path
+            else:
+                # Alternative approach if the first one doesn't work
+                cmd = [
+                    'ffmpeg',
+                    '-v',
+                    'quiet',
+                    '-stats',
+                    '-i', m4b_file_path,
+                    '-an',
+                    '-vf', 'scale=500:-1',  # Resize the image (optional)
+                    '-f', 'image2',
+                    '-y',
+                    output_image_path
+                ]
+                subprocess.run(cmd, capture_output=True, text=True)
+                
+                if os.path.exists(output_image_path) and os.path.getsize(output_image_path) > 0:
+                    return output_image_path
+                else:
+                    # Clean up the empty temporary file
+                    os.unlink(output_image_path)
+                    return None
+        
+        except Exception:
+            # Clean up in case of error
+            if 'output_image_path' in locals() and os.path.exists(output_image_path):
+                os.unlink(output_image_path)
+            return None
+
+    def create_picture_block_header(self, mime_type, description, width, height, color_depth, img_data_size):
+        """
+        Create a METADATA_BLOCK_PICTURE header according to the Xiph.org specification.
+
+        Args:
+        - mime_type: string like 'image/jpeg', 'image/png'
+        - description: text description of the picture
+        - width: image width in pixels
+        - height: image height in pixels
+        - color_depth: bits per pixel (typically 24 for RGB, 32 for RGBA)
+        - img_data_size: size of the raw image data in bytes
+
+        Returns:
+        - binary header data
+        """
+        # Picture type: 3 means "Cover (front)"
+        picture_type = 3
+
+        # Fixed format string issues
+        mime_bytes = mime_type.encode()
+        desc_bytes = description.encode()
+
+        # Pack each part separately to avoid format string errors
+        header = (
+            struct.pack(">I", picture_type) +                # Picture type (4 bytes, big-endian)
+            struct.pack(">I", len(mime_bytes)) +             # MIME type length (4 bytes)
+            mime_bytes +                                     # MIME type string
+            struct.pack(">I", len(desc_bytes)) +             # Description length (4 bytes)
+            desc_bytes +                                     # Description string
+            struct.pack(">I", width) +                       # Width (4 bytes)
+            struct.pack(">I", height) +                      # Height (4 bytes)
+            struct.pack(">I", color_depth) +                 # Color depth (4 bytes)
+            struct.pack(">I", 0) +                           # Number of colors (0 for non-indexed)
+            struct.pack(">I", img_data_size)                 # Image data size (4 bytes)
+        )
+
+        return header
+
+    def get_cover_metadata(self, cover_art_file):
+        """
+        Return metadata for embedding cover art
+
+        Args:
+          cover_art_file: path to the cover art image
+        """
+        # Open and analyze the image
+        with Image.open(cover_art_file) as img:
+            width, height = img.size
+            # Determine color depth based on image mode
+            if img.mode == 'RGB':
+                color_depth = 24
+            elif img.mode == 'RGBA':
+                color_depth = 32
+            else:
+                # Convert to RGB for other modes
+                img = img.convert('RGB')
+                color_depth = 24
+
+            # Get the image data in bytes
+            img_byte_arr = io.BytesIO()
+            img_format = os.path.splitext(cover_art_file)[1][1:].upper()
+            if img_format.lower() == 'jpg':
+                img_format = 'JPEG'
+            img.save(img_byte_arr, format=img_format)
+            img_data = img_byte_arr.getvalue()
+            img_data_size = len(img_data)
+
+            # Determine MIME type
+            mime_type = f'image/{img_format.lower()}'
+
+            # Create the header
+            description = os.path.basename(cover_art_file)
+            header = self.create_picture_block_header(
+                mime_type, description, width, height, color_depth, img_data_size
+            )
+
+            # Combine header and image data
+            metadata_block = header + img_data
+
+            # Base64 encode the combined data
+            encoded_data = base64.b64encode(metadata_block).decode('ascii')
+
+            return ['-metadata:s:a', f'METADATA_BLOCK_PICTURE={encoded_data}']
+
+    def _get_opus_filename(self, input_filename):
+        input_filename = pathlib.Path(input_filename)
+        base_filename = pathlib.Path(input_filename).stem.rsplit("-", 1)[0]
+        return pathlib.Path(base_filename + f"-{self._bitrate}bps.opus")
+
+    def run_ffmpeg(self, ffmpeg_cmd):
+        # Start the FFmpeg process with simple progress output
+        ffmpeg_cmd.extend([
+            "-progress",
+            "-",
+            "-nostats",
+            "-stats_period",
+            "10",
+        ])
+        process = subprocess.Popen(
+            ffmpeg_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # FFmpeg writes progress to stderr by default
+            text=True,
+            bufsize=1
+        )
+
+        speed_regex = re.compile(r"speed=([\d\.x]+)")
+        time_regex = re.compile(r"time=(\d{2}):(\d{2}):(\d{2}\.\d{2})")
+        duration_regex = re.compile(r"Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})")
+
+        duration_seconds = None
+        current_speed = ""
+
+        # Process output line by line as it becomes available
+        for line in iter(process.stdout.readline, ""):
+            # Try to find duration
+            if duration_seconds is None:
+                duration_match = duration_regex.search(line)
+                if duration_match:
+                    h, m, s = map(float, duration_match.groups())
+                    duration_seconds = h * 3600 + m * 60 + s
+
+            speed_match = speed_regex.search(line)
+            if speed_match:
+                current_speed = f"({speed_match.group(1)} speed)"
+
+            # Try to find current progress time
+            time_match = time_regex.search(line)
+            if time_match and duration_seconds:
+                h, m, s = map(float, time_match.groups())
+                current_seconds = h * 3600 + m * 60 + s
+                progress = min(100, int(current_seconds / duration_seconds * 100))
+
+                # Update progress bar
+                sys.stdout.write(f"{progress}% complete {current_speed} {self._title}\n")
+                sys.stdout.flush()
+
+        # Wait for process to complete and get return code
+        return_code = process.wait()
+        return return_code
+
     def run(self):
-        oname = self._source.with_suffix(".m4b").name
-        outfile = self._target_dir / oname
+        if self._output_opus_format:
+            oname = self._get_opus_filename(self._source)
+        else:
+            oname = self._source.with_suffix(".m4b").name
+        self._title = oname
+
+        outdir = self._target_dir
+        if self._output_folders:
+            outdir = self._target_dir / self.ffmeta.get_output_path()
+            os.makedirs(outdir, exist_ok=True)
+
+        outfile = outdir / oname
 
         if outfile.exists():
             if self._overwrite:
@@ -466,9 +748,6 @@ class FfmpegFileDecrypter:
 
         base_cmd = [
             "ffmpeg",
-            "-v",
-            "quiet",
-            "-stats",
         ]
         if self._overwrite:
             base_cmd.append("-y")
@@ -538,17 +817,57 @@ class FfmpegFileDecrypter:
                 ]
             )
 
-        base_cmd.extend(
-            [
-                "-c",
-                "copy",
-                str(outfile),
-            ]
-        )
+        if self._output_opus_format:
+            # Add cover
+            cover_filename = self.get_cover_image(str(self._source))
+            if cover_filename:
+                try:
+                    base_cmd.extend(self.get_cover_metadata(cover_filename))
+                except Exception as ex:
+                    logger.warning(f"Failed to process cover image for {self._source}: {ex}")
+            else:
+                logger.info(f"No cover image available for {self._source}")
+                    
+            # Clean up temp image if required
+            if cover_filename and cover_filename.startswith("deleteme_"):
+                os.unlink(cover_filename)
+            
+            # ffmpeg transcoding options to opus
+            base_cmd.extend(
+                [
+                    "-c:a",
+                    "libopus",
+                    "-vn",
+                    "-ac",
+                    "1",
+                    "-application",
+                    "voip",
+                    "-frame_duration",
+                    "60",
+                    "-b:a",
+                    self._bitrate,
+                    str(outfile),
+                ]
+            )
+        else:
+            base_cmd.extend(
+                [
+                    "-c",
+                    "copy",
+                    str(outfile),
+                ]
+            )
 
-        subprocess.check_output(base_cmd, text=True)  # noqa: S603
+        self.run_ffmpeg(base_cmd)
 
-        echo(f"File decryption successful: {outfile}")
+        # Work out relative file size
+        result_size = ""
+        output_size = os.path.getsize(outfile)
+        original_size = os.path.getsize(self._source)
+        if original_size:
+            delta = (output_size/original_size) * 100
+            result_size = f"Output is {delta:.1f}% of the original size"
+        echo(f"File decryption successful: {outfile}\n{result_size}")
 
 @click.command("decrypt")
 @click.argument("files", nargs=-1)
@@ -612,6 +931,38 @@ class FfmpegFileDecrypter:
         "Only use with `--rebuild-chapters`."
     ),
 )
+@click.option(
+    "--opus",
+    is_flag=True,
+    help=(
+        "Output in Opus format at 32kbps for much smaller output files."
+        "Includes cover art, chapters and other metadata."
+    ),
+)
+@click.option(
+    "--jobs", "-j",
+    type=int,
+    default=4,
+    show_default=True,
+    help="Number of simultaneous decryption jobs."
+)
+@click.option(
+    "--folders",
+    is_flag=True,
+    help=(
+        "Output decrypted audiobooks into separate sub-folders, <author>/<title>/ "
+        "Required by some audiobook players."
+    ),
+)
+@click.option(
+    "--bitrate",
+    "-b",
+    "bitrate",
+    type=str,
+    default="16k",
+    help="Bitrate for Opus encoding, in bits.",
+    show_default=True
+)
 @pass_session
 def cli(
     session,
@@ -624,6 +975,10 @@ def cli(
     skip_rebuild_chapters: bool,
     separate_intro_outro: bool,
     remove_intro_outro: bool,
+    opus: bool,
+    folders: bool,
+    bitrate: str,
+    jobs: int,
 ):
     """Decrypt audiobooks downloaded with audible-cli.
 
@@ -667,17 +1022,53 @@ def cli(
 
     files = _get_input_files(files, recursive=True)
     with tempfile.TemporaryDirectory() as tempdir:
-        for file in files:
-            decrypter = FfmpegFileDecrypter(
-                file=file,
-                target_dir=pathlib.Path(directory).resolve(),
-                tempdir=pathlib.Path(tempdir).resolve(),
-                activation_bytes=session.auth.activation_bytes,
-                overwrite=overwrite,
-                rebuild_chapters=rebuild_chapters,
-                force_rebuild_chapters=force_rebuild_chapters,
-                skip_rebuild_chapters=skip_rebuild_chapters,
-                separate_intro_outro=separate_intro_outro,
-                remove_intro_outro=remove_intro_outro
-            )
-            decrypter.run()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as executor:
+            # Create a list of futures
+            futures = []
+            for file in files:
+                future = executor.submit(
+                    process_file,
+                    file,
+                    directory,
+                    tempdir,
+                    session.auth.activation_bytes,
+                    overwrite,
+                    rebuild_chapters,
+                    force_rebuild_chapters,
+                    skip_rebuild_chapters,
+                    separate_intro_outro,
+                    remove_intro_outro,
+                    opus,
+                    folders,
+                    bitrate
+                )
+                futures.append(future)
+
+            # Keep processing...
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()
+                except Exception as exc:
+                    logger.error(f'Error processing file {file}: {exc} {traceback.format_exc()}')
+
+
+def process_file(file, directory, tempdir, activation_bytes, overwrite, rebuild_chapters,
+                force_rebuild_chapters, skip_rebuild_chapters, separate_intro_outro,
+                remove_intro_outro, opus, folders, bitrate):
+    decrypter = FfmpegFileDecrypter(
+        file=file,
+        target_dir=pathlib.Path(directory).resolve(),
+        tempdir=pathlib.Path(tempdir).resolve(),
+        activation_bytes=activation_bytes,
+        overwrite=overwrite,
+        rebuild_chapters=rebuild_chapters,
+        force_rebuild_chapters=force_rebuild_chapters,
+        skip_rebuild_chapters=skip_rebuild_chapters,
+        separate_intro_outro=separate_intro_outro,
+        remove_intro_outro=remove_intro_outro,
+        output_opus_format=opus,
+        output_folders=folders,
+        bitrate=bitrate,
+    )
+    return decrypter.run()
