@@ -37,7 +37,7 @@ async def _get_library(session, client, resolve_podcasts):
             "relationships, review_attrs, categories, badge_types, "
             "category_ladders, claim_code_url, is_downloaded, "
             "is_finished, is_returnable, origin_asin, pdf_url, "
-            "percent_complete, provided_review"
+            "percent_complete, provided_review, customer_rights"
         ),
         bunch_size=bunch_size,
         start_date=start_date,
@@ -152,6 +152,22 @@ async def export_library(session, client, **params):
         output_filename.write_text(data)
 
 
+def _intersects(filter_authors, item_authors):
+    for ia in item_authors:
+        if ia['name'] in filter_authors:
+            return True
+    return False
+
+
+def _get_authors_filter(filters):
+    authors = []
+    for f in filters:
+        if f.startswith('author='):
+            (_,author) = f.split('=',1)
+            authors.append(author)
+    return authors
+
+
 @cli.command("list")
 @timeout_option
 @bunch_size_option
@@ -160,11 +176,16 @@ async def export_library(session, client, **params):
     is_flag=True,
     help="Resolve podcasts to show all episodes"
 )
+@click.option(
+    "--filter",
+    multiple=True,
+    help="Filter library list: 'downloadable' 'not-downloadable' 'author=<Name>'"
+)
 @start_date_option
 @end_date_option
 @pass_session
 @pass_client
-async def list_library(session, client, resolve_podcasts):
+async def list_library(session, client, resolve_podcasts, filter):
     """list titles in library"""
 
     @wrap_async
@@ -186,9 +207,19 @@ async def list_library(session, client, resolve_podcasts):
         fields.append(item.title)
         return ": ".join(fields)
 
+    filters = {
+        'downloadable': 'downloadable' in filter,
+        'not downloadable': 'not downloadable' in filter,
+        'authors': _get_authors_filter(filter),
+    }
+
     library = await _get_library(session, client, resolve_podcasts)
 
     books = await asyncio.gather(
-        *[_prepare_item(i) for i in library]
+        *[_prepare_item(i) for i in library if \
+            (filters['downloadable'] is False or i.is_downloadable() is True) and \
+            (filters['not downloadable'] is False or i.is_downloadable() is False) and \
+            (len(filters['authors']) == 0 or _intersects(filters['authors'], i.authors))
+         ]
     )
     [echo(i) for i in sorted(books) if len(i) > 0]
