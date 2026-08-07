@@ -7,8 +7,9 @@ from . import (
     cmd_library,
     cmd_manage,
     cmd_quickstart,
-    cmd_wishlist
+    cmd_wishlist,
 )
+
 
 cli_cmds = [
     cmd_activation_bytes.cli,
@@ -22,11 +23,10 @@ cli_cmds = [
 
 
 def build_in_cmds(func=None):
-    """
-    A decorator to register build-in CLI commands to an instance of
+    """A decorator to register build-in CLI commands to an instance of
     `click.Group()`.
 
-    Returns
+    Returns:
     -------
     click.Group()
     """

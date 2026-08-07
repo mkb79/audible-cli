@@ -1,5 +1,4 @@
-"""
-This script replaces the chapter titles from a ffmetadata file with the one
+"""This script replaces the chapter titles from a ffmetadata file with the one
 extracted from an API metadata/voucher file
 
 Example:
@@ -165,7 +164,7 @@ class FFMeta:
             # This happens on some of my books
             # but runtime is identical +- few ms
             echo("Missmatch between chapter numbers.")
-            click.confirm('Do you want to continue?', abort=True)
+            click.confirm("Do you want to continue?", abort=True)
 
         echo(f"Found {self.count_chapters()} chapters to prepare.")
 

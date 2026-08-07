@@ -2,15 +2,16 @@ import logging
 import pathlib
 
 import click
+from isbntools.app import isbn_from_words
+
 from audible_cli.decorators import (
     bunch_size_option,
-    timeout_option,
     pass_client,
-    pass_session
+    pass_session,
+    timeout_option,
 )
 from audible_cli.models import Library
 from audible_cli.utils import export_to_csv, parse_api_datetime
-from isbntools.app import isbn_from_words
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_goodreads-transform")
@@ -30,7 +31,6 @@ logger = logging.getLogger("audible_cli.cmds.cmd_goodreads-transform")
 @pass_client
 async def cli(session, client, output):
     """YOUR COMMAND DESCRIPTION"""
-
     logger.debug("fetching library")
     bunch_size = session.params.get("bunch_size")
     library = await Library.from_api_full_sync(
@@ -71,7 +71,7 @@ def _prepare_library_for_export(library):
         if authors is not None:
             authors = ", ".join([a["name"] for a in authors])
         is_finished = i.is_finished
-        
+
         isbn = i.isbn
         if isbn is None:
             isbn_counter += 1

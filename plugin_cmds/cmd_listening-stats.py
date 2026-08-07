@@ -5,6 +5,7 @@ import pathlib
 from datetime import datetime
 
 import click
+
 from audible_cli.decorators import pass_client
 
 
@@ -15,8 +16,8 @@ current_year = datetime.now().year
 
 def ms_to_hms(milliseconds):
     seconds = int((milliseconds / 1000) % 60)
-    minutes = int(((milliseconds / (1000*60)) % 60))
-    hours = int(((milliseconds / (1000*60*60)) % 24))
+    minutes = int((milliseconds / (1000*60)) % 60)
+    hours = int((milliseconds / (1000*60*60)) % 24)
     return {"hours": hours, "minutes": minutes, "seconds": seconds}
 
 
@@ -29,7 +30,7 @@ async def _get_stats_year(client, year):
         store="Audible"
     )
     # iterate over each month
-    for stat in stats['aggregated_monthly_listening_stats']:
+    for stat in stats["aggregated_monthly_listening_stats"]:
         stats_year[stat["interval_identifier"]] = ms_to_hms(stat["aggregated_sum"])
     return stats_year
 
@@ -51,7 +52,7 @@ async def _get_stats_year(client, year):
 )
 @pass_client
 async def cli(client, output, signup_year):
-    """get and analyse listening statistics"""
+    """Get and analyse listening statistics"""
     year_range = [y for y in range(signup_year, current_year+1)]
 
     r = await asyncio.gather(
