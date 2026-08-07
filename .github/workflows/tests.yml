@@ -38,3 +38,25 @@ jobs:
 
       - name: Run tests
         run: uv run --no-sync pytest -v
+
+  ruff:
+    name: Ruff ${{ matrix.command }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # check and format are separate so a failure names which one
+        command: ["check", "format --check"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install the project
+        run: uv sync --locked
+
+      - name: Run ruff ${{ matrix.command }}
+        run: uv run --no-sync ruff ${{ matrix.command }} .

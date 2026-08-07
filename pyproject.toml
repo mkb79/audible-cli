@@ -53,7 +53,10 @@ audible-quickstart = "audible_cli:quickstart"
 [dependency-groups]
 dev = [
     "pyinstaller",
-    "pytest>=8.4.2"
+    "pytest>=8.4.2",
+    # Pinned: the enabled rule families pull in new stable rules on an
+    # upgrade, which would turn the gate red without a code change
+    "ruff==0.16.2"
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -105,6 +108,41 @@ src = ["src", "plugin_cmds", "utils"]
 target-version = "py311"
 output-format = "grouped"
 
+[tool.ruff.format]
+# Files the formatter has never run over. Take one off the list by
+# running `ruff format` on it in a commit of its own.
+exclude = [
+    "docs/source/conf.py",
+    "plugin_cmds/cmd_decrypt.py",
+    "plugin_cmds/cmd_get-annotations.py",
+    "plugin_cmds/cmd_goodreads-transform.py",
+    "plugin_cmds/cmd_image-urls.py",
+    "plugin_cmds/cmd_listening-stats.py",
+    "plugin_cmds/convert_oa_cred.py",
+    "plugin_cmds/README.md",
+    "pyi_entrypoint.py",
+    "README.md",
+    "src/audible_cli/cli.py",
+    "src/audible_cli/cmds/cmd_activation_bytes.py",
+    "src/audible_cli/cmds/cmd_api.py",
+    "src/audible_cli/cmds/cmd_download.py",
+    "src/audible_cli/cmds/cmd_library.py",
+    "src/audible_cli/cmds/cmd_manage.py",
+    "src/audible_cli/cmds/cmd_quickstart.py",
+    "src/audible_cli/cmds/cmd_wishlist.py",
+    "src/audible_cli/cmds/__init__.py",
+    "src/audible_cli/config.py",
+    "src/audible_cli/constants.py",
+    "src/audible_cli/decorators.py",
+    "src/audible_cli/downloader.py",
+    "src/audible_cli/_logging.py",
+    "src/audible_cli/__main__.py",
+    "src/audible_cli/models.py",
+    "src/audible_cli/plugins.py",
+    "src/audible_cli/utils.py",
+    "utils/update_chapter_titles.py",
+]
+
 [tool.ruff.lint]
 ignore = [
     "D10",  # temporarily ignore missing docstrings
@@ -149,6 +187,42 @@ lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
+
+# Baseline: findings that predate the Ruff gate. Each entry lists the rules a
+# file already breaks. A new file, and a rule not listed for a file, both
+# still fail; another violation of a rule already listed for that same file
+# does not, because per-file-ignores keys on file and rule rather than on
+# individual findings. Shrink the list by fixing a rule in a file and
+# dropping its code here.
+"docs/source/conf.py" = ["A001", "I001"]
+"plugin_cmds/cmd_decrypt.py" = ["C401", "C417", "PLR0917", "PLW0108", "Q000", "RUF005", "RUF100", "UP006", "UP007", "UP045", "W291", "W293"]
+"plugin_cmds/cmd_get-annotations.py" = ["F541", "I001"]
+"plugin_cmds/cmd_goodreads-transform.py" = ["D202", "D415", "G004", "I001", "W293"]
+"plugin_cmds/cmd_image-urls.py" = ["D415", "I001"]
+"plugin_cmds/cmd_listening-stats.py" = ["C416", "D403", "D415", "I001", "Q000", "UP034"]
+"plugin_cmds/convert_oa_cred.py" = ["A002", "C408", "D205", "D209", "D415", "I001", "Q000", "W291", "W293"]
+"pyi_entrypoint.py" = ["Q000"]
+"src/audible_cli/__init__.py" = ["RUF022", "UP009"]
+"src/audible_cli/__main__.py" = ["I001"]
+"src/audible_cli/_logging.py" = ["B028", "C408", "D205", "D209", "G004", "UP007", "UP045"]
+"src/audible_cli/cli.py" = ["C408", "D415", "I001"]
+"src/audible_cli/cmds/__init__.py" = ["D205", "D212", "D416", "I001"]
+"src/audible_cli/cmds/cmd_activation_bytes.py" = ["I001"]
+"src/audible_cli/cmds/cmd_api.py" = ["D415", "G004", "W291"]
+"src/audible_cli/cmds/cmd_download.py" = ["ASYNC240", "C901", "D403", "D415", "G004", "I001", "PLR0917", "PLR5501", "PLW0603", "PLW2901", "RUF010", "S101", "UP015"]
+"src/audible_cli/cmds/cmd_library.py" = ["D403", "D415", "I001"]
+"src/audible_cli/cmds/cmd_manage.py" = ["D403", "D415", "PLR0917"]
+"src/audible_cli/cmds/cmd_quickstart.py" = ["D415", "I001", "W291"]
+"src/audible_cli/cmds/cmd_wishlist.py" = ["D403", "D415", "G004", "I001", "Q000"]
+"src/audible_cli/config.py" = ["B904", "D202", "D415", "D416", "D417", "G004", "I001", "UP006", "UP007", "UP035", "UP045", "W291", "W293"]
+"src/audible_cli/constants.py" = ["UP006", "UP035"]
+"src/audible_cli/decorators.py" = ["B904", "D205", "D415", "F541", "G004", "I001", "RUF001", "UP035", "W293"]
+"src/audible_cli/downloader.py" = ["G004", "PGH004", "PLR0917", "RUF100", "UP006", "UP007", "UP015", "UP035", "UP045", "W293"]
+"src/audible_cli/exceptions.py" = ["D415", "UP032"]
+"src/audible_cli/models.py" = ["B904", "D202", "D205", "D415", "F541", "G004", "I001", "S101", "UP006", "UP007", "UP035", "UP045", "W291", "W293"]
+"src/audible_cli/plugins.py" = ["D200", "D201", "D202", "D205", "D212", "D415", "D416", "PGH004", "Q000", "RUF010", "RUF021", "RUF100", "UP007", "UP025", "UP031"]
+"src/audible_cli/utils.py" = ["D202", "G004", "I001", "PGH004", "PLR0917", "UP006", "UP007", "UP035", "UP045"]
+"utils/update_chapter_titles.py" = ["C408", "D205", "D212", "D415", "Q000", "S101", "W293"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -45,9 +45,7 @@ def run_queue(jobs, sim_jobs, ignore_errors, timeout=5.0):
         for i, job in enumerate(jobs):
             cmd_download.QUEUE.put_nowait((job, {"n": i}))
 
-        consumers = [
-            asyncio.create_task(consume(run)) for _ in range(sim_jobs)
-        ]
+        consumers = [asyncio.create_task(consume(run)) for _ in range(sim_jobs)]
         try:
             await asyncio.wait_for(cmd_download.QUEUE.join(), timeout=timeout)
         finally:
