@@ -54,7 +54,7 @@ async def cli(session, client, output):
         dialect="excel"
     )
 
-    logger.info(f"File saved to {output}")
+    logger.info("File saved to %s", output)
 
 
 def _prepare_library_for_export(library):
@@ -97,11 +97,12 @@ def _prepare_library_for_export(library):
         else:
             skipped_items += 1
 
-    logger.debug(f"ISBNs from API: {isbn_api_counter}")
-    logger.debug(f"ISBNs requested with isbntools: {isbn_counter}")
-    logger.debug(f"No result with isbntools: {isbn_no_result_counter}")
+    logger.debug("ISBNs from API: %s", isbn_api_counter)
+    logger.debug("ISBNs requested with isbntools: %s", isbn_counter)
+    logger.debug("No result with isbntools: %s", isbn_no_result_counter)
     logger.debug(
-        f"title skipped from file due to no ISBN or title not read: "
-        f"{skipped_items}")
+        "title skipped from file due to no ISBN or title not read: %s",
+        skipped_items
+    )
 
     return prepared_library

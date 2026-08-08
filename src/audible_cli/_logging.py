@@ -26,9 +26,7 @@ class AudibleCliLogHelper:
             obj.setLevel(level)
 
         level_name = logging.getLevelName(obj.level)
-        audible_cli_logger.info(
-            f"set log level for {obj.name} to: {level_name}"
-        )
+        audible_cli_logger.info("set log level for %s to: %s", obj.name, level_name)
 
         if 0 < obj.level < audible_cli_logger.level:
             warn(
@@ -65,7 +63,8 @@ class AudibleCliLogHelper:
         """Lets the logger capture warnings."""
         logging.captureWarnings(status)
         audible_cli_logger.info(
-            f"Capture warnings {'activated' if status else 'deactivated'}"
+            "Capture warnings %s",
+            "activated" if status else "deactivated"
         )
 
 
