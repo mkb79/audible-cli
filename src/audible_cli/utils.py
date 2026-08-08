@@ -116,7 +116,7 @@ def prompt_external_callback(url: str) -> str:
     # import readline to prevent issues when input URL in
     # CLI prompt when using macOS
     try:
-        import readline  # noqa
+        import readline  # noqa: F401, PLC0415
     except ImportError:
         pass
 
@@ -271,7 +271,7 @@ class Downloader:
         if not 200 <= status_code < 400:
             try:
                 msg = self._tmp_file.read_text()
-            except:  # noqa
+            except Exception:
                 msg = "Unknown"
             logger.error("Error downloading %s. Message: %s", self._file, msg)
             return False
@@ -293,7 +293,7 @@ class Downloader:
             if content_type not in self._expected_content_type:
                 try:
                     msg = self._tmp_file.read_text()
-                except:  # noqa
+                except Exception:
                     msg = "Unknown"
                 logger.error(
                     "Error downloading %s. Wrong content type. Expected type(s): %s; "

@@ -1,7 +1,8 @@
-"""Converts the credentials.json file from OpenAudible >= v2.4 beta to an
-audible-cli auth file. The credentials.json file from OpenAudible leaves
-unchanged, so you can use one device registration for OpenAudible and
-audible-cli.
+"""Convert an OpenAudible credentials.json file to an audible-cli auth file.
+
+Supports OpenAudible >= v2.4 beta. The credentials.json file from
+OpenAudible is left unchanged, so you can use one device registration for
+OpenAudible and audible-cli.
 """
 
 

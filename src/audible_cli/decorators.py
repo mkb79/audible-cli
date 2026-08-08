@@ -148,10 +148,10 @@ def password_option(func=None, **kwargs):
 
 
 def verbosity_option(func=None, *, cli_logger=None, **kwargs):
-    """A decorator that adds a `--verbosity, -v` option to the decorated
-    command.
-    Keyword arguments are passed to
-    the underlying ``click.option`` decorator.
+    """Add a `--verbosity, -v` option to the decorated command.
+
+    Keyword arguments are passed to the underlying ``click.option``
+    decorator.
     """
     def callback(ctx, param, value):
         x = getattr(logging, value.upper(), None)
@@ -227,7 +227,7 @@ def page_size_option(
     kwargs.setdefault(
         "help",
         (
-            "Number of items to request per API call (10–1000). Larger values "
+            "Number of items to request per API call (10-1000). Larger values "
             "reduce the number of requests but may cause timeouts or higher "
             "memory usage on slow connections. Tip: Use smaller values if you "
             "experience 408 timeouts or 429 rate limits."

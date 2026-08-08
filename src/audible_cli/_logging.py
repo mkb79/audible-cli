@@ -137,8 +137,10 @@ def _normalize_echo_kwargs(echo_kwargs):
 
 
 def click_basic_config(logger=None, style_kwargs=None, echo_kwargs=None):
-    """Set up the default handler (:py:class:`ClickHandler`) and formatter
-    (:py:class:`ColorFormatter`) on the given logger.
+    """Set up the default handler and formatter on the given logger.
+
+    The handler is :py:class:`ClickHandler`, the formatter
+    :py:class:`ColorFormatter`.
     """
     logger = _normalize_logger(logger)
     style_kwargs = _normalize_style_kwargs(style_kwargs)

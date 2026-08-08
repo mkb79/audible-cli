@@ -23,8 +23,7 @@ cli_cmds = [
 
 
 def build_in_cmds(func=None):
-    """A decorator to register build-in CLI commands to an instance of
-    `click.Group()`.
+    """Decorate a `click.Group()` to register the built-in CLI commands.
 
     Returns:
     -------

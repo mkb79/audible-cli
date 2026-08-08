@@ -173,8 +173,11 @@ class LibraryItem(BaseItem):
         return data.get("item", data)
 
     def _get_codec(self, quality: str):
-        """If quality is not ``best``, ensures the given quality is present in
-        them codecs list. Otherwise, will find the best aax quality available.
+        """Resolve the codec to download in.
+
+        If quality is not ``best``, ensures the given quality is present in
+        the codecs list. Otherwise, will find the best aax quality
+        available.
         """
         assert quality in ("best", "high", "normal",)
 
