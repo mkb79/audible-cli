@@ -158,7 +158,8 @@ class BaseItem:
             # item on absent evidence would silently drop it, so let the
             # download attempt itself decide.
             logger.debug(
-                f"{self.asin}: no publication date, assuming it is published."
+                "%s: no publication date, assuming it is published.",
+                self.asin
             )
             return True
 
@@ -206,11 +207,11 @@ class LibraryItem(BaseItem):
                         )
 
                 except ValueError:
-                    logger.warning(f"Unexpected codec name: {name}")
+                    logger.warning("Unexpected codec name: %s", name)
                     continue
 
         if verify is not None:
-            logger.info(f"{verify} codec was not found, using {best[0]} instead")
+            logger.info("%s codec was not found, using %s instead", verify, best[0])
 
         return best[0], best[3]
 
@@ -383,9 +384,11 @@ class LibraryItem(BaseItem):
                     rejection_reason = reason.get("rejectionReason", "UNKNOWN")
                     validation_type = reason.get("validationType", "UNKNOWN")
                     logger.debug(
-                        f"License denied message for {self.asin}: {message}."
-                        f"Reason: {rejection_reason}."
-                        f"Type: {validation_type}"
+                        "License denied message for %s: %s.Reason: %s.Type: %s",
+                        self.asin,
+                        message,
+                        rejection_reason,
+                        validation_type
                     )
 
             msg = content_license["message"]
@@ -402,11 +405,11 @@ class LibraryItem(BaseItem):
                     self._client.auth, lr
                 )
             except Exception:
-                logger.error(f"Decrypting voucher for  {self.asin} failed")
+                logger.error("Decrypting voucher for  %s failed", self.asin)
             else:
                 content_license["license_response"] = voucher
         else:
-            logger.error(f"No voucher for {self.asin} found")
+            logger.error("No voucher for %s found", self.asin)
 
         return lr
 
@@ -530,7 +533,9 @@ class Library(BaseList):
                 date_added = parse_api_datetime(library_status["date_added"])
             else:
                 logger.info(
-                    f"{item.asin}: {item.full_title} can not determine date added."
+                    "%s: %s can not determine date added.",
+                    item.asin,
+                    item.full_title
                 )
                 return True
 

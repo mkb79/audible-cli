@@ -105,4 +105,4 @@ def cli(session, **options):
         click.echo(r)
     else:
         output_filename.write_text(r)
-        logger.info(f"Output saved to {output_filename.resolve()}")
+        logger.info("Output saved to %s", output_filename.resolve())
