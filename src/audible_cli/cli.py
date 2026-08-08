@@ -22,7 +22,7 @@ from .exceptions import AudibleCliException
 logger = logging.getLogger("audible_cli")
 click_basic_config(logger)
 
-CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 
 @plugins.from_folder(get_plugin_dir())
@@ -42,7 +42,7 @@ def cli():
 @version_option
 @verbosity_option(cli_logger=logger)
 def quickstart(ctx):
-    """Entrypoint for the quickstart command"""
+    """Entrypoint for the quickstart command."""
     try:
         sys.exit(ctx.forward(cmd_quickstart.cli))
     except click.Abort:

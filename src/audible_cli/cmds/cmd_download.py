@@ -836,7 +836,7 @@ def display_counter():
 @pass_session
 @pass_client(headers=CLIENT_HEADERS)
 async def cli(session, api_client, **params):
-    """Download audiobook(s) from library"""
+    """Download audiobook(s) from library."""
     client = api_client.session
     output_dir = pathlib.Path(params.get("output_dir")).resolve()
 

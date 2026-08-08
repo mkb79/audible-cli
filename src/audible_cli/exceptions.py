@@ -5,19 +5,19 @@ from .utils import parse_api_datetime
 
 
 class AudibleCliException(Exception):
-    """Base class for all errors"""
+    """Base class for all errors."""
 
 
 class NotFoundError(AudibleCliException):
-    """Raised if an item is not found"""
+    """Raised if an item is not found."""
 
 
 class NotDownloadableAsAAX(AudibleCliException):
-    """Raised if an item is not downloadable in aax format"""
+    """Raised if an item is not downloadable in aax format."""
 
 
 class FileDoesNotExists(AudibleCliException):
-    """Raised if a file does not exist"""
+    """Raised if a file does not exist."""
 
     def __init__(self, file):
         if isinstance(file, Path):
@@ -28,7 +28,7 @@ class FileDoesNotExists(AudibleCliException):
 
 
 class DirectoryDoesNotExists(AudibleCliException):
-    """Raised if a directory does not exist"""
+    """Raised if a directory does not exist."""
 
     def __init__(self, path):
         if isinstance(path, Path):
@@ -39,7 +39,7 @@ class DirectoryDoesNotExists(AudibleCliException):
 
 
 class ProfileAlreadyExists(AudibleCliException):
-    """Raised if an item is not found"""
+    """Raised if an item is not found."""
 
     def __init__(self, name):
         message = f"Profile {name} already exist"
@@ -47,11 +47,11 @@ class ProfileAlreadyExists(AudibleCliException):
 
 
 class LicenseDenied(AudibleCliException):
-    """Raised if a license request is not granted"""
+    """Raised if a license request is not granted."""
 
 
 class NoDownloadUrl(AudibleCliException):
-    """Raised if a license response does not contain a download url"""
+    """Raised if a license response does not contain a download url."""
 
     def __init__(self, asin):
         message = f"License response for {asin} does not contain a download url"
@@ -59,7 +59,7 @@ class NoDownloadUrl(AudibleCliException):
 
 
 class DownloadUrlExpired(AudibleCliException):
-    """Raised if a download url is expired"""
+    """Raised if a download url is expired."""
 
     def __init__(self, lr_file):
         message = f"Download url in {lr_file} is expired."
@@ -67,7 +67,7 @@ class DownloadUrlExpired(AudibleCliException):
 
 
 class VoucherNeedRefresh(AudibleCliException):
-    """Raised if a voucher reached his refresh date"""
+    """Raised if a voucher reached his refresh date."""
 
     def __init__(self, lr_file):
         message = f"Refresh date for voucher {lr_file} reached."
@@ -75,7 +75,7 @@ class VoucherNeedRefresh(AudibleCliException):
 
 
 class ItemNotPublished(AudibleCliException):
-    """Raised if a voucher reached his refresh date"""
+    """Raised if a voucher reached his refresh date."""
 
     def __init__(self, asin: str, pub_date):
         # Never fail while building an error message. Without a usable
