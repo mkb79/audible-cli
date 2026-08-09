@@ -1,14 +1,17 @@
-name: Upload Python Package
+name: Upload Python Package to PyPI
 
 on:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   PYTHON_VERSION: "3.14"
 
 jobs:
   build-n-publish:
-    name: Build and publish Audible-cli to TestPyPI
+    name: Build and publish Audible-cli to PyPI
     runs-on: ubuntu-latest
 
     steps:
@@ -30,3 +33,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
+          # Named even though it is the default, so that this workflow and
+          # the TestPyPI one state their target the same way
+          repository-url: https://upload.pypi.org/legacy/
