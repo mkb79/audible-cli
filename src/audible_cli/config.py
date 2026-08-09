@@ -153,6 +153,8 @@ class ConfigFile:
             is_primary: If ``True``, this profile is set as primary in the
                 ``APP`` section
             write_config: If ``True``, save the config to file
+            **additional_options: Further key-value pairs stored verbatim in
+                the profile section
         """
         if self.has_profile(name):
             raise ProfileAlreadyExists(name)

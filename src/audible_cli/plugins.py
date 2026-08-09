@@ -1,5 +1,6 @@
-"""Core components for click_plugins
-https://github.com/click-contrib/click-plugins.
+"""Core components for click_plugins.
+
+See https://github.com/click-contrib/click-plugins.
 """
 import os
 import pathlib
@@ -11,8 +12,7 @@ import click
 
 
 def from_folder(plugin_dir: str | pathlib.Path):
-    """A decorator to register external CLI commands to an instance of
-    `click.Group()`.
+    """Decorate a `click.Group()` to register external CLI commands.
 
     Parameters
     ----------
@@ -60,8 +60,7 @@ def from_folder(plugin_dir: str | pathlib.Path):
 
 
 def from_entry_point(entry_point_group):
-    """A decorator to register external CLI commands to an instance of
-    `click.Group()`.
+    """Decorate a `click.Group()` to register external CLI commands.
 
     Parameters
     ----------
@@ -103,11 +102,13 @@ def from_entry_point(entry_point_group):
 
 
 class BrokenCommand(click.Command):
-    """Rather than completely crash the CLI when a broken plugin is loaded, this
-    class provides a modified help message informing the user that the plugin
-    is broken, and they should contact the owner. If the user executes the
-    plugin or specifies `--help` a traceback is reported showing the exception
-    the plugin loader encountered.
+    """Stand in for a plugin that failed to load.
+
+    Rather than completely crash the CLI when a broken plugin is loaded,
+    this class provides a modified help message informing the user that the
+    plugin is broken, and they should contact the owner. If the user
+    executes the plugin or specifies `--help` a traceback is reported
+    showing the exception the plugin loader encountered.
     """
 
     def __init__(self, name):
