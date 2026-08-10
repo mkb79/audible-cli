@@ -3,6 +3,9 @@ name: Upload Python Package to TestPyPI
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: "3.14"
 
@@ -10,7 +13,7 @@ jobs:
   build-n-publish:
     name: Build and publish Audible-cli to TestPyPI
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v7
 
@@ -26,8 +29,8 @@ jobs:
         run: |
           uv build
 
-      - name: Publish distribution to Test PyPI
+      - name: Publish distribution to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-          repository_url: https://test.pypi.org/legacy/
+          repository-url: https://test.pypi.org/legacy/
