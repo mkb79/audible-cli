@@ -139,7 +139,12 @@ class FFMeta:
         if not isinstance(api_meta, ApiMeta):
             api_meta = ApiMeta(api_meta)
 
-        assert api_meta.count_chapters() == self.count_chapters()
+        if api_meta.count_chapters() != self.count_chapters():
+            raise ValueError(
+                f"Chapter count mismatch: the api meta file has "
+                f"{api_meta.count_chapters()}, the ffmetadata file "
+                f"{self.count_chapters()}."
+            )
 
         echo(f"Found {self.count_chapters()} chapters to prepare.")
 

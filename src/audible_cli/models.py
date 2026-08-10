@@ -31,6 +31,12 @@ from .utils import (
 
 logger = logging.getLogger("audible_cli.models")
 
+# The download command restricts both through click.Choice, so a value outside
+# these reaches the item methods only from a plugin or another caller of the
+# API, which is why they answer with ValueError rather than a CLI error
+QUALITIES = ("best", "high", "normal")
+CHAPTER_TYPES = ("Flat", "Tree")
+
 
 class BaseItem:
     def __init__(
@@ -179,7 +185,8 @@ class LibraryItem(BaseItem):
         the codecs list. Otherwise, will find the best aax quality
         available.
         """
-        assert quality in ("best", "high", "normal",)
+        if quality not in QUALITIES:
+            raise ValueError(f"quality must be one of {QUALITIES}, not {quality!r}")
 
         # if available_codecs is None the item can't be downloaded as aax
         if self.available_codecs is None:
@@ -300,7 +307,7 @@ class LibraryItem(BaseItem):
         except Exception as e:
             raise AudibleCliException(
                 f"Can not get download url for asin {self.asin} with message {e}"
-            )
+            ) from e
 
         return httpx.URL(link), codec_name
 
@@ -353,7 +360,8 @@ class LibraryItem(BaseItem):
             quality: str = "high",
             response_groups: str | None = None
     ):
-        assert quality in ("best", "high", "normal",)
+        if quality not in QUALITIES:
+            raise ValueError(f"quality must be one of {QUALITIES}, not {quality!r}")
 
         if response_groups is None:
             response_groups = "last_position_heard, pdf_url, content_reference"
@@ -420,8 +428,12 @@ class LibraryItem(BaseItem):
         self, quality: str = "high", chapter_type: str = "Tree", **request_kwargs
     ):
         chapter_type = chapter_type.capitalize()
-        assert quality in ("best", "high", "normal",)
-        assert chapter_type in ("Flat", "Tree")
+        if quality not in QUALITIES:
+            raise ValueError(f"quality must be one of {QUALITIES}, not {quality!r}")
+        if chapter_type not in CHAPTER_TYPES:
+            raise ValueError(
+                f"chapter_type must be one of {CHAPTER_TYPES}, not {chapter_type!r}"
+            )
 
         url = f"content/{self.asin}/metadata"
         params = {

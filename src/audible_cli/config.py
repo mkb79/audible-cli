@@ -316,7 +316,9 @@ class Session:
                     hide_input=True,
                     default="")
                 if len(password) == 0:
-                    raise click.Abort()
+                    # Leaving the prompt empty is how the user asks to stop,
+                    # so the decryption error is not what caused the abort
+                    raise click.Abort() from None
 
         click_f = click.format_filename(auth_file, shorten=True)
         logger.debug("Auth file %s for profile %s loaded.", click_f, profile)
