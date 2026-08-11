@@ -10,8 +10,8 @@ import asyncio
 import pytest
 from helpers import FakeClient, library_item
 
-from audible_cli.cmds.cmd_download import cli as download_cli
-from audible_cli.models import CHAPTER_TYPES, QUALITIES, LibraryItem
+from audible_cli.constants import CLI_CHAPTER_TYPE_CONFIG, QUALITIES
+from audible_cli.models import LibraryItem, api_quality
 
 
 def sync(coro):
@@ -72,19 +72,44 @@ def test_get_codec_accepts_every_supported_quality(quality):
     assert item()._get_codec(quality) == (None, None)
 
 
-def choices_of(option_name):
-    param = next(p for p in download_cli.params if p.name == option_name)
-    return param.type.choices
+@pytest.mark.parametrize(
+    ("quality", "sent"),
+    [
+        # Spelled out rather than taken from the constants, so that changing a
+        # wire value has to be a deliberate edit here too
+        ("normal", "Normal"),
+        ("high", "High"),
+        # "best" never crosses the wire under that name
+        ("best", "High"),
+    ],
+)
+def test_quality_is_translated_for_the_api(quality, sent):
+    assert api_quality(quality) == sent
+
+    client = FakeClient()
+    item = LibraryItem(library_item("B00TEST01"), api_client=client)
+    sync(item.get_content_metadata(quality))
+    assert client.last_params["params"]["quality"] == sent
 
 
-def test_the_supported_qualities_are_the_ones_the_cli_offers():
-    # Guards against the two drifting apart. If --quality gains a value that
-    # the item methods then reject, the download command breaks on an option
-    # its own help advertises.
-    assert set(QUALITIES) == set(choices_of("quality"))
+def test_every_supported_quality_is_sent_as_high_or_normal():
+    # The set the API is given is smaller than the set the CLI offers, which
+    # is the whole reason api_quality exists
+    assert set(map(api_quality, QUALITIES)) == {"High", "Normal"}
 
 
-def test_the_supported_chapter_types_are_the_ones_the_cli_offers():
-    # "config" is resolved against the profile before any item method sees it,
-    # so it is the one choice that must not reach CHAPTER_TYPES.
-    assert set(CHAPTER_TYPES) == set(choices_of("chapter_type")) - {"config"}
+@pytest.mark.parametrize("quality", BAD_QUALITIES)
+def test_api_quality_refuses_what_it_cannot_translate(quality):
+    # It is reachable from a plugin without going through a method that
+    # validates first, so it has to refuse rather than fall back to a quality
+    # nobody asked for
+    with pytest.raises(ValueError, match="quality"):
+        api_quality(quality)
+
+
+def test_config_never_reaches_a_metadata_request():
+    # --chapter-type accepts it, but the download command resolves it against
+    # the profile first. Reaching an item method means that resolution was
+    # skipped, so it has to be refused rather than sent as a chapter style.
+    with pytest.raises(ValueError, match="chapter_type"):
+        sync(item().get_content_metadata("best", chapter_type=CLI_CHAPTER_TYPE_CONFIG))

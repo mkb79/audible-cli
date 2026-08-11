@@ -13,6 +13,7 @@ import questionary
 from audible.exceptions import NotFoundError
 from click import echo
 
+from ..constants import API_CHAPTER_TYPES, CLI_CHAPTER_TYPE_CONFIG, QUALITIES
 from ..decorators import (
     bunch_size_option,
     end_date_option,
@@ -740,7 +741,7 @@ def display_counter():
     "--quality", "-q",
     default="best",
     show_default=True,
-    type=click.Choice(["best", "high", "normal"]),
+    type=click.Choice(QUALITIES),
     help="download quality"
 )
 @click.option(
@@ -769,7 +770,9 @@ def display_counter():
 @click.option(
     "--chapter-type",
     default="config",
-    type=click.Choice(["Flat", "Tree", "config"], case_sensitive=False),
+    type=click.Choice(
+        [*API_CHAPTER_TYPES, CLI_CHAPTER_TYPE_CONFIG], case_sensitive=False
+    ),
     help="The chapter type."
 )
 @click.option(
@@ -914,7 +917,7 @@ async def cli(session, api_client, **params):
         logger.info("Selected end date: %s", end_date.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
 
     chapter_type = params.get("chapter_type")
-    if chapter_type == "config":
+    if chapter_type == CLI_CHAPTER_TYPE_CONFIG:
         chapter_type = session.config.get_profile_option(
             session.selected_profile, "chapter_type") or "Tree"
 
