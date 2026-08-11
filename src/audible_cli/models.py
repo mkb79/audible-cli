@@ -13,7 +13,13 @@ import httpx
 from audible.aescipher import decrypt_voucher_from_licenserequest
 from audible.client import convert_response_content
 
-from .constants import CODEC_HIGH_QUALITY, CODEC_NORMAL_QUALITY
+from .constants import (
+    API_CHAPTER_TYPES,
+    CODEC_HIGH_QUALITY,
+    CODEC_NORMAL_QUALITY,
+    QUALITIES,
+    QUALITY_TO_API,
+)
 from .exceptions import (
     AudibleCliException,
     ItemNotPublished,
@@ -31,11 +37,27 @@ from .utils import (
 
 logger = logging.getLogger("audible_cli.models")
 
-# The download command restricts both through click.Choice, so a value outside
-# these reaches the item methods only from a plugin or another caller of the
-# API, which is why they answer with ValueError rather than a CLI error
-QUALITIES = ("best", "high", "normal")
-CHAPTER_TYPES = ("Flat", "Tree")
+
+def api_quality(quality: str) -> str:
+    """Return what a request sends for this `--quality` value.
+
+    "best" is not sent under that name. On the aax path it selects the best
+    entry from the item's `available_codecs`, in `LibraryItem._get_codec`,
+    while the request goes out as High. An aaxc download does not go through
+    that selection for its format at all and takes it from the license
+    response.
+
+    Raises:
+        ValueError: if `quality` is not one of `QUALITIES`. Refusing beats
+            guessing, because either fallback would silently request a quality
+            the caller never asked for.
+    """
+    try:
+        return QUALITY_TO_API[quality]
+    except (KeyError, TypeError):
+        raise ValueError(
+            f"quality must be one of {QUALITIES}, not {quality!r}"
+        ) from None
 
 
 class BaseItem:
@@ -368,7 +390,7 @@ class LibraryItem(BaseItem):
 
         body = {
             "supported_drm_types": ["Mpeg", "Adrm"],
-            "quality": "High" if quality in ("best", "high") else "Normal",
+            "quality": api_quality(quality),
             "consumption_type": "Download",
             "response_groups": response_groups
         }
@@ -430,16 +452,16 @@ class LibraryItem(BaseItem):
         chapter_type = chapter_type.capitalize()
         if quality not in QUALITIES:
             raise ValueError(f"quality must be one of {QUALITIES}, not {quality!r}")
-        if chapter_type not in CHAPTER_TYPES:
+        if chapter_type not in API_CHAPTER_TYPES:
             raise ValueError(
-                f"chapter_type must be one of {CHAPTER_TYPES}, not {chapter_type!r}"
+                f"chapter_type must be one of {API_CHAPTER_TYPES}, not {chapter_type!r}"
             )
 
         url = f"content/{self.asin}/metadata"
         params = {
             "response_groups": "last_position_heard, content_reference, "
                                "chapter_info",
-            "quality": "High" if quality in ("best", "high") else "Normal",
+            "quality": api_quality(quality),
             "drm_type": "Adrm",
             "chapter_titles_type": chapter_type,
             **request_kwargs
