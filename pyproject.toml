@@ -195,14 +195,10 @@ lines-after-imports = 2
 # individual findings. Shrink the list by fixing a rule in a file and
 # dropping its code here.
 "plugin_cmds/cmd_decrypt.py" = ["PLR0917"]
-"src/audible_cli/cmds/cmd_download.py" = ["ASYNC240", "C901", "PLR0917", "PLW0603", "PLW2901", "S101"]
+"src/audible_cli/cmds/cmd_download.py" = ["ASYNC240", "C901", "PLR0917", "PLW0603", "PLW2901"]
 "src/audible_cli/cmds/cmd_manage.py" = ["PLR0917"]
-"src/audible_cli/config.py" = ["B904"]
-"src/audible_cli/decorators.py" = ["B904"]
 "src/audible_cli/downloader.py" = ["PLR0917"]
-"src/audible_cli/models.py" = ["B904", "S101"]
 "src/audible_cli/utils.py" = ["PLR0917"]
-"utils/update_chapter_titles.py" = ["S101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

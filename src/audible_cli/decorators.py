@@ -85,7 +85,7 @@ def version_option(func=None, **kwargs):
             response.raise_for_status()
         except Exception as e:
             logger.error(e)
-            raise click.Abort()
+            raise click.Abort() from e
 
         content = response.json()
 

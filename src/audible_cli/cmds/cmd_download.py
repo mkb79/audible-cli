@@ -27,6 +27,7 @@ from ..exceptions import (
     AudibleCliException,
     DirectoryDoesNotExists,
     DownloadUrlExpired,
+    LicenseDenied,
     NotDownloadableAsAAX,
     VoucherNeedRefresh,
 )
@@ -358,7 +359,9 @@ async def _reuse_voucher(lr_file, item):
     lr = json.loads(lr)
     content_license = lr["content_license"]
 
-    assert content_license["status_code"] == "Granted", "License not granted"
+    status_code = content_license["status_code"]
+    if status_code != "Granted":
+        raise LicenseDenied(f"License in {lr_file} is not granted: {status_code}")
 
     # try to get the user id
     user_id = None
