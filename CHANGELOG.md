@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - `build_auth_file()` no longer raises an `AttributeError` when its `filename` is passed as a `str`, which its signature allows. The failure happened after the login had already registered the device, so the registration was lost without the auth file being written
 - The `convert-oa-file` plugin works again. It has failed to even load since v0.2 because it imported `pass_session` from the wrong module, and behind that sat a tuple passed to `pathlib.Path()`, a call to a `Session` method that does not exist, an expiry read as seconds although OpenAudible writes milliseconds, a `KeyError` on cookie fields that are optional, and a profile name from the converted file that could write outside the config directory
+- The size of a finished audiobook download is checked again. The check existed but nothing ever called it, so a file that arrived at a different length than announced was renamed to its final name and counted as a success. Covers and PDFs take the older download path and were never affected
 
 ## [0.5.0] - 2026-08-05
 
