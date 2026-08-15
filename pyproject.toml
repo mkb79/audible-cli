@@ -42,6 +42,12 @@ documentation = "https://audible-cli.readthedocs.io/"
 cryptography = [
     "audible[cryptography]>=0.11.0",
 ]
+# For platforms cryptography publishes no wheel for, currently Windows on
+# arm64. Same job, different implementation, both faster than the pure
+# Python fallback.
+pycryptodome = [
+    "audible[pycryptodome]>=0.11.0",
+]
 
 [project.urls]
 Changelog = "https://github.com/mkb79/audible-cli/releases"
