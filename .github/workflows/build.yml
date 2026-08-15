@@ -88,6 +88,12 @@ jobs:
 
     - name: Install uv
       uses: astral-sh/setup-uv@v9.0.0
+      with:
+        # A cache saved under one tag is not readable from another, and this
+        # workflow only ever runs on a tag, so it would upload caches no later
+        # release can reuse. The duplicate macOS and Windows jobs can also race
+        # for the one key they share.
+        enable-cache: false
 
     - name: Build with pyinstaller for ${{matrix.TARGET}}
       run: ${{matrix.CMD_BUILD}}
