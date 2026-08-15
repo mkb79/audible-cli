@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+  # Lets the build be exercised without cutting a release. A dispatched run
+  # works the matrix and keeps what it produced as workflow artifacts; it
+  # never touches a release. Everything that writes to a release asks for
+  # both the push event and a v-tag ref: the event alone would let a future
+  # branch push through, the ref alone would let a dispatch aimed at a tag
+  # publish one.
+  workflow_dispatch:
 
 # Required by action-gh-release to create, upload to and publish the release
 permissions:
@@ -15,6 +22,7 @@ env:
 jobs:
   create_release:
     name: Create Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
     - name: Create draft release
@@ -32,6 +40,9 @@ jobs:
   build:
     name: Build packages
     needs: create_release
+    # A skipped dependency would skip this too, so spell out that a skip is
+    # acceptable while a failure or a cancellation is not
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -89,10 +100,10 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@v9.0.0
       with:
-        # A cache saved under one tag is not readable from another, and this
-        # workflow only ever runs on a tag, so it would upload caches no later
-        # release can reuse. The duplicate macOS and Windows jobs can also race
-        # for the one key they share.
+        # A cache saved under one tag is not readable from another, and a
+        # release only ever runs from a tag, so it would upload caches no
+        # later release can reuse. The duplicate macOS and Windows jobs can
+        # also race for the one key they share.
         enable-cache: false
 
     - name: Build with pyinstaller for ${{matrix.TARGET}}
@@ -100,6 +111,7 @@ jobs:
 
     - name: Upload Release Asset
       id: upload-release-asset
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v3
       with:
         files: ./dist/${{ matrix.OUT_FILE_NAME}}
@@ -111,11 +123,20 @@ jobs:
         # from swapping good assets for ones no build step has verified.
         overwrite_files: false
 
+    - name: Keep the build for inspection
+      if: github.event_name == 'workflow_dispatch'
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ matrix.OUT_FILE_NAME }}
+        path: ./dist/${{ matrix.OUT_FILE_NAME }}
+        if-no-files-found: error
+
   publish_release:
     name: Publish Release
     # Only reached when all six builds succeeded, so a failed matrix leaves
     # the draft behind instead of a public release with missing assets
     needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
     - name: Publish the draft release
