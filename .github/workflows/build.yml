@@ -54,6 +54,7 @@ jobs:
                 cd dist/ &&
                 zip -r9 audible_linux_ubuntu_latest audible
             OUT_FILE_NAME: audible_linux_ubuntu_latest.zip
+            EXE: dist/audible
           - os: ubuntu-22.04
             TARGET: linux
             CMD_BUILD: >
@@ -61,6 +62,7 @@ jobs:
                 cd dist/ &&
                 zip -r9 audible_linux_ubuntu_22_04 audible
             OUT_FILE_NAME: audible_linux_ubuntu_22_04.zip
+            EXE: dist/audible
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
@@ -68,6 +70,7 @@ jobs:
                 cd dist/ &&
                 zip -r9 audible_mac audible
             OUT_FILE_NAME: audible_mac.zip
+            EXE: dist/audible
           - os: macos-latest
             TARGET: macos
             CMD_BUILD: >
@@ -75,6 +78,7 @@ jobs:
                 cd dist/ &&
                 zip -r9 audible_mac_dir audible
             OUT_FILE_NAME: audible_mac_dir.zip
+            EXE: dist/audible/audible
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
@@ -82,6 +86,7 @@ jobs:
                 cd dist/ &&
                 powershell Compress-Archive audible audible_win_dir.zip
             OUT_FILE_NAME: audible_win_dir.zip
+            EXE: dist/audible/audible.exe
           - os: windows-latest
             TARGET: windows
             CMD_BUILD: >
@@ -89,6 +94,7 @@ jobs:
                 cd dist/ &&
                 powershell Compress-Archive audible.exe audible_win.zip
             OUT_FILE_NAME: audible_win.zip
+            EXE: dist/audible.exe
     steps:
     - uses: actions/checkout@v7
 
@@ -108,6 +114,17 @@ jobs:
 
     - name: Build with pyinstaller for ${{matrix.TARGET}}
       run: ${{matrix.CMD_BUILD}}
+
+    # Nothing here ever started the thing it ships. A build that cannot run
+    # on the machine that produced it has no business reaching a release,
+    # and that is the failure a new runner or architecture produces first.
+    - name: Check that the build runs
+      shell: bash
+      run: |
+        set -euo pipefail
+        out=$("${{ matrix.EXE }}" --help)
+        printf '%s\n' "$out"
+        grep -q '^Usage: audible' <<<"$out"
 
     - name: Upload Release Asset
       id: upload-release-asset
