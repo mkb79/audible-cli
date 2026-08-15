@@ -18,6 +18,7 @@ logger = logging.getLogger("audible_cli.downloader")
 
 ACCEPT_RANGES_HEADER = "Accept-Ranges"
 ACCEPT_RANGES_NONE_VALUE = "none"
+CONTENT_ENCODING_HEADER = "Content-Encoding"
 CONTENT_LENGTH_HEADER = "Content-Length"
 CONTENT_TYPE_HEADER = "Content-Type"
 MAX_FILE_READ_SIZE = 3 * 1024 * 1024
@@ -170,9 +171,30 @@ async def check_target_file_status(
     return Status.Success
 
 
+def _is_content_encoded(response: ResponseInfo | None) -> bool:
+    if response is None:
+        return False
+    encoding = response.headers.get(CONTENT_ENCODING_HEADER, "")
+    return encoding.strip().lower() not in ("", "identity")
+
+
 async def check_download_size(
-    tmp_file: File, target_file: File, head_response: ResponseInfo, **kwargs: Any
+    tmp_file: File,
+    target_file: File,
+    head_response: ResponseInfo,
+    response: ResponseInfo | None = None,
+    **kwargs: Any
 ) -> Status:
+    """Compare what landed on disk with the length that was announced.
+
+    Skipped for an encoded transfer: Content-Length may then describe the
+    encoded bytes while what reaches the file may have been decoded on the
+    way, so the two are not reliably comparable and the comparison could
+    reject a sound download.
+    """
+    if _is_content_encoded(head_response) or _is_content_encoded(response):
+        return Status.Success
+
     tmp_file_size = await tmp_file.get_size()
     content_length = head_response.content_length
 
@@ -185,7 +207,7 @@ async def check_download_size(
                 content_length,
                 tmp_file_size
             )
-        return Status.DownloadSizeMismatch
+            return Status.DownloadSizeMismatch
 
     return Status.Success
 
@@ -393,6 +415,7 @@ class Downloader:
             response=response,
             tmp_file=tmp_file,
             target_file=target_file,
+            head_response=head_response,
             expected_types=expected_types
         )
         if status != Status.Success:
@@ -412,11 +435,14 @@ class Downloader:
     ) -> DownloadResult:
         head_response = await self.get_head_response()
 
+        # Order matters. A text response is reported by its own message
+        # before anything measures it, and the size is only worth comparing
+        # once the response looked like the file we asked for.
         status_checks = [
             check_status_for_message,
             check_status_code,
-            check_status_code,
-            check_content_type
+            check_content_type,
+            check_download_size
         ]
         for check in status_checks:
             result = await self._check_and_return_download_result(
