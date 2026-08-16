@@ -13,7 +13,13 @@ import questionary
 from audible.exceptions import NotFoundError
 from click import echo
 
-from ..constants import API_CHAPTER_TYPES, CLI_CHAPTER_TYPE_CONFIG, QUALITIES
+from ..constants import (
+    AAX_CONTENT_TYPES,
+    AAXC_CONTENT_TYPES,
+    API_CHAPTER_TYPES,
+    CLI_CHAPTER_TYPE_CONFIG,
+    QUALITIES,
+)
 from ..decorators import (
     bunch_size_option,
     end_date_option,
@@ -327,9 +333,7 @@ async def download_aax(
     dl = NewDownloader(
         source=url,
         client=client,
-        expected_types=[
-            "audio/aax", "audio/vnd.audible.aax", "audio/audible", "audio/mp4"
-        ]
+        expected_types=list(AAX_CONTENT_TYPES)
     )
     downloaded = await dl.run(target=filepath, force_reload=overwrite_existing)
 
@@ -469,10 +473,7 @@ async def download_aaxc(
     dl = NewDownloader(
         source=url,
         client=client,
-        expected_types=[
-            "audio/aax", "audio/vnd.audible.aax", "audio/mpeg", "audio/x-m4a",
-            "audio/audible", "audio/mp4"
-        ],
+        expected_types=list(AAXC_CONTENT_TYPES),
     )
     downloaded = await dl.run(target=filepath, force_reload=overwrite_existing)
 

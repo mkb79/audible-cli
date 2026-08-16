@@ -223,6 +223,20 @@ async def check_status_code(
     return Status.Success
 
 
+def _media_type(content_type: str | None) -> str | None:
+    """Everything before the first semicolon, trimmed and lowercased.
+
+    Parameters and casing are the server's to choose, and `audio/mpeg` and
+    `Audio/MPEG; charset=binary` name the same thing, so comparing the
+    header as it arrived turns that into a rejected download. This does not
+    validate the syntax: an empty header and one that is only parameters
+    both come back empty, and a missing one stays None.
+    """
+    if content_type is None:
+        return None
+    return content_type.split(";")[0].strip().lower()
+
+
 async def check_content_type(
     response: ResponseInfo, target_file: File, tmp_file: File,
     expected_types: list[str], **kwargs: Any
@@ -230,7 +244,11 @@ async def check_content_type(
     if not expected_types:
         return Status.Success
 
-    if response.content_type not in expected_types:
+    accepted = {m for m in map(_media_type, expected_types) if m}
+    media_type = _media_type(response.content_type)
+    # A header that is absent or names nothing matches nothing, whatever a
+    # caller may have put in its list
+    if not media_type or media_type not in accepted:
         content = await tmp_file.read_text_content()
         logger.error(
             "Error downloading %s. Wrong content type. Expected type(s): %s; Got: %s; "
@@ -254,7 +272,7 @@ def _status_for_message(message: str) -> Status:
 async def check_status_for_message(
     response: ResponseInfo, tmp_file: File, **kwargs: Any
 ) -> Status:
-    if response.content_type and "text" in response.content_type:
+    if "text" in (_media_type(response.content_type) or ""):
         length = response.content_length or await tmp_file.get_size()
         if length <= MAX_FILE_READ_SIZE:
             message = await tmp_file.read_text_content()

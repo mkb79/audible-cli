@@ -41,6 +41,33 @@ QUALITIES: tuple[str, ...] = tuple(QUALITY_TO_API)
 API_CHAPTER_TYPES: tuple[str, ...] = ("Flat", "Tree")
 CLI_CHAPTER_TYPE_CONFIG: str = "config"
 
+# What a finished audio download is allowed to have arrived as. The paths
+# differ on purpose: AAX always writes `.aax` because the codec is part of
+# the request, while AAXC takes its format from the license and writes
+# `.mp3` for MPEG.
+#
+# Asked for a title it cannot serve — a podcast episode, say — the AAX
+# service still answers 302, and behind it sits HTTP 200 with no
+# Content-Length and `File Assembly error: Invalid Audio Format.` as
+# `text/html`. Measured for every codec, `mp3` included. No other check
+# objects to that, so this list is the only thing between an error page and
+# a `.aax` file counted as a success.
+AAX_CONTENT_TYPES: tuple[str, ...] = (
+    "audio/aax",
+    "audio/vnd.audible.aax",
+    "audio/audible",
+    "audio/mp4",
+)
+
+# Audible announces the same MP3 episode as the registered `audio/mpeg` or
+# as the unregistered `audio/mp3`, so both have to be listed.
+AAXC_CONTENT_TYPES: tuple[str, ...] = (
+    *AAX_CONTENT_TYPES,
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/x-m4a",
+)
+
 AVAILABLE_MARKETPLACES = [
     market["country_code"] for market in LOCALE_TEMPLATES.values()
 ]
