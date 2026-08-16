@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- AAXC downloads of podcast episodes are no longer rejected solely because Audible labels the payload `audio/mp3`. That is not a registered media type and was not in the accepted list, so the download failed with "Wrong content type" after the file had already been fetched. The AAX path keeps its own, narrower list: it always writes a `.aax` file because the codec is part of the request, so accepting an MP3 there would store it under the wrong name
+- The content type is now compared by its media type, so parameters and casing no longer decide the outcome. A title that has to be fetched in parts is also recognised again when its `Content-Type` is capitalised, which sent it to the wrong branch and reported a type mismatch instead
+
 ### Added
 
 - Standalone builds for arm64 on Linux and Windows, alongside the existing x86_64 ones. macOS was already Apple silicon only and stays that way; on an Intel Mac install from PyPI instead
