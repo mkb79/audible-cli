@@ -103,11 +103,24 @@ Without the extra, audible-cli still works using the pure-Python fallback.
 Don’t want to install Python?  
 Prebuilt binaries are available on the [releases page](https://github.com/mkb79/audible-cli/releases).
 
-> ℹ️ The prebuilt binaries already **bundle the Rust-accelerated `cryptography` backend** (statically linked, no extra setup) — so cryptographic operations are fast out of the box.
+> ℹ️ The prebuilt binaries bundle an accelerated crypto backend, with no
+> extra setup — the Rust-based `cryptography` everywhere except Windows on
+> arm64, which uses `pycryptodome` because `cryptography` publishes no wheel
+> for it. Either way you are not on the slow pure-Python fallback.
 
-- **Windows:** [onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win_dir.zip) (recommended), [onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win.zip)  
-- **Linux:** [Ubuntu 22.04](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_22_04.zip), [latest](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_latest.zip)  
-- **macOS:** [onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac.zip), [onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac_dir.zip)  
+**Windows** — [x86_64 onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win_x86_64_dir.zip) (recommended), [x86_64 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win_x86_64.zip)  
+Also on ARM: [arm64 onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win_arm64_dir.zip), [arm64 onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_win_arm64.zip)
+
+**macOS** — Apple silicon only: [onefile](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac_arm64.zip), [onedir](https://github.com/mkb79/audible-cli/releases/latest/download/audible_mac_arm64_dir.zip)  
+On an Intel Mac, install from PyPI instead: `pipx install audible-cli`
+
+**Linux** — take these: [x86_64](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_22_04_x86_64.zip), [arm64](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_22_04_arm64.zip)  
+Built on Ubuntu 22.04, so they need glibc 2.35 — Ubuntu 22.04, Debian 12, RHEL 9 and anything newer.  
+There are also builds on a 24.04 base ([x86_64](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_24_04_x86_64.zip), [arm64](https://github.com/mkb79/audible-cli/releases/latest/download/audible_linux_ubuntu_24_04_arm64.zip)). They need glibc 2.38 and so reach fewer systems; take one only if you have a reason to.
+
+> ℹ️ The download names now carry the architecture. The old names without one
+> (`audible_mac.zip`, `audible_win.zip` and the rest) are still published
+> alongside and will be dropped after 15 November 2026.
 
 ⚠️ *On Windows, prefer the **onedir** build for faster startup.*
 

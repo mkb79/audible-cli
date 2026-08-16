@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+
+- Standalone builds for arm64 on Linux and Windows, alongside the existing x86_64 ones. macOS was already Apple silicon only and stays that way; on an Intel Mac install from PyPI instead
+- The download names now carry the architecture, for example `audible_win_x86_64.zip` and `audible_win_arm64.zip`. The Linux build that was named `latest` now names the Ubuntu release it is built on, 24.04, because the runner is pinned to it. The previous names are published alongside the new ones and will be dropped after 15 November 2026, so existing download links keep working until then
+- A `pycryptodome` extra, used by the Windows arm64 build because `cryptography` publishes no wheel for that platform. Both are accelerated; only the implementation differs
+
 ## [0.5.1] - 2026-08-15
 
 ### Fixed
