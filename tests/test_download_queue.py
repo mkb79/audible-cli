@@ -4,12 +4,15 @@ Covers the deadlock from #235/#239, where a failing job killed its consumer
 and QUEUE.join() then waited forever, and the exit code from #256.
 """
 
+import ast
 import asyncio
+import inspect
 import logging
 
 import httpx
 import pytest
 
+from audible_cli import progress
 from audible_cli.cmds import cmd_download
 from audible_cli.cmds.cmd_download import DownloadRun, consume, drain_queue
 from audible_cli.exceptions import AudibleCliException
@@ -213,3 +216,121 @@ def test_a_failure_says_which_job_it_was(caplog):
     assert "Die Hand von Thrawn" in line, "and by name"
     assert "RemoteProtocolError" in line, "and what actually went wrong"
     assert "Server disconnected" in line
+
+
+# --- what the running total sees while the queue drains -------------------
+
+
+class RecordingSummary:
+    """Stands in for the dock's summary line and just counts."""
+
+    def __init__(self):
+        self.done = 0
+        self.total = 0
+
+    def advance(self, n=1):
+        self.done += n
+
+    def grow(self, n=1):
+        self.total += n
+
+
+@pytest.fixture
+def summary(monkeypatch):
+    """Publish a summary the real consumers will find."""
+    recorder = RecordingSummary()
+    monkeypatch.setattr(progress._current, "summary", recorder, raising=False)
+    return recorder
+
+
+@pytest.mark.parametrize(
+    ("jobs", "ignore_errors"),
+    [
+        ([good, good, good], False),
+        ([bad, good, good], True),  # a failure is still one job handled
+        ([bad, good, good], False),  # and so is one skipped after the abort
+    ],
+)
+def test_every_queue_entry_is_counted_once(summary, jobs, ignore_errors):
+    # The count answers "how much of the queue is behind us", so it has to
+    # move for jobs that ran, failed, and were skipped alike. Without the
+    # call in consume()'s finally this stays at zero.
+    run_queue(jobs, sim_jobs=2, ignore_errors=ignore_errors)
+
+    assert summary.done == len(jobs)
+
+
+def test_a_job_queued_while_draining_grows_the_total(summary):
+    # A book that comes in parts adds its jobs after the total was taken.
+    # Counting them without growing the total runs the display past 100%.
+    async def spawns_two(n):
+        for child in range(2):
+            cmd_download.enqueue(good, {"n": f"{n}.{child}"})
+
+    run_queue([spawns_two], sim_jobs=2, ignore_errors=False)
+
+    assert summary.done == 3, "the parent and both of its parts"
+    assert summary.total == 2, "the two parts were not in the original count"
+
+
+class FakeItem:
+    def create_base_filename(self, mode, length):
+        return "a-title"
+
+
+def queue_one_pdf():
+    """Put exactly one job on the queue through the real queue_job()."""
+    cmd_download.queue_job(
+        get_cover=False,
+        get_pdf=True,
+        get_annotation=False,
+        get_chapters=False,
+        get_aax=False,
+        get_aaxc=False,
+        client=None,
+        output_dir="/nowhere",
+        filename_mode="config",
+        filename_length=230,
+        item=FakeItem(),
+        cover_sizes=[],
+        chapter_type="Tree",
+        quality="best",
+        overwrite_existing=False,
+        aax_fallback=False,
+    )
+
+
+def test_queueing_a_job_the_real_way_grows_the_total(summary, monkeypatch):
+    # Not `enqueue()` directly: the point is that the production path goes
+    # through it. Calling put_nowait anywhere else would leave the running
+    # total short by exactly the jobs that took the shortcut.
+    monkeypatch.setattr(cmd_download, "QUEUE", asyncio.Queue())
+
+    queue_one_pdf()
+
+    assert cmd_download.QUEUE.qsize() == 1
+    assert summary.total == 1, "the queued job was not counted"
+
+
+def test_nothing_reaches_the_queue_behind_the_counter():
+    """Every put has to go through `enqueue`, which is what counts it.
+
+    Read from the syntax tree because the miscount is invisible at runtime
+    until a title comes in parts: a bare `put_nowait` elsewhere still
+    queues the work, it just never shows up in the denominator.
+    """
+    tree = ast.parse(inspect.getsource(cmd_download))
+    outside = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        for call in ast.walk(node):
+            if (
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "put_nowait"
+                and node.name != "enqueue"
+            ):
+                outside.append(f"{node.name}:{call.lineno}")
+
+    assert outside == [], f"queue puts that bypass enqueue(): {outside}"

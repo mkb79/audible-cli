@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - AAXC downloads of podcast episodes are no longer rejected over their `audio/mp3` content type (#297)
 - The content type is compared by its media type, so parameters and casing no longer decide the outcome (#297)
 
+### Changed
+
+- Progress bars now hold their line: one numbered line per worker at the bottom of the terminal plus one for the queue, released when the window is too small and turned off with `--no-progress`
+
 ### Added
 
 - Standalone builds for arm64 on Linux and Windows; the macOS build stays Apple silicon only (#296)

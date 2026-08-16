@@ -11,6 +11,8 @@ import httpx
 import tqdm
 from aiofiles.os import path, unlink
 
+from .progress import DockedProgressBar, progress_disabled, take_progressbar
+
 
 FileMode = Literal["ab", "wb"]
 
@@ -299,20 +301,36 @@ class DummyProgressBar:
     def update(self, *args, **kwargs):
         pass
 
+    def close(self):
+        # Callers release a bar by closing it, and a bar that shows nothing
+        # still has to accept that
+        pass
+
 
 def get_progressbar(
     destination: pathlib.Path, total: int | None, start: int = 0
-) -> tqdm.tqdm | DummyProgressBar:
-    if total is None:
+) -> tqdm.tqdm | DockedProgressBar | DummyProgressBar:
+    if total is None or progress_disabled():
         return DummyProgressBar()
 
+    docked = take_progressbar(destination, total=total, start=start)
+    if docked is not None:
+        return docked
+
+    # No row from the dock: no terminal, one too short or without cursor
+    # control, a Windows console that will not take escape sequences, or more
+    # downloads at once than rows were reserved for. This bar is placed the
+    # old way and still drifts with the log output, but `leave=False` keeps
+    # finished bars from piling up between the log lines, which is where they
+    # used to be drawn over each other.
     description = click.format_filename(destination, shorten=True)
     progressbar = tqdm.tqdm(
         desc=description,
         total=total,
         unit="B",
         unit_scale=True,
-        unit_divisor=1024
+        unit_divisor=1024,
+        leave=False
     )
     if start > 0:
         progressbar.update(start)
@@ -490,7 +508,7 @@ class Downloader:
         tmp_file: File,
         target_file: File,
         start: int,
-        progressbar: tqdm.tqdm | DummyProgressBar,
+        progressbar: tqdm.tqdm | DockedProgressBar | DummyProgressBar,
         force_reload: bool = True
     ) -> DownloadResult:
         headers = self._additional_headers.copy()
@@ -595,6 +613,11 @@ class Downloader:
                     force_reload=force_reload
                 )
         finally:
+            if progressbar is not None:
+                # Its own `with` only covers a stream that opened. Failing
+                # before that would keep the reserved row for good, and
+                # enough failures would leave later downloads without one.
+                progressbar.close()
             await self._handle_tmp_file(
                 tmp_file=tmp_file,
                 supports_resume=supports_resume,

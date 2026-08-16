@@ -24,6 +24,7 @@ from click import echo, prompt, secho
 from PIL import Image
 
 from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
+from .progress import progress_disabled, take_progressbar
 
 
 logger = logging.getLogger("audible_cli.utils")
@@ -286,6 +287,11 @@ class DummyProgressBar:
     def update(self, *args, **kwargs):
         pass
 
+    def close(self):
+        # Callers release a bar by closing it, and a bar that shows nothing
+        # still has to accept that
+        pass
+
 
 class Downloader:
     def __init__(
@@ -307,12 +313,24 @@ class Downloader:
         self._expected_content_type = content_type
 
     def _progressbar(self, total: int):
+        if progress_disabled():
+            return DummyProgressBar()
+
+        docked = take_progressbar(self._file, total=total)
+        if docked is not None:
+            return docked
+
+        # Placed the old way, so it still drifts with the log output.
+        # `leave=False` at least keeps a finished bar from staying between
+        # the log lines, which is where concurrent bars used to be drawn
+        # over each other.
         return tqdm.tqdm(
             desc=click.format_filename(self._file, shorten=True),
             total=total,
             unit="B",
             unit_scale=True,
-            unit_divisor=1024
+            unit_divisor=1024,
+            leave=False
         )
 
     def _file_okay(self):

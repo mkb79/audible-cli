@@ -40,6 +40,7 @@ from ..exceptions import (
     VoucherNeedRefresh,
 )
 from ..models import Library
+from ..progress import advance_summary, docked_progress, grow_summary_total
 from ..utils import Downloader, datetime_type
 
 
@@ -170,6 +171,17 @@ class DownloadCounter:
 
 
 counter = DownloadCounter()
+
+
+def enqueue(cmd, kwargs) -> None:
+    """Put one job on the queue and let the running total know.
+
+    A book that has to be fetched in parts discovers its jobs while the
+    queue is already draining, so the total taken at the start would be
+    short by exactly those.
+    """
+    QUEUE.put_nowait((cmd, kwargs))
+    grow_summary_total()
 
 
 async def download_cover(
@@ -591,6 +603,10 @@ async def consume(run: DownloadRun):
             )
             run.record(e)
         finally:
+            # Counted whether it ran, failed or was skipped after an abort:
+            # the summary tracks how much of the queue is behind us, not how
+            # much of it succeeded.
+            advance_summary()
             QUEUE.task_done()
 
 
@@ -661,7 +677,7 @@ def queue_job(
                 "res": cover_size,
                 "overwrite_existing": overwrite_existing
             }
-            QUEUE.put_nowait((cmd, kwargs))
+            enqueue(cmd, kwargs)
 
     if get_pdf:
         cmd = download_pdf
@@ -672,7 +688,7 @@ def queue_job(
             "item": item,
             "overwrite_existing": overwrite_existing
         }
-        QUEUE.put_nowait((cmd, kwargs))
+        enqueue(cmd, kwargs)
 
     if get_chapters:
         cmd = download_chapters
@@ -684,7 +700,7 @@ def queue_job(
             "overwrite_existing": overwrite_existing,
             "chapter_type": chapter_type
         }
-        QUEUE.put_nowait((cmd, kwargs))
+        enqueue(cmd, kwargs)
 
     if get_annotation:
         cmd = download_annotations
@@ -694,7 +710,7 @@ def queue_job(
             "item": item,
             "overwrite_existing": overwrite_existing
         }
-        QUEUE.put_nowait((cmd, kwargs))
+        enqueue(cmd, kwargs)
 
     if get_aax:
         cmd = download_aax
@@ -709,7 +725,7 @@ def queue_job(
             "filename_mode": filename_mode,
             "filename_length": filename_length
         }
-        QUEUE.put_nowait((cmd, kwargs))
+        enqueue(cmd, kwargs)
 
     if get_aaxc:
         cmd = download_aaxc
@@ -723,7 +739,7 @@ def queue_job(
             "filename_mode": filename_mode,
             "filename_length": filename_length
         }
-        QUEUE.put_nowait((cmd, kwargs))
+        enqueue(cmd, kwargs)
 
 
 def display_counter():
@@ -852,6 +868,11 @@ def display_counter():
     help="number of simultaneous downloads"
 )
 @click.option(
+    "--no-progress",
+    is_flag=True,
+    help="do not show progress bars"
+)
+@click.option(
     "--filename-mode", "-f",
     type=click.Choice(
         ["config", "ascii", "asin_ascii", "unicode", "asin_unicode", "asin_only"]
@@ -931,6 +952,7 @@ async def cli(session, api_client, **params):
 
     # additional options
     sim_jobs = params.get("jobs")
+    show_progress = not params.get("no_progress")
     quality = params.get("quality")
     cover_sizes = list(set(params.get("cover_size")))
     overwrite_existing = params.get("overwrite")
@@ -1086,5 +1108,10 @@ async def cli(session, api_client, **params):
 
     # schedule the consumer
     run = DownloadRun(ignore_errors)
-    await drain_queue(run, sim_jobs)
+    # One reserved row per consumer, which is the most bars that can be
+    # alive at once, plus one for the running total. Where no dock can be
+    # had, downloads get plain bars instead; if the window shrinks below the
+    # room it needs mid-run, that applies to the ones started from then on.
+    with docked_progress(sim_jobs, enabled=show_progress, total=QUEUE.qsize()):
+        await drain_queue(run, sim_jobs)
     run.raise_for_errors()
