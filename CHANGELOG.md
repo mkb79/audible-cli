@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- A podcast episode that is already downloaded no longer costs a voucher on every run (#299)
 - A cover size a title does not offer is reported as a warning, not an error (#300)
 - A request to Audible's CDE host is tried up to three times when it gets no answer (#298)
 - A failed download job now names the command, the title and the ASIN (#298)

@@ -1,6 +1,7 @@
 import asyncio
 import asyncio.log
 import asyncio.sslproto
+import glob
 import json
 import logging
 import pathlib
@@ -411,6 +412,41 @@ async def _reuse_voucher(lr_file, item):
     return lr, url, codec
 
 
+def _finished_downloads(output_dir, base_filename, item, quality):
+    """What an earlier attempt at this title may have left behind.
+
+    Worth guessing because it saves a license request, and a license costs
+    a voucher whether or not anything is found. `_get_codec` knows the AAXC
+    name up front, but a podcast episode has no codec until its license
+    arrives, so every run used to buy one for an episode already on disk.
+    A voucher counts as a find: a download that died after writing it can
+    reuse that license.
+    """
+    folder = pathlib.Path(output_dir)
+    codec, _ = item._get_codec(quality)
+    if codec is not None:
+        yield folder / f"{base_filename}-{codec}.aaxc"
+        return
+
+    # The name is `<title>-<format>` and a format carries no hyphen, so the
+    # last one separates them. A wildcard cannot say "exactly one segment"
+    # and would let `Foo` claim `Foo-Bar-MPEG.mp3`, so both halves are
+    # compared, the format in whatever casing Audible used. The title is
+    # escaped because brackets in it would read as a character class.
+    seen = set()
+    escaped = glob.escape(base_filename)
+    for found in sorted(folder.glob(f"{escaped}-*.mp3")) + sorted(
+        folder.glob(f"{escaped}-*.voucher")
+    ):
+        title, _, content_format = found.stem.rpartition("-")
+        if title != base_filename or content_format.lower() != "mpeg":
+            continue
+        candidate = found.with_suffix(".mp3")
+        if candidate not in seen:
+            seen.add(candidate)
+            yield candidate
+
+
 async def download_aaxc(
     client, output_dir, base_filename, item, quality, overwrite_existing,
     filename_mode, filename_length
@@ -419,10 +455,7 @@ async def download_aaxc(
 
     # https://github.com/mkb79/audible-cli/issues/60
     if not overwrite_existing:
-        codec, _ = item._get_codec(quality)
-        if codec is not None:
-            filepath = pathlib.Path(
-                output_dir) / f"{base_filename}-{codec}.aaxc"
+        for filepath in _finished_downloads(output_dir, base_filename, item, quality):
             lr_file = filepath.with_suffix(".voucher")
 
             if lr_file.is_file():
@@ -445,6 +478,7 @@ async def download_aaxc(
                         lr_file
                     )
                     overwrite_existing = True
+                break
 
     is_aycl = item.benefit_id == "AYCL"
 
