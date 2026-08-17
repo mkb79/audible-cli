@@ -542,7 +542,17 @@ async def consume(run: DownloadRun):
 
             await cmd(**kwargs)
         except Exception as e:
-            logger.error(e)
+            # The bare exception names neither the title nor the kind of
+            # file, which leaves nothing to act on.
+            item = kwargs.get("item")
+            logger.error(
+                "%s failed for %s (%s): %s: %s",
+                cmd.__name__,
+                getattr(item, "full_title", "unknown title"),
+                getattr(item, "asin", "unknown asin"),
+                type(e).__name__,
+                e,
+            )
             run.record(e)
         finally:
             QUEUE.task_done()

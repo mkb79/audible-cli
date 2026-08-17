@@ -8,14 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- AAXC downloads of podcast episodes are no longer rejected solely because Audible labels the payload `audio/mp3`. That is not a registered media type and was not in the accepted list, so the download failed with "Wrong content type" after the file had already been fetched. The AAX path keeps its own, narrower list: it always writes a `.aax` file because the codec is part of the request, so accepting an MP3 there would store it under the wrong name
-- The content type is now compared by its media type, so parameters and casing no longer decide the outcome. A title that has to be fetched in parts is also recognised again when its `Content-Type` is capitalised, which sent it to the wrong branch and reported a type mismatch instead
+- Try a request to Audible's CDE host up to three times when it gets no answer, waiting a little longer each time. A dropped connection on the annotations endpoint used to end a whole `-j 8` run. An HTTP status is an answer and is never retried, 404 included (#298)
+- A failed download job now names itself: the command, the title and the ASIN, instead of the bare exception (#298)
+- AAXC downloads of podcast episodes are no longer rejected over the `audio/mp3` content type Audible sends for them. The AAX path keeps its own, narrower list: it always writes a `.aax` file, so accepting an MP3 there would misname it (#297)
+- The content type is compared by its media type, so parameters and casing no longer decide the outcome. That also brings back the "download individual parts" message, which a capitalised `Content-Type` had been hiding (#297)
 
 ### Added
 
-- Standalone builds for arm64 on Linux and Windows, alongside the existing x86_64 ones. macOS was already Apple silicon only and stays that way; on an Intel Mac install from PyPI instead
-- The download names now carry the architecture, for example `audible_win_x86_64.zip` and `audible_win_arm64.zip`. The Linux build that was named `latest` now names the Ubuntu release it is built on, 24.04, because the runner is pinned to it. The previous names are published alongside the new ones and will be dropped after 15 November 2026, so existing download links keep working until then
-- A `pycryptodome` extra, used by the Windows arm64 build because `cryptography` publishes no wheel for that platform. Both are accelerated; only the implementation differs
+- Standalone builds for arm64 on Linux and Windows, alongside the existing x86_64 ones. macOS stays Apple silicon only; on an Intel Mac install from PyPI (#296)
+- The download names now carry the architecture, for example `audible_win_arm64.zip`, and the Linux build names the Ubuntu release it is built on. The previous names are published alongside them until 15 November 2026 (#296)
+- A `pycryptodome` extra, used by the Windows arm64 build because `cryptography` publishes no wheel for that platform (#296)
 
 ## [0.5.1] - 2026-08-15
 

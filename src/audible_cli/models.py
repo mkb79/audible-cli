@@ -15,6 +15,8 @@ from audible.client import convert_response_content
 
 from .constants import (
     API_CHAPTER_TYPES,
+    CDE_ATTEMPTS,
+    CDE_FIRST_DELAY,
     CODEC_HIGH_QUALITY,
     CODEC_NORMAL_QUALITY,
     QUALITIES,
@@ -31,12 +33,12 @@ from .utils import (
     LongestSubString,
     full_response_callback,
     parse_api_datetime,
+    request_with_retry,
     to_utc_datetime,
 )
 
 
 logger = logging.getLogger("audible_cli.models")
-
 
 def api_quality(quality: str) -> str:
     """Return what a request sends for this `--quality` value.
@@ -319,7 +321,12 @@ class LibraryItem(BaseItem):
            "key": self.asin,
            "codec": codec_name
         }
-        r = await self._client.session.head(url, params=params)
+        r = await request_with_retry(
+            lambda: self._client.session.head(url, params=params),
+            f"The AAX download url for {self.asin}",
+            attempts=CDE_ATTEMPTS,
+            first_delay=CDE_FIRST_DELAY,
+        )
 
         try:
             link = r.headers["location"]
@@ -478,7 +485,12 @@ class LibraryItem(BaseItem):
             "key": self.asin
         }
 
-        annotations = await self._client.get(url, params=params)
+        annotations = await request_with_retry(
+            lambda: self._client.get(url, params=params),
+            f"The annotations for {self.asin}",
+            attempts=CDE_ATTEMPTS,
+            first_delay=CDE_FIRST_DELAY,
+        )
 
         return annotations
 
