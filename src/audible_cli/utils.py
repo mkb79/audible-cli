@@ -1,7 +1,9 @@
+import asyncio
 import csv
 import io
 import logging
 import pathlib
+import random
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 
@@ -11,6 +13,12 @@ import httpx
 import tqdm
 from audible import Authenticator
 from audible.client import raise_for_status
+from audible.exceptions import (
+    NetworkError,
+    NotResponding,
+    RequestError,
+    StatusError,
+)
 from audible.login import default_login_url_callback
 from click import echo, prompt, secho
 from PIL import Image
@@ -19,6 +27,57 @@ from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
 
 
 logger = logging.getLogger("audible_cli.utils")
+
+
+def is_transient(exc: BaseException) -> bool:
+    """Whether a request never got an answer and is worth repeating.
+
+    An answer is not transient, however unwelcome: every `StatusError`
+    carries an HTTP status. The audible client remaps httpx errors and
+    raises `from None`, so the original sits in `args`, not in the cause.
+    """
+    if isinstance(exc, httpx.TransportError):
+        return not isinstance(exc, httpx.LocalProtocolError)
+    if isinstance(exc, StatusError):
+        return False
+    if isinstance(exc, NotResponding | NetworkError):
+        return True
+    if isinstance(exc, RequestError):
+        return any(
+            isinstance(arg, httpx.TransportError)
+            and not isinstance(arg, httpx.LocalProtocolError)
+            for arg in exc.args
+        )
+    return False
+
+
+async def request_with_retry(
+    make_request, describe: str, *, attempts: int = 3, first_delay: float = 0.5
+):
+    """Make a request again while it gets no answer at all.
+
+    Only for requests that can be repeated without consequence. The delay
+    doubles and carries jitter, so callers that fail together do not return
+    together.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            return await make_request()
+        except Exception as exc:
+            if attempt == attempts or not is_transient(exc):
+                raise
+            delay = first_delay * 2 ** (attempt - 1) * random.uniform(0.8, 1.2)  # noqa: S311
+            logger.warning(
+                "%s got no answer (%s: %s). Attempt %s of %s, retrying in %.1fs.",
+                describe,
+                type(exc).__name__,
+                exc,
+                attempt,
+                attempts,
+                delay,
+            )
+            await asyncio.sleep(delay)
+    return None  # unreachable: the loop returns or raises
 
 
 def to_utc_datetime(value: datetime) -> datetime:

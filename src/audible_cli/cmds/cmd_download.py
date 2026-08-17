@@ -542,10 +542,8 @@ async def consume(run: DownloadRun):
 
             await cmd(**kwargs)
         except Exception as e:
-            # Say which job it was. On its own a message like "Server
-            # disconnected without sending a response" names neither the
-            # title nor the kind of file, and a run of hundreds of jobs
-            # gives no way to find out which one to retry.
+            # The bare exception names neither the title nor the kind of
+            # file, which leaves nothing to act on.
             item = kwargs.get("item")
             logger.error(
                 "%s failed for %s (%s): %s: %s",

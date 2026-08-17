@@ -8,8 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- A request to Audible's CDE host that never got an answer is made again, up to three times, with a growing and slightly randomised wait. Downloading a library with `-j 8` produced runs of `Server disconnected without sending a response.`, all of them on the annotations endpoint, and without `--ignore-errors` the first one ended the whole run. The endpoint is healthy when asked on its own, so the cause looks like a pooled connection the server had already closed while eight downloads were streaming through the same client. Only requests that got no answer at all are repeated: an HTTP status is an answer, and a 404 from the annotations endpoint is the ordinary way of saying a title has none
-- A failed download job now says which job it was. The message used to be the bare exception, so `Server disconnected without sending a response.` named neither the title nor the kind of file, and a run of several hundred jobs gave no way to tell which one to retry. It now reads `download_aaxc failed for <title> (<asin>): RemoteProtocolError: …`
+- Repeat a request to Audible's CDE host that got no answer, up to three times with a growing, jittered wait. A dropped connection on the annotations endpoint used to end a whole `-j 8` run. Only requests without an answer are repeated; an HTTP status, 404 included, is left alone (#298)
+- A failed download job now names itself: the command, the title and the ASIN, instead of the bare exception (#298)
 
 ### Fixed
 

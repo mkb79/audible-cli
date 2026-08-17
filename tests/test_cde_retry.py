@@ -27,7 +27,8 @@ from audible.exceptions import (
 )
 
 from audible_cli import models
-from audible_cli.models import CDE_ATTEMPTS, is_transient, request_with_retry
+from audible_cli.models import CDE_ATTEMPTS
+from audible_cli.utils import is_transient, request_with_retry
 
 
 class Answered:
@@ -211,3 +212,33 @@ def test_both_cde_requests_go_through_the_retry():
 
     assert cde_methods == {"get_annotations", "get_aax_url_old"}, cde_methods
     assert wrapped == cde_methods, f"not repeated: {cde_methods - wrapped}"
+
+
+def test_the_caller_decides_how_often_and_how_long():
+    # The helper is generic; the numbers are the caller's policy.
+    stubborn = Answering(disconnected(), failures=4)
+
+    assert asyncio.run(request_with_retry(stubborn, "A request", attempts=5)) == (
+        "the answer"
+    )
+    assert stubborn.calls == 5
+
+
+def test_the_first_delay_is_the_callers_too(monkeypatch):
+    waits = []
+
+    async def record(seconds):
+        waits.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", record)
+    with pytest.raises(RequestError):
+        asyncio.run(
+            request_with_retry(
+                Answering(disconnected(), failures=3),
+                "A request",
+                attempts=3,
+                first_delay=10,
+            )
+        )
+
+    assert waits[0] > 5, waits
