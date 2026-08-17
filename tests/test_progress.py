@@ -273,10 +273,14 @@ def test_a_window_shrinking_too_far_hands_out_no_more_rows(terminal, monkeypatch
         # own, so force one rather than wait out the interval.
         first._render(force=True)
 
-        assert not progress._current.dock.active
+        assert not progress._current.dock.available
         # A row nobody can see must not be handed out as if it worked
         assert progress.take_progressbar(pathlib.Path("b"), total=10) is None
         assert "\x1b[r" in terminal.text
+        # Out of room is not the end of it: this terminal can still hold a
+        # dock, and does again as soon as the window has the space.
+        assert progress._current.dock.enabled
+        assert progress._current.dock.active
 
 
 def test_a_bar_outliving_its_dock_keeps_its_hands_off_the_next_one(terminal):
@@ -743,49 +747,81 @@ def test_a_height_change_wipes_nothing_by_its_old_row_numbers(terminal, monkeypa
     assert "\x1b[2K" not in upto_new_region, f"erased something: {upto_new_region!r}"
 
 
-def test_a_width_change_stands_the_dock_down(terminal, monkeypatch):
-    # Turning a phone sideways changes both. After the rewrap every row we
-    # could address has moved somewhere we cannot work out, so the only
-    # honest answer is to stop drawing.
+def test_a_width_change_moves_the_dock_rather_than_ending_it(terminal, monkeypatch):
+    # Turning a phone sideways changes the width, so this is the ordinary
+    # case there, not the exception. Where the old rows went is unknowable,
+    # but the new bottom is not, and every row can say what it holds.
     with progress.docked_progress(2, stream=terminal):
         dock = progress._current.dock
-        assert progress.take_progressbar(pathlib.Path("a"), total=10) is not None
+        bar = progress.take_progressbar(pathlib.Path("a"), total=10)
+        assert bar is not None
 
         monkeypatch.setattr(
             progress.shutil,
             "get_terminal_size",
-            lambda *a: os.terminal_size((60, 24)),
+            lambda *a: os.terminal_size((60, 18)),
         )
         dock._on_resize(signal.SIGWINCH, None)
+        before = len(terminal.written)
         dock.set(0, "anything")  # the repaint notices the new width
+        after = "".join(terminal.written[before:])
 
-        assert not dock.active
-        assert not dock.enabled
-        assert progress.take_progressbar(pathlib.Path("b"), total=10) is None
+        assert dock.available
+        assert dock.enabled
+        assert "\x1b[1;16r" in after, "a region for the window it is now"
+        assert "\x1b[17;1H" in after, "and the rows painted where it put them"
+        assert dock.width == 60, "the bars are told the width they render for"
+        assert progress.take_progressbar(pathlib.Path("b"), total=10) is not None
+
+
+def test_a_bar_keeps_drawing_after_a_width_change(terminal, monkeypatch):
+    # What the user sees: bars that go quiet and then drift up with the
+    # output are the whole complaint. An update after the turn has to land.
+    with progress.docked_progress(2, stream=terminal):
+        bar = progress.take_progressbar(pathlib.Path("a"), total=1000)
+        bar.update(100)
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+        )
+        progress._current.dock._on_resize(signal.SIGWINCH, None)
+        bar._render(force=True)  # works the resize out and rebuilds
+
+        before = len(terminal.written)
+        bar.update(100)
+        bar._render(force=True)
+        after = "".join(terminal.written[before:])
+
+    assert "\x1b[17;1H" in after, f"the bar went quiet: {after!r}"
 
 
 def test_a_width_change_wipes_nothing_by_its_old_row_numbers(terminal, monkeypatch):
     # The dangerous case: after a rewrap the old rows may hold the user's
-    # output, so erasing them by number would take that with it.
+    # output, so erasing them by number would take that with it. The rows of
+    # the new dock are ours and may be cleared; rows 23 and 24 are not.
     with progress.docked_progress(2, stream=terminal):
         bar = progress.take_progressbar(pathlib.Path("a"), total=1000)
         bar.update(100)
         monkeypatch.setattr(
             progress.shutil,
             "get_terminal_size",
-            lambda *a: os.terminal_size((60, 24)),
+            lambda *a: os.terminal_size((60, 18)),
         )
         before = len(terminal.written)
         progress._current.dock._on_resize(signal.SIGWINCH, None)
         bar._render(force=True)
         during = "".join(terminal.written[before:])
 
-    assert "\x1b[2K" not in during, f"erased something: {during!r}"
+    for old_row in (23, 24):
+        assert f"\x1b[{old_row};1H\x1b[2K" not in during, (
+            f"erased row {old_row}, which is the user's now: {during!r}"
+        )
+    assert "\x1b[17;1H\x1b[2K" in during, "its own new rows it may clear"
 
 
-def test_a_window_dragged_out_and_back_still_counts_as_rewrapped(terminal, monkeypatch):
-    # Sampling only the width we end up with would call this a height
-    # change, although the terminal rewrapped its lines twice.
+def test_a_window_dragged_out_and_back_rebuilds_once(terminal, monkeypatch):
+    # Two reflows before anything repaints. The width it ends on is the one
+    # it started with, so nothing distinguishes this from no resize at all
+    # except the latch the handler sets -- and one rebuild settles both.
     with progress.docked_progress(2, stream=terminal):
         dock = progress._current.dock
         monkeypatch.setattr(
@@ -798,21 +834,27 @@ def test_a_window_dragged_out_and_back_still_counts_as_rewrapped(terminal, monke
         dock._on_resize(signal.SIGWINCH, None)  # and back
         dock.set(0, "anything")
 
-        assert not dock.active, "the width came back, the rewrap did not undo itself"
+        assert dock.available
+        assert not dock._rewrapped, "worked out, so the exit may erase again"
+        assert not dock._resized
 
 
 def test_a_bar_asked_for_after_a_resize_is_never_a_mute_one(terminal, monkeypatch):
     # The real order on a rotated phone: the window changes, and the next
-    # thing that happens is a new download asking for a row — before any
-    # existing bar has painted and noticed. Handing it a row it does not
-    # own gives that download a bar nobody ever sees.
+    # thing that happens is a new download asking for a row -- before any
+    # existing bar has painted and noticed. `settle` works the resize out
+    # first, so the row it hands back is one of the new ones.
     with progress.docked_progress(2, stream=terminal):
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 24))
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
         )
         progress._current.dock._on_resize(signal.SIGWINCH, None)
 
-        assert progress.take_progressbar(pathlib.Path("a"), total=10) is None
+        before = len(terminal.written)
+        assert progress.take_progressbar(pathlib.Path("a"), total=10) is not None
+        assert "\x1b[1;16r" in "".join(terminal.written[before:]), (
+            "settled before the row was handed out"
+        )
 
 
 def test_a_resize_stops_the_exit_from_erasing_old_rows(terminal, monkeypatch):
@@ -890,3 +932,98 @@ def test_nothing_is_painted_once_a_resize_is_pending(terminal):
         dock._paint(0, "should not appear")
 
     assert "should not appear" not in "".join(terminal.written[before:])
+
+
+def test_a_dock_out_of_room_comes_back_when_the_room_does(terminal, monkeypatch):
+    # Landscape on a phone is short: nine rows do not fit, and the old dock
+    # took that as final. Turning back gives the room again, and a dock that
+    # stayed out for good is the same bug from the other side.
+    with progress.docked_progress(8, stream=terminal, total=8):
+        dock = progress._current.dock  # 8 workers plus the summary
+        bar = progress.take_progressbar(pathlib.Path("a"), total=1000)
+        assert bar is not None
+
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 14))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        bar._render(force=True)
+        assert not dock.available, "control: 14 rows have no room for 9"
+        assert dock.enabled, "out of room is not the same as unusable"
+
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((45, 40))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        before = len(terminal.written)
+        bar._render(force=True)
+        after = "".join(terminal.written[before:])
+
+        assert dock.available, "the room came back and the dock did not"
+        assert "\x1b[1;31r" in after, f"no region for this window: {after!r}"
+        assert "\x1b[32;1H" in after, "the first row is drawn again"
+
+
+def test_nothing_is_painted_while_there_is_no_room(terminal, monkeypatch):
+    with progress.docked_progress(2, stream=terminal):
+        dock = progress._current.dock
+        monkeypatch.setattr(
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a: os.terminal_size((100, progress.MIN_SCROLL_ROWS + 1)),
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        dock.set(0, "settles into the pause")
+
+        before = len(terminal.written)
+        dock.set(0, "and this one has nowhere to go")
+        assert "".join(terminal.written[before:]) == "", "drew into a window too small"
+
+    # Kept all the same, so the row can show it once the room is back
+    assert dock._lines[0] == "and this one has nowhere to go"
+
+
+def test_a_resize_during_the_rebuild_leaves_no_stale_region(terminal, monkeypatch):
+    # The margins being written describe the window as it was measured. A
+    # turn landing in between makes them wrong before they arrive, and the
+    # handler cannot take them back: it ran before they were written.
+    monkeypatch.setattr(
+        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 24))
+    )
+    dock = progress.Dock(2, stream=terminal)
+    with dock:
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+
+        real_write = dock._write
+
+        def write_then_turn_again(text):
+            if "\x1b[1;16r" in text:
+                monkeypatch.setattr(
+                    progress.shutil,
+                    "get_terminal_size",
+                    lambda *a: os.terminal_size((100, 30)),
+                )
+                dock._on_resize(signal.SIGWINCH, None)
+            real_write(text)
+
+        dock._write = write_then_turn_again
+        dock.set(0, "anything")
+        dock._write = real_write
+
+        assert dock._resized, "the second turn is still owed an answer"
+        assert not dock._reserved, "margins for a window that is already gone"
+        assert terminal.text.rindex("\x1b[r") > terminal.text.rindex("\x1b[1;16r"), (
+            "the stale region is given back, not left set"
+        )
+
+        # And the next paint settles it on the geometry that is real now
+        before = len(terminal.written)
+        dock.set(0, "anything")
+        after = "".join(terminal.written[before:])
+
+        assert dock.available
+
+    assert "\x1b[1;28r" in after, f"never caught up: {after!r}"

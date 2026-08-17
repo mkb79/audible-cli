@@ -121,6 +121,7 @@ class Dock:
         self._reserved_width = 0
         self._rewrapped = False
         self._painting = False
+        self._paused = False
         self._fd = self._descriptor()
         self.enabled = self._usable()
 
@@ -136,11 +137,20 @@ class Dock:
 
     @property
     def active(self) -> bool:
-        """Whether the dock may still hand out rows and paint them.
+        """Whether the dock is still open.
 
         Not whether the region is set: this goes false first on the way out.
         """
         return self._active
+
+    @property
+    def available(self) -> bool:
+        """Whether a row handed out now would actually be drawn.
+
+        False while the window is too small. The dock stays open through
+        that and takes its rows back when the room returns.
+        """
+        return self._active and not self._paused
 
     def _usable(self) -> bool:
         if self._rows <= 0:
@@ -429,36 +439,43 @@ class Dock:
             previous(number, frame)
 
     def _reopen_after_resize(self) -> None:
+        """Rebuild the dock at the bottom of whatever the window is now.
+
+        A reflow moves the old rows somewhere we cannot work out, so nothing
+        is erased by their numbers and whatever they held stays where the
+        terminal put it. The dock itself survives that: the new bottom is
+        measurable and every line can say what it holds.
+        """
         self._resized = False
-        # The handler already released the region. Nothing is wiped: a
-        # terminal reflows on a width change, so the old rows may hold the
-        # user's output by now. A stale bar is the cheaper mistake.
         if self._reserved:
-            self._write("\x1b[r")
-            self._reserved = False
-            self._flush()
+            # Usually the handler did this already. It skips a paint in
+            # flight, which is the one case that gets here still reserved.
+            self._release_only()
 
         height, width = self._measure()
         if not self._active:
             # A signal restored the terminal while we were measuring
             return
-        if self._rewrapped or width != self._reserved_width:
-            # A rewrap moved every row somewhere we cannot work out.
-            self._active = False
-            self.enabled = False
-            return
-        self._width = width
         if not self._fits(height):
-            # The window no longer has the room. Stay out of the way;
-            # callers get plain bars from here on.
-            self._active = False
-            self.enabled = False
+            # No room at the moment. Not the end of the dock: callers get
+            # plain bars until the window has the space again.
+            self._paused = True
             return
 
+        self._width = width
+        self._reserved_width = width
+        self._rewrapped = False
+        self._paused = False
         self._top = height - self._rows + 1
         self._write("\n" * self._rows)  # scroll the room back into being
         self._reserve(height, after_resize=True)
         if not self._active:
+            return
+        if self._resized:
+            # Another one arrived while we were setting these margins, so
+            # they describe a window that is already gone. The next `set`
+            # measures again; leaving them would pin the bars to nothing.
+            self._release_only()
             return
         # Ask each line for its text again rather than repainting what was
         # measured for the old width: a bar rendered for 100 columns wraps
@@ -493,6 +510,10 @@ class Dock:
                 if not self._active:
                     return
                 self._undo_if_gone()
+                return
+            if self._paused:
+                # No room to draw in. The text is kept, so the row comes
+                # back with what it holds once there is.
                 return
             self._paint(row, text)
             self._flush()
@@ -809,9 +830,9 @@ def take_progressbar(
     dock.settle()
 
     with _rows_lock:
-        # A dock that has given its region back — the window changed width,
-        # or got too short — can no longer show anything.
-        if _current.dock is not dock or not dock.active or not _current.free_rows:
+        # A dock with no room at the moment shows nothing, so the caller is
+        # better off with a plain bar than with a row that stays blank.
+        if _current.dock is not dock or not dock.available or not _current.free_rows:
             return None
         row = _current.free_rows.pop(0)
         label = _current.labels[row] if row < len(_current.labels) else ""
