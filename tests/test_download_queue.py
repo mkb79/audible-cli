@@ -5,7 +5,9 @@ and QUEUE.join() then waited forever, and the exit code from #256.
 """
 
 import asyncio
+import logging
 
+import httpx
 import pytest
 
 from audible_cli.cmds import cmd_download
@@ -178,3 +180,35 @@ def test_drain_queue_completes_a_normal_run():
     run = asyncio.run(main())
 
     assert (run.errors, run.skipped) == ([], 0)
+
+
+class NamedItem:
+    asin = "B0FQJHTG19"
+    full_title = "Star Wars: Die Hand von Thrawn"
+
+
+async def disconnects(item):
+    raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
+
+
+def test_a_failure_says_which_job_it_was(caplog):
+    # "Server disconnected without sending a response" on its own names
+    # neither the title nor the kind of file, and a run of hundreds of jobs
+    # gives no way to find out which one to retry.
+    async def main():
+        cmd_download.QUEUE = asyncio.Queue()
+        run = DownloadRun(ignore_errors=True)
+        cmd_download.QUEUE.put_nowait((disconnects, {"item": NamedItem()}))
+        consumer = asyncio.create_task(consume(run))
+        await asyncio.wait_for(cmd_download.QUEUE.join(), timeout=5)
+        consumer.cancel()
+        await asyncio.gather(consumer, return_exceptions=True)
+
+    with caplog.at_level(logging.ERROR, logger="audible_cli.cmds.cmd_download"):
+        asyncio.run(main())
+
+    line = caplog.text
+    assert "disconnects" in line, "which kind of job"
+    assert "B0FQJHTG19" in line, "which title, by asin"
+    assert "RemoteProtocolError" in line, "and what actually went wrong"
+    assert "Server disconnected" in line

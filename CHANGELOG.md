@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- A failed download job now says which job it was. The message used to be the bare exception, so `Server disconnected without sending a response.` named neither the title nor the kind of file, and a run of several hundred jobs gave no way to tell which one to retry. It now reads `download_aaxc failed for <title> (<asin>): RemoteProtocolError: …`
+
 ### Fixed
 
 - AAXC downloads of podcast episodes are no longer rejected solely because Audible labels the payload `audio/mp3`. That is not a registered media type and was not in the accepted list, so the download failed with "Wrong content type" after the file had already been fetched. The AAX path keeps its own, narrower list: it always writes a `.aax` file because the codec is part of the request, so accepting an MP3 there would store it under the wrong name
