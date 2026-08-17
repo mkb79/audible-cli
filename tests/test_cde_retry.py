@@ -8,6 +8,7 @@ sending a response.`, always on the annotations endpoint, and without
 import ast
 import asyncio
 import inspect
+import pathlib
 import random
 
 import httpx
@@ -242,6 +243,15 @@ def test_both_cde_requests_go_through_the_retry():
 
     assert cde_methods == {"get_annotations", "get_aax_url_old"}, cde_methods
     assert wrapped == cde_methods, f"not repeated: {cde_methods - wrapped}"
+
+
+def test_the_bundled_plugin_asks_the_same_way():
+    # It talks to the same host with its own request rather than through a
+    # model, so it needs the same treatment.
+    source = pathlib.Path("plugin_cmds/cmd_get-annotations.py").read_text()
+
+    assert "FionaCDEServiceEngine" in source, "the plugin this is about"
+    assert "request_with_retry(" in source
 
 
 def test_the_caller_decides_how_often_and_how_long():

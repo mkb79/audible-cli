@@ -68,6 +68,11 @@ AAXC_CONTENT_TYPES: tuple[str, ...] = (
     "audio/x-m4a",
 )
 
+# The CDE host drops a connection now and then while downloads stream
+# through the same pool.
+CDE_ATTEMPTS: int = 3
+CDE_FIRST_DELAY: float = 0.5
+
 AVAILABLE_MARKETPLACES = [
     market["country_code"] for market in LOCALE_TEMPLATES.values()
 ]

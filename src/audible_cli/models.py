@@ -15,6 +15,8 @@ from audible.client import convert_response_content
 
 from .constants import (
     API_CHAPTER_TYPES,
+    CDE_ATTEMPTS,
+    CDE_FIRST_DELAY,
     CODEC_HIGH_QUALITY,
     CODEC_NORMAL_QUALITY,
     QUALITIES,
@@ -37,12 +39,6 @@ from .utils import (
 
 
 logger = logging.getLogger("audible_cli.models")
-
-#: The CDE host drops a connection now and then while downloads stream
-#: through the same pool.
-CDE_ATTEMPTS = 3
-CDE_FIRST_DELAY = 0.5
-
 
 def api_quality(quality: str) -> str:
     """Return what a request sends for this `--quality` value.
