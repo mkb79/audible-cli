@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import secrets
 import string
 import unicodedata
@@ -12,6 +13,7 @@ import audible
 import httpx
 from audible.aescipher import decrypt_voucher_from_licenserequest
 from audible.client import convert_response_content
+from audible.exceptions import NetworkError, NotResponding, RequestError, StatusError
 
 from .constants import (
     API_CHAPTER_TYPES,
@@ -36,6 +38,71 @@ from .utils import (
 
 
 logger = logging.getLogger("audible_cli.models")
+
+#: How often a request to the CDE host is made before giving up, and how
+#: long to wait after the first failure. The delay doubles and carries a
+#: little jitter, so eight workers that fail together do not come back
+#: together.
+CDE_ATTEMPTS = 3
+CDE_FIRST_DELAY = 0.5
+
+
+def is_transient(exc: BaseException) -> bool:
+    """Whether the request never got an answer and is worth repeating.
+
+    An answer, even an unwelcome one, is not transient: `StatusError` and
+    everything under it carries an HTTP status, and a 404 from the
+    annotations endpoint is the ordinary way of saying a title has none.
+
+    The audible client remaps httpx errors and raises `from None`, so the
+    original is not the cause but sits in `args`.
+    """
+    if isinstance(exc, httpx.TransportError):
+        # Raised straight at us, by a call that bypasses that client
+        return not isinstance(exc, httpx.LocalProtocolError)
+    if isinstance(exc, StatusError):
+        # Spelled out rather than relied on: a status error carries only its
+        # message, so it would fall through the check below anyway. This
+        # says what is meant if that ever changes.
+        return False
+    if isinstance(exc, NotResponding | NetworkError):
+        return True
+    if isinstance(exc, RequestError):
+        return any(
+            isinstance(arg, httpx.TransportError)
+            and not isinstance(arg, httpx.LocalProtocolError)
+            for arg in exc.args
+        )
+    return False
+
+
+async def request_with_retry(make_request, describe: str):
+    """Make an idempotent request, repeating it if it never got an answer.
+
+    Only for requests that can be repeated without consequence: the two CDE
+    calls read metadata and change nothing, so a second attempt after a
+    dropped connection cannot duplicate anything.
+    """
+    for attempt in range(1, CDE_ATTEMPTS + 1):
+        try:
+            return await make_request()
+        except Exception as exc:
+            if attempt == CDE_ATTEMPTS or not is_transient(exc):
+                raise
+            delay = CDE_FIRST_DELAY * 2 ** (attempt - 1)
+            delay *= random.uniform(0.8, 1.2)  # noqa: S311
+            logger.warning(
+                "%s got no answer (%s: %s). Attempt %s of %s, retrying in %.1fs.",
+                describe,
+                type(exc).__name__,
+                exc,
+                attempt,
+                CDE_ATTEMPTS,
+                delay,
+            )
+            await asyncio.sleep(delay)
+    return None  # unreachable: the loop returns or raises
+
 
 
 def api_quality(quality: str) -> str:
@@ -319,7 +386,10 @@ class LibraryItem(BaseItem):
            "key": self.asin,
            "codec": codec_name
         }
-        r = await self._client.session.head(url, params=params)
+        r = await request_with_retry(
+            lambda: self._client.session.head(url, params=params),
+            f"The AAX download url for {self.asin}",
+        )
 
         try:
             link = r.headers["location"]
@@ -478,7 +548,10 @@ class LibraryItem(BaseItem):
             "key": self.asin
         }
 
-        annotations = await self._client.get(url, params=params)
+        annotations = await request_with_retry(
+            lambda: self._client.get(url, params=params),
+            f"The annotations for {self.asin}",
+        )
 
         return annotations
 
