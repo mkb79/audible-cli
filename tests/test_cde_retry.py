@@ -1,20 +1,14 @@
 """Repeating a CDE request that never got an answer.
 
-Downloading a library with `-j 8` produced a run of failures, all of them
-`download_annotations`, all reading `RequestError: Server disconnected
-without sending a response.` Without `--ignore-errors` the first one ends
-the whole run.
-
-The endpoint itself is healthy: asked on its own it answers a clean 404 for
-every title, sequentially and at eight at a time. The failure needs the rest
-of the run, eight concurrent streaming downloads sharing one connection
-pool, which is what a reused connection the server has already closed looks
-like from httpx.
+Downloading with `-j 8` produced runs of `Server disconnected without
+sending a response.`, always on the annotations endpoint, and without
+`--ignore-errors` the first one ends the run.
 """
 
 import ast
 import asyncio
 import inspect
+import random
 
 import httpx
 import pytest
@@ -27,7 +21,6 @@ from audible.exceptions import (
 )
 
 from audible_cli import models
-from audible_cli.models import CDE_ATTEMPTS
 from audible_cli.utils import is_transient, request_with_retry
 
 
@@ -79,8 +72,13 @@ def no_waiting(monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", at_once)
 
 
-def run(make_request):
-    return asyncio.run(request_with_retry(make_request, "A request"))
+ATTEMPTS = 3
+
+
+def run(make_request, **policy):
+    policy.setdefault("attempts", ATTEMPTS)
+    policy.setdefault("first_delay", 0.5)
+    return asyncio.run(request_with_retry(make_request, "A request", **policy))
 
 
 # --- what counts as worth repeating ---------------------------------------
@@ -128,12 +126,12 @@ def test_a_status_error_is_never_transient_although_it_is_a_request_error():
 
 
 def test_it_gives_up_after_the_last_attempt():
-    always = Answering(disconnected(), failures=CDE_ATTEMPTS)
+    always = Answering(disconnected(), failures=ATTEMPTS)
 
     with pytest.raises(RequestError):
         run(always)
 
-    assert always.calls == CDE_ATTEMPTS
+    assert always.calls == ATTEMPTS
 
 
 def test_it_returns_the_answer_once_one_arrives():
@@ -154,15 +152,21 @@ def test_an_answer_ends_it_at_once():
     assert once.calls == 1
 
 
-def test_a_first_attempt_that_works_is_not_slowed_down():
+def test_a_first_attempt_that_works_is_not_slowed_down(monkeypatch):
+    waits = []
+
+    async def record(seconds):
+        waits.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", record)
     straight = Answering(disconnected(), failures=0)
 
     assert run(straight) == "the answer"
     assert straight.calls == 1
+    assert waits == [], "nothing to wait for"
 
 
-def test_the_wait_grows_and_is_not_the_same_for_everyone(monkeypatch):
-    # Eight workers that fail together must not come back together.
+def test_the_wait_grows(monkeypatch):
     waits = []
 
     async def record(seconds):
@@ -170,11 +174,31 @@ def test_the_wait_grows_and_is_not_the_same_for_everyone(monkeypatch):
 
     monkeypatch.setattr(asyncio, "sleep", record)
     with pytest.raises(RequestError):
-        run(Answering(disconnected(), failures=CDE_ATTEMPTS))
+        run(Answering(disconnected(), failures=ATTEMPTS))
 
-    assert len(waits) == CDE_ATTEMPTS - 1, "no wait after the last attempt"
-    assert waits[1] > waits[0], "the wait grows"
-    assert not any(w in (0.5, 1.0) for w in waits), "and carries jitter"
+    assert len(waits) == ATTEMPTS - 1, "no wait after the last attempt"
+    assert 0.4 <= waits[0] <= 0.6, waits
+    assert 0.8 <= waits[1] <= 1.2, waits
+
+
+def test_two_workers_that_fail_together_do_not_retry_together(monkeypatch):
+    # Otherwise eight of them come back in lockstep, at the moment the host
+    # is least able to answer.
+    # What `random.uniform` would hand two workers that fail at the same
+    # moment: the low end of the range for one, the high end for the other.
+    jitter = iter([0.8, 0.8, 1.2, 1.2])
+    monkeypatch.setattr(random, "uniform", lambda a, b: next(jitter))
+    waits = []
+
+    async def record(seconds):
+        waits.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", record)
+    for _ in range(2):
+        with pytest.raises(RequestError):
+            run(Answering(disconnected(), failures=ATTEMPTS))
+
+    assert waits[0] != waits[2], f"both workers waited {waits[0]}"
 
 
 def test_it_says_so_when_it_repeats(caplog, monkeypatch):
@@ -183,11 +207,17 @@ def test_it_says_so_when_it_repeats(caplog, monkeypatch):
         pass
 
     monkeypatch.setattr(asyncio, "sleep", nowait)
-    with caplog.at_level("WARNING", logger="audible_cli.models"):
-        run(Answering(disconnected(), failures=1))
+    twice = Answering(disconnected(), failures=1)
+    with caplog.at_level("WARNING", logger="audible_cli.utils"):
+        run(twice)
 
-    assert "Server disconnected" in caplog.text
-    assert "RequestError" in caplog.text
+    assert twice.calls == 2, "it says so because it did so"
+    warned = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert [r.name for r in warned] == ["audible_cli.utils"], (
+        "anyone filtering on this logger has to be able to find it"
+    )
+    assert "Server disconnected" in warned[0].getMessage()
+    assert "retrying" in warned[0].getMessage()
 
 
 def test_both_cde_requests_go_through_the_retry():
@@ -218,9 +248,7 @@ def test_the_caller_decides_how_often_and_how_long():
     # The helper is generic; the numbers are the caller's policy.
     stubborn = Answering(disconnected(), failures=4)
 
-    assert asyncio.run(request_with_retry(stubborn, "A request", attempts=5)) == (
-        "the answer"
-    )
+    assert run(stubborn, attempts=5) == "the answer"
     assert stubborn.calls == 5
 
 
@@ -232,13 +260,6 @@ def test_the_first_delay_is_the_callers_too(monkeypatch):
 
     monkeypatch.setattr(asyncio, "sleep", record)
     with pytest.raises(RequestError):
-        asyncio.run(
-            request_with_retry(
-                Answering(disconnected(), failures=3),
-                "A request",
-                attempts=3,
-                first_delay=10,
-            )
-        )
+        run(Answering(disconnected(), failures=3), first_delay=10)
 
     assert waits[0] > 5, waits

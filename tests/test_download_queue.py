@@ -210,5 +210,6 @@ def test_a_failure_says_which_job_it_was(caplog):
     line = caplog.text
     assert "disconnects" in line, "which kind of job"
     assert "B0FQJHTG19" in line, "which title, by asin"
+    assert "Die Hand von Thrawn" in line, "and by name"
     assert "RemoteProtocolError" in line, "and what actually went wrong"
     assert "Server disconnected" in line

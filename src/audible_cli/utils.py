@@ -32,9 +32,9 @@ logger = logging.getLogger("audible_cli.utils")
 def is_transient(exc: BaseException) -> bool:
     """Whether a request never got an answer and is worth repeating.
 
-    An answer is not transient, however unwelcome: every `StatusError`
-    carries an HTTP status. The audible client remaps httpx errors and
-    raises `from None`, so the original sits in `args`, not in the cause.
+    An answer is not transient: every `StatusError` carries an HTTP status.
+    The audible client remaps httpx errors and raises `from None`, so the
+    original sits in `args`, not in the cause.
     """
     if isinstance(exc, httpx.TransportError):
         return not isinstance(exc, httpx.LocalProtocolError)
@@ -52,14 +52,18 @@ def is_transient(exc: BaseException) -> bool:
 
 
 async def request_with_retry(
-    make_request, describe: str, *, attempts: int = 3, first_delay: float = 0.5
+    make_request, describe: str, *, attempts: int, first_delay: float
 ):
     """Make a request again while it gets no answer at all.
 
-    Only for requests that can be repeated without consequence. The delay
-    doubles and carries jitter, so callers that fail together do not return
-    together.
+    Only for requests that can be repeated without consequence. How many
+    times and how long to wait are the caller's to decide: `attempts` counts
+    the total, and the delay starts at `first_delay` seconds, doubles, and
+    carries jitter so callers that fail together do not retry together.
     """
+    if attempts < 1:
+        raise ValueError(f"attempts must be at least 1, not {attempts}")
+
     for attempt in range(1, attempts + 1):
         try:
             return await make_request()
