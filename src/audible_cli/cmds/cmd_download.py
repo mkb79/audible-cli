@@ -179,7 +179,9 @@ async def download_cover(
 
     url = item.get_cover_url(res)
     if url is None:
-        logger.error("No COVER with size %s found for %s", res, item.full_title)
+        # A step above the other "nothing to fetch" cases here: this size
+        # was asked for.
+        logger.warning("No COVER with size %s found for %s", res, item.full_title)
         return
 
     dl = Downloader(url, filepath, client, overwrite_existing, "image/jpeg")

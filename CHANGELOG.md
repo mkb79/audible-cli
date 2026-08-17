@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- A cover size a title does not offer is reported as a warning, not an error (#300)
 - Try a request to Audible's CDE host up to three times when it gets no answer, waiting a little longer each time. A dropped connection on the annotations endpoint used to end a whole `-j 8` run. An HTTP status is an answer and is never retried, 404 included (#298)
 - A failed download job now names itself: the command, the title and the ASIN, instead of the bare exception (#298)
 - AAXC downloads of podcast episodes are no longer rejected over the `audio/mp3` content type Audible sends for them. The AAX path keeps its own, narrower list: it always writes a `.aax` file, so accepting an MP3 there would misname it (#297)
