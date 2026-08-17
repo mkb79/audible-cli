@@ -1027,3 +1027,154 @@ def test_a_resize_during_the_rebuild_leaves_no_stale_region(terminal, monkeypatc
         assert dock.available
 
     assert "\x1b[1;28r" in after, f"never caught up: {after!r}"
+
+
+def test_the_room_is_scrolled_in_from_the_last_row(terminal):
+    # A line feed scrolls only from the bottom. Anywhere above it the rows
+    # are never made, and the paint then clears whatever was standing there.
+    with progress.Dock(3, stream=terminal):
+        opened = terminal.text
+
+    assert opened.index("\x1b[24;1H") < opened.index("\n\n\n"), (
+        "moved to the last row before feeding, or nothing scrolls"
+    )
+
+
+def test_every_row_is_repainted_after_a_resize(terminal, monkeypatch):
+    with progress.docked_progress(3, stream=terminal):
+        dock = progress._current.dock
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        before = len(terminal.written)
+        dock.set(0, "anything")
+        after = "".join(terminal.written[before:])
+
+    for row in (16, 17, 18):
+        assert f"\x1b[{row};1H" in after, f"row {row} was left where it was"
+
+
+def test_a_resize_asks_the_rows_what_they_hold_now(terminal, monkeypatch):
+    # Repainting the cached text would put back what was measured for the
+    # old width, which is the wrapping the dock exists to avoid.
+    with progress.Dock(1, stream=terminal) as dock:
+        dock.set(0, "for a hundred columns")
+        dock.set_renderer(0, lambda: f"rendered for {dock.width}")
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 24))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        before = len(terminal.written)
+        dock.set(0, "for a hundred columns")
+        after = "".join(terminal.written[before:])
+
+    assert "rendered for 60" in after, f"repainted the old text: {after!r}"
+
+
+def test_a_resize_at_the_new_width_is_not_taken_for_a_rewrap(terminal, monkeypatch):
+    # The width the dock reserved for has to be brought forward, or the next
+    # resize compares against the old one and calls a height change a reflow.
+    with progress.Dock(2, stream=terminal) as dock:
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 24))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        dock.set(0, "settles at 60")
+        assert dock._reserved_width == 60
+
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        assert not dock._rewrapped, "same width, so nothing reflowed"
+
+
+def test_the_margins_are_given_back_before_the_flag_says_so(terminal):
+    # A signal between the two finds a region it believes is set and gives
+    # it back again. The other order leaves nobody to do it.
+    with progress.Dock(2, stream=terminal) as dock:
+        seen = []
+        real_write = dock._write
+
+        def note(text):
+            if "\x1b[r" in text:
+                seen.append((text, dock._reserved))
+            real_write(text)
+
+        dock._write = note
+        dock._release_only()
+        dock._write = real_write
+
+    assert seen == [("\x1b7\x1b[r\x1b8", True)], (
+        "either the cursor was homed or the flag went first"
+    )
+
+
+def test_a_release_after_a_resize_keeps_the_cursor(terminal, monkeypatch):
+    # Releasing the margins homes the cursor, and the exit path skipped the
+    # save and restore that every other release wraps it in.
+    with progress.docked_progress(2, stream=terminal):
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 24))
+        )
+        # Painting when it lands, so the handler leaves the margins alone
+        # and the exit is the one that has to give them back.
+        progress._current.dock._painting = True
+        progress._current.dock._on_resize(signal.SIGWINCH, None)
+        progress._current.dock._painting = False
+        before = len(terminal.written)
+    closing = "".join(terminal.written[before:])
+
+    assert "\x1b[r" in closing
+    assert "\x1b7\x1b[r\x1b8" in closing, f"homed the cursor: {closing!r}"
+
+
+def test_a_paint_reaches_the_terminal_before_the_handler_can_cut_in(terminal):
+    # The paint carries no newline, so a line-buffered stream keeps it. A
+    # resize landing between the write and the flush would put its release
+    # out first and this on top, onto rows that are nobody's by then.
+    with progress.Dock(2, stream=terminal) as dock:
+        painting_at_flush = []
+        real_flush = dock._flush
+
+        def note():
+            painting_at_flush.append(dock._painting)
+            real_flush()
+
+        dock._flush = note
+        dock.set(0, "a bar")
+        dock._flush = real_flush
+
+    assert True in painting_at_flush, "flushed only after the paint window closed"
+
+
+def test_a_resize_during_the_repaint_gives_the_margins_back(terminal, monkeypatch):
+    # The one case the handler leaves alone: it will not touch the margins
+    # mid-paint, because the terminal keeps a single saved cursor. Whoever
+    # is painting has to notice and give them back.
+    with progress.Dock(2, stream=terminal) as dock:
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+
+        real_paint_write = dock._paint_write
+
+        def turn_mid_paint(text):
+            if "\x1b[17;1H" in text:  # the first row of the rebuilt dock
+                monkeypatch.setattr(
+                    progress.shutil,
+                    "get_terminal_size",
+                    lambda *a: os.terminal_size((90, 26)),
+                )
+                dock._on_resize(signal.SIGWINCH, None)  # `_painting` is on
+            real_paint_write(text)
+
+        dock._paint_write = turn_mid_paint
+        dock.set(0, "anything")
+        dock._paint_write = real_paint_write
+
+        assert not dock._reserved, "margins for a window that is already gone"
+        assert dock._resized, "and the next paint still owes a rebuild"
+        assert terminal.text.rindex("\x1b[r") > terminal.text.rindex("\x1b[1;16r")

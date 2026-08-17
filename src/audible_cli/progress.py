@@ -11,10 +11,12 @@ Everything catchable puts it back, `atexit` included; SIGKILL, `os._exit()`
 and a fatal signal do not, and restoring means writing to a terminal that
 may be blocked, so it is best effort rather than a guarantee.
 
-The dock steps aside rather than fight: no terminal, one too short or
-without cursor control, a Windows console that refuses escape sequences, or
-a window that changes width, after which no absolute row means what it did.
-Callers then get a plain tqdm bar.
+The dock steps aside rather than fight: no terminal, one without cursor
+control, or a Windows console that refuses escape sequences. A window too
+short for the rows only pauses it. A resize rebuilds it at the bottom of
+whatever the window is now; where the old rows went is unknowable, so
+nothing is erased by their numbers. While it stands aside, callers get a
+plain tqdm bar.
 """
 
 from __future__ import annotations
@@ -252,7 +254,7 @@ class Dock:
             self._top = height - self._rows + 1
             # Scroll the reserved rows into existence, so nothing already on
             # screen ends up underneath them.
-            self._write("\n" * self._rows)
+            self._scroll_room_into_being(height)
             self._reserve(height)
 
     def _reserve(self, height: int, after_resize: bool = False) -> None:
@@ -291,22 +293,27 @@ class Dock:
 
     def _release_only(self) -> None:
         """Give the margins back and erase nothing."""
-        self._reserved = False
         self._write("\x1b7\x1b[r\x1b8")
         self._flush()
+        # Cleared after writing, the other way round from `_reserve`: a signal
+        # in between finds a region it thinks is still set and releases it
+        # again, and a doubled release costs nothing. Clearing first would
+        # leave nobody to give it back.
+        self._reserved = False
 
     def _undo_reservation(self) -> None:
         """Release a region that was set after somebody else restored."""
-        self._reserved = False
         self._write(self._restore_sequence())
         self._flush()
+        self._reserved = False
 
     def _restore_sequence(self) -> str:
         parts = ["\x1b[r"]  # release the region
         if self._resized or self._rewrapped:
             # A resize was seen and not worked out, so those rows may hold the
-            # user's output. Give the margins back, erase nothing.
-            return parts[0]
+            # user's output. Give the margins back, erase nothing -- and keep
+            # the cursor, which releasing the margins would otherwise home.
+            return "\x1b7\x1b[r\x1b8"
         for row in range(self._rows):  # wipe what is left
             parts.append(f"\x1b[{self._top + row};1H\x1b[2K")
         parts.append(f"\x1b[{self._top};1H")
@@ -467,7 +474,7 @@ class Dock:
         self._rewrapped = False
         self._paused = False
         self._top = height - self._rows + 1
-        self._write("\n" * self._rows)  # scroll the room back into being
+        self._scroll_room_into_being(height)
         self._reserve(height, after_resize=True)
         if not self._active:
             return
@@ -485,6 +492,19 @@ class Dock:
             if render is not None:
                 self._lines[row] = render()
             self._paint(row, self._lines[row])
+        if self._resized and self._reserved:
+            # One arrived mid-repaint, during a row that kept the handler off
+            # the margins. Nobody else would give these back.
+            self._release_only()
+
+    def _scroll_room_into_being(self, height: int) -> None:
+        """Make the reserved rows by scrolling, not by writing over them.
+
+        A line feed only scrolls from the last row; anywhere above it just
+        moves down. Coming out of a reflow the cursor can be anywhere, and
+        the rows would then be cleared with the user's output still in them.
+        """
+        self._write(f"\x1b[{height};1H" + "\n" * self._rows)
 
     # -- painting ---------------------------------------------------------
 
@@ -539,12 +559,22 @@ class Dock:
         # cut a split sequence in half. Not a guarantee, but the text has no
         # newline, so a line-buffered stream holds it.
         self._painting = True
-        self._write(
+        self._paint_write(
             "\x1b7"  # save cursor
             f"\x1b[{self._top + row};1H\x1b[2K{text}"  # absolute row
             "\x1b8"  # put it back
         )
         self._painting = False
+
+    def _paint_write(self, text: str) -> None:
+        """Write and flush a paint before the handler may come between.
+
+        The paint carries no newline, so a line-buffered stream keeps it. A
+        resize landing after the write but before the flush would put its
+        release out first and this on top of it, on rows that are nobody's.
+        """
+        self._write(text)
+        self._flush()
 
     @property
     def width(self) -> int:
