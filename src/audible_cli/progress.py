@@ -45,8 +45,6 @@ from typing import IO, Any
 import click
 import tqdm
 
-from ._terminal import atomic
-
 
 if sys.platform == "win32":
     import ctypes
@@ -359,7 +357,7 @@ class Dock:
         self._reserved = True
         # One write, for the same reason as in `_paint`: a sequence spread
         # over several calls is the easy one for a handler to cut in half.
-        self._write_atomic(
+        self._write_now(
             f"\x1b[1;{height - self._reserved_rows}r"
             # Setting the region homes the cursor, so put it back into the
             # scrolling part before ordinary output continues there.
@@ -379,7 +377,7 @@ class Dock:
 
     def _release_only(self) -> None:
         """Give the margins back and erase nothing."""
-        self._write_atomic("\x1b7\x1b[r\x1b8")
+        self._write_now("\x1b7\x1b[r\x1b8")
         # Cleared after writing, the other way round from `_reserve`: a signal
         # in between finds a region it thinks is still set and releases it
         # again, and a doubled release costs nothing. Clearing first would
@@ -388,7 +386,7 @@ class Dock:
 
     def _undo_reservation(self) -> None:
         """Release a region that was set after somebody else restored."""
-        self._write_atomic(self._restore_sequence())
+        self._write_now(self._restore_sequence())
         self._reserved = False
 
     def _restore_sequence(self) -> str:
@@ -431,7 +429,7 @@ class Dock:
         if raw:
             self._write_raw(self._restore_sequence())
         else:
-            self._write_atomic(self._restore_sequence())
+            self._write_now(self._restore_sequence())
         self._reserved = False
 
     def _enable_windows_escapes(self) -> bool:
@@ -594,7 +592,7 @@ class Dock:
         moves down. Coming out of a reflow the cursor can be anywhere, and
         the rows would then be cleared with the user's output still in them.
         """
-        self._write_atomic(f"\x1b[{height};1H" + "\n" * self._reserved_rows)
+        self._write_now(f"\x1b[{height};1H" + "\n" * self._reserved_rows)
 
     # -- painting ---------------------------------------------------------
 
@@ -696,7 +694,7 @@ class Dock:
         resize landing after the write but before the flush would put its
         release out first and this on top of it, on rows that are nobody's.
         """
-        self._write_atomic(text)
+        self._write_now(text)
 
     @property
     def width(self) -> int:
@@ -709,16 +707,15 @@ class Dock:
         """
         return max(1, self._width - 1)
 
-    def _write_atomic(self, text: str) -> None:
-        """One whole sequence onto the terminal, with nobody in between.
+    def _write_now(self, text: str) -> None:
+        """One whole sequence onto the terminal, and out of the buffer.
 
-        The log handler takes the same lock, so a line cannot land inside
-        the escape sequence a row is being drawn with. Never from a signal
-        handler: one that waits on a lock restores nothing at all.
+        Flushed here rather than by the caller: the sequence carries no
+        newline, so a line-buffered stream would hold it, and a resize
+        landing in between would put its own release out first.
         """
-        with atomic():
-            self._write(text)
-            self._flush()
+        self._write(text)
+        self._flush()
 
     def _write(self, text: str) -> None:
         # RuntimeError is what a buffered writer raises when a signal handler

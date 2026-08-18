@@ -202,12 +202,17 @@ def test_more_downloads_than_rows_show_nothing_rather_than_drift(terminal):
         assert isinstance(second, DummyProgressBar)
 
 
-def test_the_downloader_cannot_build_a_bar_of_its_own():
+def test_nothing_outside_the_dock_can_build_a_bar():
     # The hard version of the rule: the old way is not merely unused, it is
-    # out of reach. tqdm still formats the docked rows, from `progress`.
-    source = pathlib.Path("src/audible_cli/downloader.py").read_text()
+    # out of reach. This was checked in one file and missed a second
+    # downloader in utils.py that still built one. tqdm formats the docked
+    # rows, so `progress` is the one module allowed to name it.
+    package = pathlib.Path("src/audible_cli")
+    named = {path.name for path in package.rglob("*.py") if "tqdm" in path.read_text()}
 
-    assert "tqdm" not in source, "the old bar is still within reach"
+    assert named == {"progress.py", "_logging.py"}, (
+        f"the old bar is within reach of {sorted(named - {'progress.py', '_logging.py'})}"
+    )
 
 
 def test_a_download_gets_a_docked_row_or_nothing(terminal, monkeypatch):

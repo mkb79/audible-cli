@@ -10,7 +10,6 @@ from difflib import SequenceMatcher
 import aiofiles
 import click
 import httpx
-import tqdm
 from audible import Authenticator
 from audible.client import raise_for_status
 from audible.exceptions import (
@@ -320,18 +319,10 @@ class Downloader:
         if docked is not None:
             return docked
 
-        # Placed the old way, so it still drifts with the log output.
-        # `leave=False` at least keeps a finished bar from staying between
-        # the log lines, which is where concurrent bars used to be drawn
-        # over each other.
-        return tqdm.tqdm(
-            desc=click.format_filename(self._file, shorten=True),
-            total=total,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-            leave=False
-        )
+        # No row from the dock, so nothing. A bar placed the old way drifts
+        # with the log output and draws over its neighbours, and the dock is
+        # meant to be the only way progress is shown.
+        return DummyProgressBar()
 
     def _file_okay(self):
         if not self._file.parent.is_dir():

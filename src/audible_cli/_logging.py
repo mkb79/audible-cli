@@ -5,8 +5,6 @@ from warnings import warn
 import click
 from tqdm import tqdm
 
-from ._terminal import atomic
-
 
 audible_cli_logger = logging.getLogger("audible_cli")
 audible_cli_logger.addHandler(logging.NullHandler())
@@ -14,19 +12,6 @@ audible_cli_logger.addHandler(logging.NullHandler())
 log_formatter = logging.Formatter(
     "%(asctime)s %(levelname)s [%(name)s] %(filename)s:%(lineno)d: %(message)s"
 )
-
-
-class LockedStreamHandler(logging.StreamHandler):
-    """A console handler that waits its turn.
-
-    The other console handler goes through `tqdm.external_write_mode`,
-    which takes the same lock. Without this one taking it too, a second
-    console logger writes straight into whatever the dock is drawing.
-    """
-
-    def emit(self, record: logging.LogRecord) -> None:
-        with atomic():
-            super().emit(record)
 
 
 class AudibleCliLogHelper:
@@ -60,7 +45,7 @@ class AudibleCliLogHelper:
             level: str | int | None = None
     ) -> None:
         """Set up a console logger to the audible-cli package."""
-        handler = LockedStreamHandler()
+        handler = logging.StreamHandler()
         # noinspection PyTypeChecker
         self._set_handler(handler, "ConsoleLogger", level)
 
