@@ -1458,3 +1458,135 @@ def test_a_rebuild_overwrites_its_rows_instead_of_pushing_them_up(
     assert "\n" not in rebuilt, f"scrolled the old rows into the flow: {rebuilt!r}"
     for line in range(23, 27):  # the rule and the three rows, 26 high
         assert f"\x1b[{line};1H\x1b[2K" in rebuilt, f"line {line} not cleared"
+
+
+def test_a_shrinking_dock_clears_the_rows_it_gives_up(terminal, monkeypatch):
+    # Both docks sit on the bottom, so a dock that shrank leaves its extra
+    # rows standing directly above the new one, where no later paint
+    # reaches them. That is the old bars, not the user's output.
+    with progress.docked_progress(8, stream=terminal, total=100):
+        dock = progress._current.dock
+        assert dock._reserved_rows == 10, "control: nine rows and the rule"
+
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 14))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        before = len(terminal.written)
+        progress.advance_summary(1)
+        after = "".join(terminal.written[before:])
+
+        assert dock._reserved_rows == 2, "the rule and the running total"
+        # Ten lines were held, so ten come back: 5 to 14 of a 14-row window
+        for line in range(5, 15):
+            assert f"\x1b[{line};1H\x1b[2K" in after, f"line {line} left standing"
+        assert "\x1b[4;1H\x1b[2K" not in after, "reached above what it ever held"
+
+
+def test_a_dock_that_grows_wipes_no_more_than_it_takes(terminal, monkeypatch):
+    with progress.docked_progress(2, stream=terminal, total=100):
+        dock = progress._current.dock
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 40))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        before = len(terminal.written)
+        progress.advance_summary(1)
+        after = "".join(terminal.written[before:])
+
+    for line in range(1, 37):
+        assert f"\x1b[{line};1H\x1b[2K" not in after, f"erased line {line}"
+
+
+def test_the_running_total_keeps_its_own_clock_running(terminal, monkeypatch):
+    # Nothing finishes for minutes on a big library, and until something
+    # does the row is never drawn again: the clock stops and a paint cut
+    # short by a resize stays cut.
+    with progress.docked_progress(2, stream=terminal, total=100):
+        dock = progress._current.dock
+        bar = progress.take_progressbar(pathlib.Path("a.aaxc"), total=1000)
+        dock.set(2, "Overall:   3%|█▌")  # what a cut-off paint leaves
+
+        monkeypatch.setattr(progress, "MIN_REPAINT_INTERVAL", 0)
+        bar.update(100)
+        bar._render()
+
+        assert dock._lines[2] != "Overall:   3%|█▌", "the row was left as it was"
+        assert dock._lines[2].startswith(progress.SUMMARY_PREFIX)
+
+
+def test_the_running_total_is_not_redrawn_on_every_chunk(terminal):
+    with progress.docked_progress(2, stream=terminal, total=100):
+        dock = progress._current.dock
+        bar = progress.take_progressbar(pathlib.Path("a.aaxc"), total=1000)
+        progress.advance_summary(1)
+        painted = dock._lines[2]
+
+        for _ in range(20):
+            bar.update(1)
+            bar._render(force=True)
+
+        assert dock._lines[2] == painted, "repainted inside the interval"
+
+
+def test_a_second_change_wipes_only_what_the_dock_held_by_then(terminal, monkeypatch):
+    # After shrinking, the band it may clear is the small one. Remembering
+    # the first size would have it erase the user's output every time from
+    # then on.
+    with progress.docked_progress(8, stream=terminal, total=100):
+        dock = progress._current.dock
+        for height in (14, 12):
+            monkeypatch.setattr(
+                progress.shutil,
+                "get_terminal_size",
+                lambda *a, h=height: os.terminal_size((100, h)),
+            )
+            dock._on_resize(signal.SIGWINCH, None)
+            before = len(terminal.written)
+            progress.advance_summary(1)
+            after = "".join(terminal.written[before:])
+
+        assert dock._reserved_rows == 2, "control: still the rule and the total"
+        assert "\x1b[11;1H\x1b[2K" in after, "its own two rows of twelve"
+        assert "\x1b[12;1H\x1b[2K" in after
+        for line in range(1, 11):
+            assert f"\x1b[{line};1H\x1b[2K" not in after, (
+                f"erased line {line}, which it never held"
+            )
+
+
+def test_a_bar_outside_the_dock_gets_its_title_shortened_too(monkeypatch):
+    # The row with no number in the user's screenshot: a fallback bar whose
+    # title pushed the meter off the line and wrapped onto the next one.
+    monkeypatch.setattr(
+        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((80, 24))
+    )
+    monkeypatch.setattr(
+        "audible_cli.downloader.shutil.get_terminal_size",
+        lambda *a: os.terminal_size((80, 24)),
+    )
+    long_name = pathlib.Path(
+        "B0GTCGYFGD_Sternengeschichten_Sternengeschichten_Spezial_Marz_2026-MPEG.mp3"
+    )
+    with progress.docked_progress(1, stream=FakeTerminal()):
+        progress.take_progressbar(pathlib.Path("takes the only row"), total=10)
+        bar = get_progressbar(long_name, total=27_600_000)
+
+    assert not isinstance(bar, progress.DockedProgressBar), "control: fell back"
+    assert "…" in bar.desc, f"title left at full length: {bar.desc!r}"
+    assert len(bar.desc) < len(long_name.name)
+    bar.close()
+
+
+def test_a_title_that_fits_keeps_its_full_name_outside_the_dock(monkeypatch):
+    monkeypatch.setattr(
+        "audible_cli.downloader.shutil.get_terminal_size",
+        lambda *a: os.terminal_size((120, 24)),
+    )
+    with progress.docked_progress(1, stream=FakeTerminal()):
+        progress.take_progressbar(pathlib.Path("takes the only row"), total=10)
+        bar = get_progressbar(pathlib.Path("short.aaxc"), total=1000)
+
+    assert bar.desc.startswith("short.aaxc")
+    assert "…" not in bar.desc
+    bar.close()

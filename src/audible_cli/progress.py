@@ -139,6 +139,9 @@ class Dock:
         # The one row worth keeping when there is no room for all of them.
         self._keep_row = keep_row
         self._rule = rule
+        # Lines the dock held last time it was set up. A smaller one
+        # leaves the difference standing above it.
+        self._held = 0
         # Row numbers on screen, top to bottom. Fewer than all of them when
         # the window is short, so `_top + n` is a position, not a row.
         self._shown = list(range(rows))
@@ -320,6 +323,7 @@ class Dock:
             self._top = height - self._reserved_rows + 1
             # Scroll the reserved rows into existence, so nothing already on
             # screen ends up underneath them.
+            self._held = self._reserved_rows
             self._scroll_room_into_being(height)
             self._reserve(height)
             self._paint_rule()
@@ -544,6 +548,8 @@ class Dock:
         self._rewrapped = False
         self._paused = False
         self._top = height - self._reserved_rows + 1
+        self._wipe_what_it_used_to_hold()
+        self._held = self._reserved_rows
         # No scrolling here, unlike the first open. What stands in those
         # rows a moment after a resize is the dock that was there before,
         # and scrolling it up is what put the old bars in the text flow and
@@ -570,6 +576,24 @@ class Dock:
             # One arrived mid-repaint, during a row that kept the handler off
             # the margins. Nobody else would give these back.
             self._release_only()
+
+    def _wipe_what_it_used_to_hold(self) -> None:
+        """Clear the lines a wider dock left above this one.
+
+        Both docks sit on the bottom, so a dock that shrank left its extra
+        rows directly above where the new one starts. They hold nothing but
+        the bars that were there, and no later paint reaches them.
+        """
+        extra = min(self._held - self._reserved_rows, self._top - 1)
+        if extra <= 0:
+            return
+        self._paint_write(
+            "\x1b7"
+            + "".join(
+                f"\x1b[{line};1H\x1b[2K" for line in range(self._top - extra, self._top)
+            )
+            + "\x1b8"
+        )
 
     def _scroll_room_into_being(self, height: int) -> None:
         """Make the reserved rows by scrolling, not by writing over them.
@@ -735,6 +759,27 @@ def _prefix_budget(ncols: int, bar_format: str | None, **meter: Any) -> int:
     return max(0, closing - opening - 1 - MIN_BAR_COLUMNS)
 
 
+def fit_title(title: str, width: int, total: int, start: int = 0) -> str:
+    """Shorten `title` to what a bar of `width` can show beside its meter.
+
+    For bars drawn outside the dock, which have the same problem with a
+    long name and rather less room to lose.
+    """
+    return _elide(
+        title,
+        _prefix_budget(
+            width,
+            None,
+            n=start,
+            total=total,
+            elapsed=0.0,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024,
+        ),
+    )
+
+
 class DockedProgressBar:
     """One reserved row, rendered by tqdm and placed by the dock."""
 
@@ -790,6 +835,9 @@ class DockedProgressBar:
             return
         self._last_paint = now
         self._dock.set(self._row, self._text())
+        # The row below keeps the same cadence, so its clock runs and a
+        # paint that did not land is made good.
+        _tick_summary()
 
     def _text(self) -> str:
         return self._format(time.monotonic() - self._started)
@@ -835,6 +883,7 @@ class _Summary:
         self._total = total
         self._done = 0
         self._started = time.monotonic()
+        self._last_paint = 0.0
         dock.set_renderer(row, self._text)
         self.render()
 
@@ -847,7 +896,17 @@ class _Summary:
         self._total += n
         self.render()
 
-    def render(self) -> None:
+    def render(self, force: bool = True) -> None:
+        """Draw it again.
+
+        Unforced this is the heartbeat the counts alone do not give it: a
+        long run finishes nothing for minutes, and until then the clock
+        stands still and a paint cut short by a resize stays cut.
+        """
+        now = time.monotonic()
+        if not force and now - self._last_paint < MIN_REPAINT_INTERVAL:
+            return
+        self._last_paint = now
         self._dock.set(self._row, self._text())
 
     def _text(self) -> str:
@@ -891,6 +950,13 @@ def _release_row(dock: Dock, row: int) -> None:
             return
         if row not in _current.free_rows:
             _current.free_rows.append(row)
+
+
+def _tick_summary() -> None:
+    with _rows_lock:
+        summary = _current.summary
+    if summary is not None:
+        summary.render(force=False)
 
 
 def advance_summary(n: int = 1) -> None:

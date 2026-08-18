@@ -1,6 +1,7 @@
 import logging
 import pathlib
 import re
+import shutil
 from collections.abc import Callable
 from enum import Enum, auto
 from typing import Any, Literal, NamedTuple
@@ -11,7 +12,12 @@ import httpx
 import tqdm
 from aiofiles.os import path, unlink
 
-from .progress import DockedProgressBar, progress_disabled, take_progressbar
+from .progress import (
+    DockedProgressBar,
+    fit_title,
+    progress_disabled,
+    take_progressbar,
+)
 
 
 FileMode = Literal["ab", "wb"]
@@ -323,13 +329,20 @@ def get_progressbar(
     # old way and still drifts with the log output, but `leave=False` keeps
     # finished bars from piling up between the log lines, which is where they
     # used to be drawn over each other.
-    description = click.format_filename(destination, shorten=True)
+    # Shortened for the same reason the docked rows are: past a certain
+    # length tqdm drops the meter and then wraps, and one download then
+    # takes two lines and shows no progress on either.
+    width = shutil.get_terminal_size().columns
+    description = fit_title(
+        click.format_filename(destination, shorten=True), width, total, start
+    )
     progressbar = tqdm.tqdm(
         desc=description,
         total=total,
         unit="B",
         unit_scale=True,
         unit_divisor=1024,
+        dynamic_ncols=True,
         leave=False
     )
     if start > 0:
