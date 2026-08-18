@@ -67,7 +67,9 @@ def terminal(monkeypatch):
     object after fixture setup, so the dock would see that instead.
     """
     monkeypatch.setattr(
-        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 24))
+        progress.shutil,
+        "get_terminal_size",
+        lambda *a, **kw: os.terminal_size((100, 24)),
     )
     return FakeTerminal()
 
@@ -81,7 +83,7 @@ def test_a_terminal_too_short_gets_no_dock(terminal, monkeypatch):
     monkeypatch.setattr(
         progress.shutil,
         "get_terminal_size",
-        lambda *a: os.terminal_size((100, progress.MIN_SCROLL_ROWS + 2)),
+        lambda *a, **kw: os.terminal_size((100, progress.MIN_SCROLL_ROWS + 2)),
     )
     # One row plus the rule above it is what fits here. Another is one too
     # many, and the dock declines rather than squeezing the output.
@@ -221,7 +223,7 @@ def test_a_download_gets_a_docked_row_or_nothing(terminal, monkeypatch):
             monkeypatch.setattr(
                 progress.shutil,
                 "get_terminal_size",
-                lambda *a, s=size: os.terminal_size(s),
+                lambda *a, s=size, **kw: os.terminal_size(s),
             )
             progress._current.dock._on_resize(signal.SIGWINCH, None)
             for name in "abcd":
@@ -237,7 +239,9 @@ def test_the_size_comes_from_the_stream_the_bars_go_on(monkeypatch):
     # to a file and stderr still a terminal the two differ, and reserving
     # rows of the wrong screen puts the region in the middle of it.
     monkeypatch.setattr(
-        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((80, 24))
+        progress.shutil,
+        "get_terminal_size",
+        lambda *a, **kw: os.terminal_size((80, 24)),
     )
     monkeypatch.setattr(
         progress.os, "get_terminal_size", lambda fd: os.terminal_size((50, 10))
@@ -293,7 +297,7 @@ def test_a_window_shrinking_too_far_still_hands_out_rows(terminal, monkeypatch):
         monkeypatch.setattr(
             progress.shutil,
             "get_terminal_size",
-            lambda *a: os.terminal_size((100, progress.MIN_SCROLL_ROWS + 1)),
+            lambda *a, **kw: os.terminal_size((100, progress.MIN_SCROLL_ROWS + 1)),
         )
         progress._current.dock._on_resize(signal.SIGWINCH, None)
         # A repaint is what notices the new size, and a bar throttles its
@@ -394,7 +398,9 @@ def test_a_resize_that_fits_moves_the_region_and_repaints(terminal, monkeypatch)
         bar = progress.take_progressbar(pathlib.Path("a"), total=1000)
         bar.update(100)
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 18))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((100, 18)),
         )
         progress._current.dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
@@ -635,7 +641,9 @@ def test_a_slot_keeps_its_number_while_it_waits(terminal):
 
 def test_the_numbers_line_up_past_nine(terminal, monkeypatch):
     monkeypatch.setattr(
-        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 40))
+        progress.shutil,
+        "get_terminal_size",
+        lambda *a, **kw: os.terminal_size((100, 40)),
     )
     with progress.docked_progress(12, stream=terminal):
         bar = progress.take_progressbar(pathlib.Path("a"), total=10)
@@ -718,7 +726,7 @@ def test_a_dock_that_would_eat_the_window_is_refused(monkeypatch):
         monkeypatch.setattr(
             progress.shutil,
             "get_terminal_size",
-            lambda *a: os.terminal_size((80, rows)),
+            lambda *a, **kw: os.terminal_size((80, rows)),
         )
 
     screen(24)
@@ -769,7 +777,7 @@ def test_a_height_change_wipes_nothing_by_its_old_row_numbers(terminal, monkeypa
         monkeypatch.setattr(
             progress.shutil,
             "get_terminal_size",
-            lambda *a: os.terminal_size((100, 18)),
+            lambda *a, **kw: os.terminal_size((100, 18)),
         )
         before = len(terminal.written)
         progress._current.dock._on_resize(signal.SIGWINCH, None)
@@ -792,7 +800,7 @@ def test_a_width_change_moves_the_dock_rather_than_ending_it(terminal, monkeypat
         monkeypatch.setattr(
             progress.shutil,
             "get_terminal_size",
-            lambda *a: os.terminal_size((60, 18)),
+            lambda *a, **kw: os.terminal_size((60, 18)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
@@ -815,7 +823,9 @@ def test_a_bar_keeps_drawing_after_a_width_change(terminal, monkeypatch):
         bar = progress.take_progressbar(pathlib.Path("a"), total=1000)
         bar.update(100)
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 18)),
         )
         progress._current.dock._on_resize(signal.SIGWINCH, None)
         bar._render(force=True)  # works the resize out and rebuilds
@@ -838,7 +848,7 @@ def test_a_width_change_wipes_nothing_by_its_old_row_numbers(terminal, monkeypat
         monkeypatch.setattr(
             progress.shutil,
             "get_terminal_size",
-            lambda *a: os.terminal_size((60, 18)),
+            lambda *a, **kw: os.terminal_size((60, 18)),
         )
         before = len(terminal.written)
         progress._current.dock._on_resize(signal.SIGWINCH, None)
@@ -859,11 +869,15 @@ def test_a_window_dragged_out_and_back_rebuilds_once(terminal, monkeypatch):
     with progress.docked_progress(2, stream=terminal):
         dock = progress._current.dock
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 24))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 24)),
         )
         dock._on_resize(signal.SIGWINCH, None)  # away
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 24))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((100, 24)),
         )
         dock._on_resize(signal.SIGWINCH, None)  # and back
         dock.set(0, "anything")
@@ -880,7 +894,9 @@ def test_a_bar_asked_for_after_a_resize_is_never_a_mute_one(terminal, monkeypatc
     # first, so the row it hands back is one of the new ones.
     with progress.docked_progress(2, stream=terminal):
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 18)),
         )
         progress._current.dock._on_resize(signal.SIGWINCH, None)
 
@@ -898,7 +914,9 @@ def test_a_resize_stops_the_exit_from_erasing_old_rows(terminal, monkeypatch):
     with progress.docked_progress(2, stream=terminal) as _:
         dock = progress._current.dock
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 24))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 24)),
         )
         # Mid-paint, so the handler leaves the release to the repaint and
         # the region is still ours when the block ends. Otherwise the exit
@@ -978,7 +996,9 @@ def test_a_dock_out_of_room_comes_back_when_the_room_does(terminal, monkeypatch)
         assert bar is not None
 
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 14))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((90, 14)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         bar._render(force=True)
@@ -986,7 +1006,9 @@ def test_a_dock_out_of_room_comes_back_when_the_room_does(terminal, monkeypatch)
         assert dock.enabled, "out of room is not the same as unusable"
 
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((45, 40))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((45, 40)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
@@ -1004,7 +1026,7 @@ def test_nothing_is_painted_while_there_is_no_room(terminal, monkeypatch):
         monkeypatch.setattr(
             progress.shutil,
             "get_terminal_size",
-            lambda *a: os.terminal_size((100, progress.MIN_SCROLL_ROWS + 1)),
+            lambda *a, **kw: os.terminal_size((100, progress.MIN_SCROLL_ROWS + 1)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         dock.set(0, "settles into the pause")
@@ -1022,12 +1044,16 @@ def test_a_resize_during_the_rebuild_leaves_no_stale_region(terminal, monkeypatc
     # turn landing in between makes them wrong before they arrive, and the
     # handler cannot take them back: it ran before they were written.
     monkeypatch.setattr(
-        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 24))
+        progress.shutil,
+        "get_terminal_size",
+        lambda *a, **kw: os.terminal_size((100, 24)),
     )
     dock = progress.Dock(2, stream=terminal)
     with dock:
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 18)),
         )
         dock._on_resize(signal.SIGWINCH, None)
 
@@ -1038,7 +1064,7 @@ def test_a_resize_during_the_rebuild_leaves_no_stale_region(terminal, monkeypatc
                 monkeypatch.setattr(
                     progress.shutil,
                     "get_terminal_size",
-                    lambda *a: os.terminal_size((100, 30)),
+                    lambda *a, **kw: os.terminal_size((100, 30)),
                 )
                 dock._on_resize(signal.SIGWINCH, None)
             real_write(text)
@@ -1078,7 +1104,9 @@ def test_every_row_is_repainted_after_a_resize(terminal, monkeypatch):
     with progress.docked_progress(3, stream=terminal):
         dock = progress._current.dock
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 18)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
@@ -1096,7 +1124,9 @@ def test_a_resize_asks_the_rows_what_they_hold_now(terminal, monkeypatch):
         dock.set(0, "for a hundred columns")
         dock.set_renderer(0, lambda: f"rendered for {dock.width}")
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 24))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 24)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
@@ -1111,14 +1141,18 @@ def test_a_resize_at_the_new_width_is_not_taken_for_a_rewrap(terminal, monkeypat
     # resize compares against the old one and calls a height change a reflow.
     with progress.Dock(2, stream=terminal) as dock:
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 24))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 24)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         dock.set(0, "settles at 60")
         assert dock._reserved_width == 60
 
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 18)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         assert not dock._rewrapped, "same width, so nothing reflowed"
@@ -1150,7 +1184,9 @@ def test_a_release_after_a_resize_keeps_the_cursor(terminal, monkeypatch):
     # save and restore that every other release wraps it in.
     with progress.docked_progress(2, stream=terminal):
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 24))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 24)),
         )
         # Painting when it lands, so the handler leaves the margins alone
         # and the exit is the one that has to give them back.
@@ -1189,7 +1225,9 @@ def test_a_resize_during_the_repaint_gives_the_margins_back(terminal, monkeypatc
     # is painting has to notice and give them back.
     with progress.Dock(2, stream=terminal) as dock:
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 18)),
         )
         dock._on_resize(signal.SIGWINCH, None)
 
@@ -1200,7 +1238,7 @@ def test_a_resize_during_the_repaint_gives_the_margins_back(terminal, monkeypatc
                 monkeypatch.setattr(
                     progress.shutil,
                     "get_terminal_size",
-                    lambda *a: os.terminal_size((90, 26)),
+                    lambda *a, **kw: os.terminal_size((90, 26)),
                 )
                 dock._on_resize(signal.SIGWINCH, None)  # `_painting` is on
             real_paint_write(text)
@@ -1219,7 +1257,9 @@ def test_a_resize_during_the_repaint_gives_the_margins_back(terminal, monkeypatc
 
 def _bar_at(width, name, monkeypatch, label="3."):
     monkeypatch.setattr(
-        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((width, 24))
+        progress.shutil,
+        "get_terminal_size",
+        lambda *a, **kw: os.terminal_size((width, 24)),
     )
     dock = progress.Dock(2, stream=FakeTerminal())
     with dock:
@@ -1299,7 +1339,9 @@ def test_a_window_too_small_for_all_rows_shows_as_many_as_fit(terminal, monkeypa
             assert progress.take_progressbar(pathlib.Path(name), total=10) is not None
 
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 12))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((90, 12)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
@@ -1320,7 +1362,9 @@ def test_the_running_total_is_the_last_row_to_go(terminal, monkeypatch):
     with progress.docked_progress(8, stream=terminal, total=40):
         dock = progress._current.dock
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 6))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((90, 6)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         progress.advance_summary(1)
@@ -1339,7 +1383,9 @@ def test_a_bar_that_lost_its_place_says_nothing_and_keeps_its_text(
             for name in "abcdefgh"
         ]
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 12))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((90, 12)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         progress.advance_summary(1)  # settles the resize
@@ -1361,7 +1407,7 @@ def test_the_rows_all_come_back_when_the_window_does(terminal, monkeypatch):
             monkeypatch.setattr(
                 progress.shutil,
                 "get_terminal_size",
-                lambda *a, w=width, h=height: os.terminal_size((w, h)),
+                lambda *a, w=width, h=height, **kw: os.terminal_size((w, h)),
             )
             dock._on_resize(signal.SIGWINCH, None)
             before = len(terminal.written)
@@ -1378,7 +1424,9 @@ def test_without_a_running_total_there_is_nothing_worth_keeping(terminal, monkey
     with progress.docked_progress(8, stream=terminal):
         dock = progress._current.dock
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 12))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((90, 12)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         dock.set(0, "anything")
@@ -1417,7 +1465,9 @@ def test_the_rule_is_a_row_of_the_dock_not_of_the_output(terminal):
 def test_the_rule_is_redrawn_at_the_new_width(terminal, monkeypatch):
     with progress.Dock(2, stream=terminal) as dock:
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((60, 18)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
@@ -1433,7 +1483,9 @@ def test_the_rule_costs_a_row_the_dock_has_to_have(terminal, monkeypatch):
     # It is reserved like any other, so a window that only just held the
     # rows no longer does.
     monkeypatch.setattr(
-        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 18))
+        progress.shutil,
+        "get_terminal_size",
+        lambda *a, **kw: os.terminal_size((100, 18)),
     )
     assert progress.Dock(9, stream=terminal, rule=False).enabled, "nine fit bare"
     assert not progress.Dock(9, stream=terminal).enabled, "ten do not"
@@ -1453,7 +1505,9 @@ def test_a_dock_without_a_rule_places_its_rows_as_before(terminal):
 @pytest.mark.parametrize("width", [100, 58, 45, 40, 30, 25])
 def test_the_running_total_is_never_cut_mid_number(width, monkeypatch):
     monkeypatch.setattr(
-        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((width, 24))
+        progress.shutil,
+        "get_terminal_size",
+        lambda *a, **kw: os.terminal_size((width, 24)),
     )
     term = FakeTerminal()
     with progress.docked_progress(2, stream=term, total=40):
@@ -1487,7 +1541,9 @@ def test_a_rebuild_overwrites_its_rows_instead_of_pushing_them_up(
     with progress.Dock(3, stream=terminal) as dock:
         dock.set(0, "eins")
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((52, 26))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((52, 26)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
@@ -1503,7 +1559,9 @@ def test_a_dock_that_grows_wipes_no_more_than_it_takes(terminal, monkeypatch):
     with progress.docked_progress(2, stream=terminal, total=100):
         dock = progress._current.dock
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 40))
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size((100, 40)),
         )
         dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
@@ -1571,7 +1629,9 @@ def test_no_row_ever_fills_the_last_column(terminal, monkeypatch):
 @pytest.mark.parametrize("columns", [120, 100, 60, 45, 30])
 def test_a_row_leaves_a_column_free_at_any_width(columns, monkeypatch):
     monkeypatch.setattr(
-        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((columns, 24))
+        progress.shutil,
+        "get_terminal_size",
+        lambda *a, **kw: os.terminal_size((columns, 24)),
     )
     with progress.Dock(2, stream=FakeTerminal()) as dock:
         bar = progress.DockedProgressBar(
@@ -1591,7 +1651,9 @@ def test_the_dock_never_erases_a_line_it_does_not_own(size, terminal, monkeypatc
         dock = progress._current.dock
 
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size(size)
+            progress.shutil,
+            "get_terminal_size",
+            lambda *a, **kw: os.terminal_size(size),
         )
         dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
