@@ -948,7 +948,7 @@ def test_a_dock_out_of_room_comes_back_when_the_room_does(terminal, monkeypatch)
         )
         dock._on_resize(signal.SIGWINCH, None)
         bar._render(force=True)
-        assert not dock.available, "control: 14 rows have no room for 9"
+        assert not dock.showing_all, "control: 14 rows have no room for 9"
         assert dock.enabled, "out of room is not the same as unusable"
 
         monkeypatch.setattr(
@@ -1249,3 +1249,97 @@ def test_elide_keeps_what_it_promises():
     assert progress._elide("abcdef", 0) == ""
     for width in range(0, 12):
         assert len(progress._elide("abcdefgh", width)) <= width
+
+
+# --- half a dock beats none -----------------------------------------------
+
+
+def test_a_window_too_small_for_all_rows_keeps_the_running_total(terminal, monkeypatch):
+    # A phone in landscape with the keyboard up has no room for eight bars.
+    # Falling back to plain bars for everything loses the one line that
+    # still fits and still says something: how far along the run is.
+    with progress.docked_progress(8, stream=terminal, total=40):
+        dock = progress._current.dock
+        assert dock.showing_all, "control: 24 rows hold all nine"
+
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 12))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        before = len(terminal.written)
+        progress.advance_summary(7)
+        after = "".join(terminal.written[before:])
+
+        assert not dock.showing_all, "eight bars cannot fit in twelve rows"
+        assert dock.available, "but one row can"
+        assert "\x1b[1;11r" in after, f"a region for the one row: {after!r}"
+        assert "Overall" in after, "and the running total drawn in it"
+        assert "7/40" in after
+        # Row 8 of the dock, but the only one on screen, so the bottom line
+        # of twelve -- placed by where it sits, not by what it is numbered.
+        assert "\x1b[12;1H\x1b[2KOverall" in after, f"drawn off screen: {after!r}"
+
+
+def test_no_rows_are_handed_out_while_only_the_total_is_shown(terminal, monkeypatch):
+    with progress.docked_progress(8, stream=terminal, total=40):
+        dock = progress._current.dock
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 12))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        progress.advance_summary(1)
+
+        assert progress.take_progressbar(pathlib.Path("a"), total=10) is None
+
+
+def test_a_bar_that_lost_its_place_says_nothing_and_keeps_its_text(
+    terminal, monkeypatch
+):
+    with progress.docked_progress(8, stream=terminal, total=40):
+        dock = progress._current.dock
+        bar = progress.take_progressbar(pathlib.Path("a"), total=1000)
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 12))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        progress.advance_summary(1)  # settles the resize
+
+        before = len(terminal.written)
+        bar.update(500)
+        bar._render(force=True)
+
+        assert "".join(terminal.written[before:]) == "", "drew a row it has not got"
+        assert dock._lines[bar._row], "kept what it holds for when it is back"
+
+
+def test_the_rows_all_come_back_when_the_window_does(terminal, monkeypatch):
+    with progress.docked_progress(8, stream=terminal, total=40):
+        dock = progress._current.dock
+        for width, height in ((90, 12), (100, 40)):
+            monkeypatch.setattr(
+                progress.shutil,
+                "get_terminal_size",
+                lambda *a, w=width, h=height: os.terminal_size((w, h)),
+            )
+            dock._on_resize(signal.SIGWINCH, None)
+            before = len(terminal.written)
+            progress.advance_summary(1)
+            after = "".join(terminal.written[before:])
+
+        assert dock.showing_all
+        assert "\x1b[1;31r" in after, f"no region for all nine rows: {after!r}"
+        assert progress.take_progressbar(pathlib.Path("a"), total=10) is not None
+
+
+def test_without_a_running_total_there_is_nothing_worth_keeping(terminal, monkeypatch):
+    # Nothing to fall back to, so the whole dock stands aside as before.
+    with progress.docked_progress(8, stream=terminal):
+        dock = progress._current.dock
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 12))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        dock.set(0, "anything")
+
+        assert not dock.available
+        assert dock.enabled

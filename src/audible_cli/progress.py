@@ -119,9 +119,19 @@ def _set_windows_console_mode(handle: Any, mode: int) -> bool:
 class Dock:
     """Rows reserved at the bottom of the terminal, addressed absolutely."""
 
-    def __init__(self, rows: int, stream: IO[str] | None = None) -> None:
+    def __init__(
+        self,
+        rows: int,
+        stream: IO[str] | None = None,
+        keep_row: int | None = None,
+    ) -> None:
         self._stream = stream if stream is not None else sys.stderr
         self._rows = rows
+        # The one row worth keeping when there is no room for all of them.
+        self._keep_row = keep_row
+        # Row numbers on screen, top to bottom. Fewer than all of them when
+        # the window is short, so `_top + n` is a position, not a row.
+        self._shown = list(range(rows))
         self._lines = [""] * rows
         self._lock = threading.RLock()
         self._active = False
@@ -159,12 +169,17 @@ class Dock:
 
     @property
     def available(self) -> bool:
-        """Whether a row handed out now would actually be drawn.
+        """Whether anything at all is being drawn.
 
-        False while the window is too small. The dock stays open through
-        that and takes its rows back when the room returns.
+        False while the window is too small for even the one kept row. The
+        dock stays open through that and comes back with the room.
         """
         return self._active and not self._paused
+
+    @property
+    def showing_all(self) -> bool:
+        """Whether every row has a place, so one may be handed out."""
+        return self.available and len(self._shown) == self._rows
 
     def _usable(self) -> bool:
         if self._rows <= 0:
@@ -178,11 +193,26 @@ class Dock:
         if not self._takes_escape_sequences():
             return False
 
-        return self._fits(self._measure()[0])
+        return self._choose_layout(self._measure()[0]) is not None
 
-    def _fits(self, height: int) -> bool:
-        """Whether reserving our rows still leaves the window usable."""
-        return height - self._rows >= max(MIN_SCROLL_ROWS, height // 2)
+    def _fits(self, height: int, count: int) -> bool:
+        """Whether reserving `count` rows still leaves the window usable."""
+        return height - count >= max(MIN_SCROLL_ROWS, height // 2)
+
+    def _layouts(self) -> list[list[int]]:
+        """Row sets to try, widest first."""
+        everything = list(range(self._rows))
+        if self._keep_row is None or self._rows <= 1:
+            return [everything]
+        # Half a dock beats none: on a phone with the keyboard up there is
+        # no room for eight bars, but the running total still fits.
+        return [everything, [self._keep_row]]
+
+    def _choose_layout(self, height: int) -> list[int] | None:
+        for shown in self._layouts():
+            if self._fits(height, len(shown)):
+                return shown
+        return None
 
     def _takes_escape_sequences(self) -> bool:
         """Whether this terminal can be told where to put the cursor."""
@@ -263,7 +293,12 @@ class Dock:
 
             height, self._width = self._measure()
             self._reserved_width = self._width
-            self._top = height - self._rows + 1
+            shown = self._choose_layout(height)
+            if shown is None:
+                self._paused = True
+                return
+            self._shown = shown
+            self._top = height - len(shown) + 1
             # Scroll the reserved rows into existence, so nothing already on
             # screen ends up underneath them.
             self._scroll_room_into_being(height)
@@ -285,10 +320,10 @@ class Dock:
         # One write, for the same reason as in `_paint`: a sequence spread
         # over several calls is the easy one for a handler to cut in half.
         self._write(
-            f"\x1b[1;{height - self._rows}r"
+            f"\x1b[1;{height - len(self._shown)}r"
             # Setting the region homes the cursor, so put it back into the
             # scrolling part before ordinary output continues there.
-            f"\x1b[{height - self._rows};1H"
+            f"\x1b[{height - len(self._shown)};1H"
         )
         self._flush()
 
@@ -326,8 +361,8 @@ class Dock:
             # user's output. Give the margins back, erase nothing -- and keep
             # the cursor, which releasing the margins would otherwise home.
             return "\x1b7\x1b[r\x1b8"
-        for row in range(self._rows):  # wipe what is left
-            parts.append(f"\x1b[{self._top + row};1H\x1b[2K")
+        for position in range(len(self._shown)):  # wipe what is left
+            parts.append(f"\x1b[{self._top + position};1H\x1b[2K")
         parts.append(f"\x1b[{self._top};1H")
         return "".join(parts)
 
@@ -475,17 +510,19 @@ class Dock:
         if not self._active:
             # A signal restored the terminal while we were measuring
             return
-        if not self._fits(height):
+        shown = self._choose_layout(height)
+        if shown is None:
             # No room at the moment. Not the end of the dock: callers get
             # plain bars until the window has the space again.
             self._paused = True
             return
+        self._shown = shown
 
         self._width = width
         self._reserved_width = width
         self._rewrapped = False
         self._paused = False
-        self._top = height - self._rows + 1
+        self._top = height - len(self._shown) + 1
         self._scroll_room_into_being(height)
         self._reserve(height, after_resize=True)
         if not self._active:
@@ -499,7 +536,7 @@ class Dock:
         # Ask each line for its text again rather than repainting what was
         # measured for the old width: a bar rendered for 100 columns wraps
         # on 60 and takes the whole dock with it.
-        for row in range(self._rows):
+        for row in self._shown:
             render = self._renderers.get(row)
             if render is not None:
                 self._lines[row] = render()
@@ -516,7 +553,7 @@ class Dock:
         moves down. Coming out of a reflow the cursor can be anywhere, and
         the rows would then be cleared with the user's output still in them.
         """
-        self._write(f"\x1b[{height};1H" + "\n" * self._rows)
+        self._write(f"\x1b[{height};1H" + "\n" * len(self._shown))
 
     # -- painting ---------------------------------------------------------
 
@@ -567,13 +604,18 @@ class Dock:
             # A signal may have restored the terminal between two rows of a
             # repaint. Writing on would put bars back onto the normal screen.
             return
+        if row not in self._shown:
+            # A row the window has no space for. It keeps its text and comes
+            # back with it when the space does.
+            return
+        position = self._shown.index(row)
         # One write, not three: a handler runs between bytecodes and would
         # cut a split sequence in half. Not a guarantee, but the text has no
         # newline, so a line-buffered stream holds it.
         self._painting = True
         self._paint_write(
             "\x1b7"  # save cursor
-            f"\x1b[{self._top + row};1H\x1b[2K{text}"  # absolute row
+            f"\x1b[{self._top + position};1H\x1b[2K{text}"  # absolute row
             "\x1b8"  # put it back
         )
         self._painting = False
@@ -865,7 +907,13 @@ def docked_progress(
 
     width = len(str(rows))
     labels = [f"{i + 1:>{width}}." for i in range(rows)]
-    dock = Dock(rows + (1 if total is not None else 0), stream=stream)
+    # The running total is the row kept when the window has no space for
+    # the rest: one line still says how far along the whole run is.
+    dock = Dock(
+        rows + (1 if total is not None else 0),
+        stream=stream,
+        keep_row=rows if total is not None else None,
+    )
     if not dock.enabled:
         yield
         return
@@ -924,7 +972,7 @@ def take_progressbar(
     with _rows_lock:
         # A dock with no room at the moment shows nothing, so the caller is
         # better off with a plain bar than with a row that stays blank.
-        if _current.dock is not dock or not dock.available or not _current.free_rows:
+        if _current.dock is not dock or not dock.showing_all or not _current.free_rows:
             return None
         row = _current.free_rows.pop(0)
         label = _current.labels[row] if row < len(_current.labels) else ""
