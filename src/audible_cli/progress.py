@@ -15,16 +15,14 @@ The dock steps aside rather than fight: no terminal, one without cursor
 control, or a Windows console that refuses escape sequences. A window too
 short for the rows only pauses it.
 
-A resize rebuilds it at the bottom of whatever the window is now, and
+A resize rebuilds it at the bottom of whatever the window is now and
 leaves everything above alone. What the terminal did with the old rows is
 not knowable from in here: it may have kept their line numbers, shifted
 them by the height it gained, rewrapped them into more lines than there
-were, or dropped them into the scrollback where nothing can reach them.
-So a window that grows taller leaves the old rows standing above the new
-dock until the next log line scrolls them away. Two attempts to clear
-them by working out where they must have gone each erased a warning the
-user needed instead. A stale bar is cosmetic; a warning that never
-arrives is not.
+were, or dropped them into the scrollback. So a window that grows taller
+leaves the old rows standing until the next log line scrolls them away.
+Clearing them means deciding where they must have gone, and being wrong
+about that erases the output of whoever is watching.
 """
 
 from __future__ import annotations
@@ -75,8 +73,8 @@ MIN_NAME_COLUMNS = 12
 #: progress at all -- which on a phone is most of the line.
 MIN_BAR_COLUMNS = 8
 
-# : Rows that have to stay scrollable. The scrolling part also keeps
-# : half the window, or eight jobs would swallow a phone screen.
+#: Rows that have to stay scrollable. The scrolling part also keeps
+#: half the window, or eight jobs would swallow a phone screen.
 MIN_SCROLL_ROWS = 4
 
 #: Terminals that tell us they cannot place a cursor. An empty TERM counts:
@@ -546,8 +544,8 @@ class Dock:
             return
         shown = self._choose_layout(height)
         if shown is None:
-            # No room at the moment. Not the end of the dock: callers get
-            # plain bars until the window has the space again.
+            # No room at the moment. Not the end of the dock: it draws
+            # nothing until the window has the space again.
             self._paused = True
             return
         self._shown = shown
@@ -558,10 +556,10 @@ class Dock:
         self._rewrapped = False
         self._paused = False
         self._top = height - self._reserved_rows + 1
-        # No scrolling here, unlike the first open. What stands in those
+        # No scrolling here, unlike the first open: what stands in those
         # rows a moment after a resize is the dock that was there before,
-        # and scrolling it up is what put the old bars in the text flow and
-        # sent them drifting. Every row below is erased as it is painted.
+        # and scrolling lifts it into the text flow instead of covering it.
+        # Every row below is erased as it is painted.
         self._reserve(height, after_resize=True)
         if not self._active:
             return

@@ -1109,9 +1109,7 @@ async def cli(session, api_client, **params):
     # schedule the consumer
     run = DownloadRun(ignore_errors)
     # One reserved row per consumer, which is the most bars that can be
-    # alive at once, plus one for the running total. Where no dock can be
-    # had, downloads get plain bars instead; if the window shrinks below the
-    # room it needs mid-run, that applies to the ones started from then on.
+    # alive at once, plus one for the running total.
     with docked_progress(sim_jobs, enabled=show_progress, total=QUEUE.qsize()):
         await drain_queue(run, sim_jobs)
     run.raise_for_errors()

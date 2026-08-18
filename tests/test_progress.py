@@ -229,7 +229,7 @@ def test_a_download_gets_a_docked_row_or_nothing(terminal, monkeypatch):
                 assert isinstance(bar, progress.DockedProgressBar | DummyProgressBar)
 
 
-# --- the failures a review turned up, kept from coming back ---------------
+# --- the cases that are easy to get wrong and hard to notice --------------
 
 
 def test_the_size_comes_from_the_stream_the_bars_go_on(monkeypatch):
@@ -326,7 +326,7 @@ def test_a_bar_outliving_its_dock_keeps_its_hands_off_the_next_one(terminal):
         )
 
 
-# --- a second review round: the fixes, and the tests that were green-blind ---
+# --- signals arriving at the worst moment ---------------------------------
 
 
 def test_a_disabled_bar_survives_being_released(tmp_path):
@@ -809,7 +809,8 @@ def test_a_width_change_moves_the_dock_rather_than_ending_it(terminal, monkeypat
 
 def test_a_bar_keeps_drawing_after_a_width_change(terminal, monkeypatch):
     # What the user sees: bars that go quiet and then drift up with the
-    # output are the whole complaint. An update after the turn has to land.
+    # output is the failure this exists for: an update after the turn has
+    # to land.
     with progress.docked_progress(2, stream=terminal):
         bar = progress.take_progressbar(pathlib.Path("a"), total=1000)
         bar.update(100)
@@ -1548,7 +1549,7 @@ def test_no_row_ever_fills_the_last_column(terminal, monkeypatch):
     # A row that fills the width puts the terminal into pending wrap, and
     # it marks the line as continued. Rotating to a wider window then pulls
     # the next row back onto it, and the rule and every bar arrive as one
-    # glued line -- which is what a phone screenshot showed.
+    # glued line.
     with progress.docked_progress(3, stream=terminal, total=10):
         dock = progress._current.dock
         bars = [
@@ -1582,10 +1583,10 @@ def test_a_row_leaves_a_column_free_at_any_width(columns, monkeypatch):
 
 @pytest.mark.parametrize("size", [(40, 24), (100, 40), (60, 12), (120, 18)])
 def test_the_dock_never_erases_a_line_it_does_not_own(size, terminal, monkeypatch):
-    # Twice now a rebuild has cleared lines above itself, reasoning about
-    # where the terminal must have put the old rows. Both times the reason
-    # was sound and the lines held the user's output. A stale bar is
-    # cosmetic; a warning that never arrives is not.
+    # Clearing anything above the dock means deciding where the terminal
+    # put the old rows after a resize. That cannot be known from here, and
+    # being wrong about it erases whatever is standing there. A stale bar
+    # is cosmetic; a warning that never arrives is not.
     with progress.docked_progress(4, stream=terminal, total=40):
         dock = progress._current.dock
 
