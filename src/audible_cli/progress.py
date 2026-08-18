@@ -13,10 +13,18 @@ may be blocked, so it is best effort rather than a guarantee.
 
 The dock steps aside rather than fight: no terminal, one without cursor
 control, or a Windows console that refuses escape sequences. A window too
-short for the rows only pauses it. A resize rebuilds it at the bottom of
-whatever the window is now; where the old rows went is unknowable, so
-nothing is erased by their numbers. While it stands aside, callers get a
-plain tqdm bar.
+short for the rows only pauses it.
+
+A resize rebuilds it at the bottom of whatever the window is now, and
+leaves everything above alone. What the terminal did with the old rows is
+not knowable from in here: it may have kept their line numbers, shifted
+them by the height it gained, rewrapped them into more lines than there
+were, or dropped them into the scrollback where nothing can reach them.
+So a window that grows taller leaves the old rows standing above the new
+dock until the next log line scrolls them away. Two attempts to clear
+them by working out where they must have gone each erased a warning the
+user needed instead. A stale bar is cosmetic; a warning that never
+arrives is not.
 """
 
 from __future__ import annotations
@@ -544,12 +552,6 @@ class Dock:
             # plain bars until the window has the space again.
             self._paused = True
             return
-        # What stood on the screen a moment ago, and how wide it was drawn
-        # for. Read before the new geometry overwrites either.
-        was_shown = [
-            *([RULE * self.width] if self._rule else []),
-            *(self._lines[row] for row in self._shown),
-        ]
         self._shown = shown
 
         self._width = width
@@ -558,7 +560,6 @@ class Dock:
         self._rewrapped = False
         self._paused = False
         self._top = height - self._reserved_rows + 1
-        self._wipe_what_it_used_to_hold(was_shown)
         # No scrolling here, unlike the first open. What stands in those
         # rows a moment after a resize is the dock that was there before,
         # and scrolling it up is what put the old bars in the text flow and
@@ -585,32 +586,6 @@ class Dock:
             # One arrived mid-repaint, during a row that kept the handler off
             # the margins. Nobody else would give these back.
             self._release_only()
-
-    def _wipe_what_it_used_to_hold(self, was_shown: list[str]) -> None:
-        """Clear what the dock it used to be left standing above this one.
-
-        Both docks sit on the bottom, so whatever the old one leaves over
-        stands directly above where the new one starts, and no later paint
-        reaches it.
-
-        Only the rows it no longer uses. A narrower window also rewraps
-        each of them -- a row drawn for a hundred columns comes back as
-        three at forty-five -- and clearing that many looked right on
-        paper. It is a guess about where the terminal put them, and the
-        guess erased a warning the user needed. A stale bar is cosmetic; a
-        warning that never arrives is not, so the rewrapped remainder is
-        left where it is.
-        """
-        extra = min(len(was_shown) - self._reserved_rows, self._top - 1)
-        if extra <= 0:
-            return
-        self._paint_write(
-            "\x1b7"
-            + "".join(
-                f"\x1b[{line};1H\x1b[2K" for line in range(self._top - extra, self._top)
-            )
-            + "\x1b8"
-        )
 
     def _scroll_room_into_being(self, height: int) -> None:
         """Make the reserved rows by scrolling, not by writing over them.

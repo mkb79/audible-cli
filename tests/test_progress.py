@@ -1493,29 +1493,6 @@ def test_a_rebuild_overwrites_its_rows_instead_of_pushing_them_up(
         assert f"\x1b[{line};1H\x1b[2K" in rebuilt, f"line {line} not cleared"
 
 
-def test_a_shrinking_dock_clears_the_rows_it_gives_up(terminal, monkeypatch):
-    # Both docks sit on the bottom, so a dock that shrank leaves its extra
-    # rows standing directly above the new one, where no later paint
-    # reaches them. That is the old bars, not the user's output.
-    with progress.docked_progress(8, stream=terminal, total=100):
-        dock = progress._current.dock
-        assert dock._reserved_rows == 10, "control: nine rows and the rule"
-
-        monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 14))
-        )
-        dock._on_resize(signal.SIGWINCH, None)
-        before = len(terminal.written)
-        progress.advance_summary(1)
-        after = "".join(terminal.written[before:])
-
-        assert dock._reserved_rows == 7, "five bars, the total and the rule"
-        # Ten lines were held, so ten come back: 5 to 14 of a 14-row window
-        for line in range(5, 15):
-            assert f"\x1b[{line};1H\x1b[2K" in after, f"line {line} left standing"
-        assert "\x1b[4;1H\x1b[2K" not in after, "reached above what it ever held"
-
-
 def test_a_dock_that_grows_wipes_no_more_than_it_takes(terminal, monkeypatch):
     with progress.docked_progress(2, stream=terminal, total=100):
         dock = progress._current.dock
@@ -1562,34 +1539,6 @@ def test_the_running_total_is_not_redrawn_on_every_chunk(terminal):
         assert dock._lines[2] == painted, "repainted inside the interval"
 
 
-def test_a_second_change_wipes_only_what_the_dock_held_by_then(terminal, monkeypatch):
-    # After shrinking, the band it may clear is the small one. Remembering
-    # the first size would have it erase the user's output every time from
-    # then on.
-    with progress.docked_progress(8, stream=terminal, total=100):
-        dock = progress._current.dock
-        for height in (14, 12):
-            monkeypatch.setattr(
-                progress.shutil,
-                "get_terminal_size",
-                lambda *a, h=height: os.terminal_size((100, h)),
-            )
-            dock._on_resize(signal.SIGWINCH, None)
-            before = len(terminal.written)
-            progress.advance_summary(1)
-            after = "".join(terminal.written[before:])
-
-        # Seven lines at fourteen high, six at twelve, so the band it may
-        # clear the second time is one line, not the eight of the first.
-        assert dock._reserved_rows == 6, "control: four bars, the total, the rule"
-        for line in range(6, 13):
-            assert f"\x1b[{line};1H\x1b[2K" in after, f"line {line} left standing"
-        for line in range(1, 6):
-            assert f"\x1b[{line};1H\x1b[2K" not in after, (
-                f"erased line {line}, which it never held"
-            )
-
-
 def test_no_row_ever_fills_the_last_column(terminal, monkeypatch):
     # A row that fills the width puts the terminal into pending wrap, and
     # it marks the line as continued. Rotating to a wider window then pulls
@@ -1626,16 +1575,17 @@ def test_a_row_leaves_a_column_free_at_any_width(columns, monkeypatch):
         assert len(progress.RULE * dock.width) < columns
 
 
-def test_the_dock_never_erases_a_line_it_did_not_write(terminal, monkeypatch):
-    # A rewrapped row takes more lines than it had, and clearing that many
-    # would reach past the dock into the output above. It did, and a
-    # warning went with it. A stale bar is cosmetic; a lost warning is not.
+@pytest.mark.parametrize("size", [(40, 24), (100, 40), (60, 12), (120, 18)])
+def test_the_dock_never_erases_a_line_it_does_not_own(size, terminal, monkeypatch):
+    # Twice now a rebuild has cleared lines above itself, reasoning about
+    # where the terminal must have put the old rows. Both times the reason
+    # was sound and the lines held the user's output. A stale bar is
+    # cosmetic; a warning that never arrives is not.
     with progress.docked_progress(4, stream=terminal, total=40):
         dock = progress._current.dock
-        held = dock._reserved_rows
 
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((40, 24))
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size(size)
         )
         dock._on_resize(signal.SIGWINCH, None)
         before = len(terminal.written)
@@ -1643,9 +1593,8 @@ def test_the_dock_never_erases_a_line_it_did_not_write(terminal, monkeypatch):
         after = "".join(terminal.written[before:])
 
         cleared = {int(line) for line in re.findall(r"\x1b\[(\d+);1H\x1b\[2K", after)}
-        ours = set(range(dock._top, 25))
-        gave_up = set(range(dock._top - (held - dock._reserved_rows), dock._top))
+        ours = set(range(dock._top, dock._top + dock._reserved_rows))
 
-    assert cleared <= ours | gave_up, (
-        f"cleared {sorted(cleared - (ours | gave_up))}, which is the user's"
+    assert cleared <= ours, (
+        f"cleared {sorted(cleared - ours)}, which the dock does not own"
     )
