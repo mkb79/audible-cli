@@ -17,7 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- Progress bars now hold their line: one numbered line per worker at the bottom of the terminal plus one for the queue, carried along by a resize, stood aside while the window is too small, and turned off with `--no-progress`
+- Progress bars now hold their line: a ruled block at the bottom of the terminal with one numbered line per worker and one for the queue, which follows the window through a resize and keeps the queue line when there is no room for the rest; `--no-progress` turns it off
+- A title too long for the window loses its middle instead of the bar and the counts it was pushing off the line
 
 ### Added
 
