@@ -544,7 +544,10 @@ class Dock:
         self._rewrapped = False
         self._paused = False
         self._top = height - self._reserved_rows + 1
-        self._scroll_room_into_being(height)
+        # No scrolling here, unlike the first open. What stands in those
+        # rows a moment after a resize is the dock that was there before,
+        # and scrolling it up is what put the old bars in the text flow and
+        # sent them drifting. Every row below is erased as it is painted.
         self._reserve(height, after_resize=True)
         if not self._active:
             return

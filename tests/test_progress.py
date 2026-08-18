@@ -1436,3 +1436,25 @@ def test_the_running_total_keeps_its_clock_when_there_is_room(terminal):
         line = progress._current.dock._lines[2]
 
     assert "[00:" in line and "]" in line, f"gave up the clock at 100: {line!r}"
+
+
+def test_a_rebuild_overwrites_its_rows_instead_of_pushing_them_up(
+    terminal, monkeypatch
+):
+    # The first open scrolls, because what is down there is the user's. A
+    # rebuild must not: a moment after a resize those rows hold the dock
+    # that was there before, and scrolling sends copies of the old bars up
+    # the screen where nothing can reach them again.
+    with progress.Dock(3, stream=terminal) as dock:
+        dock.set(0, "eins")
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((52, 26))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        before = len(terminal.written)
+        dock.set(0, "eins")
+        rebuilt = "".join(terminal.written[before:])
+
+    assert "\n" not in rebuilt, f"scrolled the old rows into the flow: {rebuilt!r}"
+    for line in range(23, 27):  # the rule and the three rows, 26 high
+        assert f"\x1b[{line};1H\x1b[2K" in rebuilt, f"line {line} not cleared"
