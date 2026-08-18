@@ -1,20 +1,16 @@
 import logging
 import pathlib
 import re
-import shutil
 from collections.abc import Callable
 from enum import Enum, auto
 from typing import Any, Literal, NamedTuple
 
 import aiofiles
-import click
 import httpx
-import tqdm
 from aiofiles.os import path, unlink
 
 from .progress import (
     DockedProgressBar,
-    fit_title,
     progress_disabled,
     take_progressbar,
 )
@@ -315,7 +311,7 @@ class DummyProgressBar:
 
 def get_progressbar(
     destination: pathlib.Path, total: int | None, start: int = 0
-) -> tqdm.tqdm | DockedProgressBar | DummyProgressBar:
+) -> DockedProgressBar | DummyProgressBar:
     if total is None or progress_disabled():
         return DummyProgressBar()
 
@@ -323,32 +319,12 @@ def get_progressbar(
     if docked is not None:
         return docked
 
-    # No row from the dock: no terminal, one too short or without cursor
-    # control, a Windows console that will not take escape sequences, or more
-    # downloads at once than rows were reserved for. This bar is placed the
-    # old way and still drifts with the log output, but `leave=False` keeps
-    # finished bars from piling up between the log lines, which is where they
-    # used to be drawn over each other.
-    # Shortened for the same reason the docked rows are: past a certain
-    # length tqdm drops the meter and then wraps, and one download then
-    # takes two lines and shows no progress on either.
-    width = shutil.get_terminal_size().columns
-    description = fit_title(
-        click.format_filename(destination, shorten=True), width, total, start
-    )
-    progressbar = tqdm.tqdm(
-        desc=description,
-        total=total,
-        unit="B",
-        unit_scale=True,
-        unit_divisor=1024,
-        dynamic_ncols=True,
-        leave=False
-    )
-    if start > 0:
-        progressbar.update(start)
-
-    return progressbar
+    # No row at all: no terminal, one without cursor control, a Windows
+    # console that will not take escape sequences, or more downloads at once
+    # than rows were reserved for. A bar drawn the old way drifts with the
+    # log output and over its neighbours, which is worse than showing
+    # nothing, so nothing is what it gets.
+    return DummyProgressBar()
 
 
 class Downloader:
@@ -521,7 +497,7 @@ class Downloader:
         tmp_file: File,
         target_file: File,
         start: int,
-        progressbar: tqdm.tqdm | DockedProgressBar | DummyProgressBar,
+        progressbar: DockedProgressBar | DummyProgressBar,
         force_reload: bool = True
     ) -> DownloadResult:
         headers = self._additional_headers.copy()

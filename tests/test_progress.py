@@ -189,17 +189,38 @@ def test_a_download_gets_a_docked_bar_when_one_is_free(terminal):
     assert "book.aaxc" in terminal.text
 
 
-def test_more_downloads_than_rows_fall_back_to_a_plain_bar(terminal):
+def test_more_downloads_than_rows_show_nothing_rather_than_drift(terminal):
+    # The dock is the only way progress is shown. A bar placed the old way
+    # drifts with the log output and draws over its neighbours, which is
+    # worse than showing nothing at all.
     with progress.docked_progress(1, stream=terminal):
         first = get_progressbar(pathlib.Path("a"), total=1000)
         second = get_progressbar(pathlib.Path("b"), total=1000)
 
         assert isinstance(first, progress.DockedProgressBar)
-        assert not isinstance(second, progress.DockedProgressBar)
-        # A tqdm bar that leaves nothing behind, not a silent no-op
-        assert not isinstance(second, DummyProgressBar)
-        assert second.leave is False
-        second.close()
+        assert isinstance(second, DummyProgressBar)
+
+
+def test_the_downloader_cannot_build_a_bar_of_its_own():
+    # The hard version of the rule: the old way is not merely unused, it is
+    # out of reach. tqdm still formats the docked rows, from `progress`.
+    source = pathlib.Path("src/audible_cli/downloader.py").read_text()
+
+    assert "tqdm" not in source, "the old bar is still within reach"
+
+
+def test_a_download_gets_a_docked_row_or_nothing(terminal, monkeypatch):
+    with progress.docked_progress(2, stream=terminal, total=10):
+        for size in ((100, 24), (90, 6), (40, 8)):
+            monkeypatch.setattr(
+                progress.shutil,
+                "get_terminal_size",
+                lambda *a, s=size: os.terminal_size(s),
+            )
+            progress._current.dock._on_resize(signal.SIGWINCH, None)
+            for name in "abcd":
+                bar = get_progressbar(pathlib.Path(name), total=1000)
+                assert isinstance(bar, progress.DockedProgressBar | DummyProgressBar)
 
 
 # --- the failures a review turned up, kept from coming back ---------------
@@ -258,7 +279,7 @@ def test_a_newer_handler_survives_the_dock(terminal):
         signal.signal(signal.SIGWINCH, previous)
 
 
-def test_a_window_shrinking_too_far_hands_out_no_more_rows(terminal, monkeypatch):
+def test_a_window_shrinking_too_far_still_hands_out_rows(terminal, monkeypatch):
     with progress.docked_progress(2, stream=terminal):
         first = progress.take_progressbar(pathlib.Path("a"), total=10)
         assert first is not None
@@ -274,8 +295,9 @@ def test_a_window_shrinking_too_far_hands_out_no_more_rows(terminal, monkeypatch
         first._render(force=True)
 
         assert not progress._current.dock.available
-        # A row nobody can see must not be handed out as if it worked
-        assert progress.take_progressbar(pathlib.Path("b"), total=10) is None
+        # Handed out all the same: it counts while it waits, and it shows
+        # itself the moment there is room. Nothing else comes back at all.
+        assert progress.take_progressbar(pathlib.Path("b"), total=10) is not None
         assert "\x1b[r" in terminal.text
         # Out of room is not the end of it: this terminal can still hold a
         # dock, and does again as soon as the window has the space.
@@ -1259,13 +1281,15 @@ def test_elide_keeps_what_it_promises():
 # --- half a dock beats none -----------------------------------------------
 
 
-def test_a_window_too_small_for_all_rows_keeps_the_running_total(terminal, monkeypatch):
+def test_a_window_too_small_for_all_rows_shows_as_many_as_fit(terminal, monkeypatch):
     # A phone in landscape with the keyboard up has no room for eight bars.
-    # Falling back to plain bars for everything loses the one line that
-    # still fits and still says something: how far along the run is.
+    # It has room for four, and dropping to the running total alone throws
+    # away the other three for nothing.
     with progress.docked_progress(8, stream=terminal, total=40):
         dock = progress._current.dock
         assert dock.showing_all, "control: 24 rows hold all nine"
+        for name in "abcdefgh":
+            assert progress.take_progressbar(pathlib.Path(name), total=10) is not None
 
         monkeypatch.setattr(
             progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 12))
@@ -1276,25 +1300,26 @@ def test_a_window_too_small_for_all_rows_keeps_the_running_total(terminal, monke
         after = "".join(terminal.written[before:])
 
         assert not dock.showing_all, "eight bars cannot fit in twelve rows"
-        assert dock.available, "but one row can"
-        assert "\x1b[1;10r" in after, f"a region for the one row: {after!r}"
+        assert dock._shown == [0, 1, 2, 3, 8], "four of them and the total can"
+        assert "\x1b[1;6r" in after, f"a region for six rows: {after!r}"
         assert "Overall" in after, "and the running total drawn in it"
         assert "7/40" in after
-        # Row 8 of the dock, but the only one on screen, so the bottom line
-        # of twelve -- placed by where it sits, not by what it is numbered.
+        # Row 8 of the dock, but the fifth on screen, so the bottom line of
+        # twelve -- placed by where it sits, not by what it is numbered.
         assert "\x1b[12;1H\x1b[2KOverall" in after, f"drawn off screen: {after!r}"
 
 
-def test_no_rows_are_handed_out_while_only_the_total_is_shown(terminal, monkeypatch):
+def test_the_running_total_is_the_last_row_to_go(terminal, monkeypatch):
     with progress.docked_progress(8, stream=terminal, total=40):
         dock = progress._current.dock
         monkeypatch.setattr(
-            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 12))
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 6))
         )
         dock._on_resize(signal.SIGWINCH, None)
         progress.advance_summary(1)
 
-        assert progress.take_progressbar(pathlib.Path("a"), total=10) is None
+        assert dock._shown == [8], "no room for a single bar beside it"
+        assert dock.available
 
 
 def test_a_bar_that_lost_its_place_says_nothing_and_keeps_its_text(
@@ -1302,19 +1327,24 @@ def test_a_bar_that_lost_its_place_says_nothing_and_keeps_its_text(
 ):
     with progress.docked_progress(8, stream=terminal, total=40):
         dock = progress._current.dock
-        bar = progress.take_progressbar(pathlib.Path("a"), total=1000)
+        bars = [
+            progress.take_progressbar(pathlib.Path(name), total=1000)
+            for name in "abcdefgh"
+        ]
         monkeypatch.setattr(
             progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((90, 12))
         )
         dock._on_resize(signal.SIGWINCH, None)
         progress.advance_summary(1)  # settles the resize
 
+        last = bars[-1]  # row 7, past the four the window can hold
+        assert last._row not in dock._shown, "control: this one has no place"
         before = len(terminal.written)
-        bar.update(500)
-        bar._render(force=True)
+        last.update(500)
+        last._render(force=True)
 
         assert "".join(terminal.written[before:]) == "", "drew a row it has not got"
-        assert dock._lines[bar._row], "kept what it holds for when it is back"
+        assert dock._lines[last._row], "kept what it holds for when it is back"
 
 
 def test_the_rows_all_come_back_when_the_window_does(terminal, monkeypatch):
@@ -1476,7 +1506,7 @@ def test_a_shrinking_dock_clears_the_rows_it_gives_up(terminal, monkeypatch):
         progress.advance_summary(1)
         after = "".join(terminal.written[before:])
 
-        assert dock._reserved_rows == 2, "the rule and the running total"
+        assert dock._reserved_rows == 7, "five bars, the total and the rule"
         # Ten lines were held, so ten come back: 5 to 14 of a 14-row window
         for line in range(5, 15):
             assert f"\x1b[{line};1H\x1b[2K" in after, f"line {line} left standing"
@@ -1546,47 +1576,12 @@ def test_a_second_change_wipes_only_what_the_dock_held_by_then(terminal, monkeyp
             progress.advance_summary(1)
             after = "".join(terminal.written[before:])
 
-        assert dock._reserved_rows == 2, "control: still the rule and the total"
-        assert "\x1b[11;1H\x1b[2K" in after, "its own two rows of twelve"
-        assert "\x1b[12;1H\x1b[2K" in after
-        for line in range(1, 11):
+        # Seven lines at fourteen high, six at twelve, so the band it may
+        # clear the second time is one line, not the eight of the first.
+        assert dock._reserved_rows == 6, "control: four bars, the total, the rule"
+        for line in range(6, 13):
+            assert f"\x1b[{line};1H\x1b[2K" in after, f"line {line} left standing"
+        for line in range(1, 6):
             assert f"\x1b[{line};1H\x1b[2K" not in after, (
                 f"erased line {line}, which it never held"
             )
-
-
-def test_a_bar_outside_the_dock_gets_its_title_shortened_too(monkeypatch):
-    # The row with no number in the user's screenshot: a fallback bar whose
-    # title pushed the meter off the line and wrapped onto the next one.
-    monkeypatch.setattr(
-        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((80, 24))
-    )
-    monkeypatch.setattr(
-        "audible_cli.downloader.shutil.get_terminal_size",
-        lambda *a: os.terminal_size((80, 24)),
-    )
-    long_name = pathlib.Path(
-        "B0GTCGYFGD_Sternengeschichten_Sternengeschichten_Spezial_Marz_2026-MPEG.mp3"
-    )
-    with progress.docked_progress(1, stream=FakeTerminal()):
-        progress.take_progressbar(pathlib.Path("takes the only row"), total=10)
-        bar = get_progressbar(long_name, total=27_600_000)
-
-    assert not isinstance(bar, progress.DockedProgressBar), "control: fell back"
-    assert "…" in bar.desc, f"title left at full length: {bar.desc!r}"
-    assert len(bar.desc) < len(long_name.name)
-    bar.close()
-
-
-def test_a_title_that_fits_keeps_its_full_name_outside_the_dock(monkeypatch):
-    monkeypatch.setattr(
-        "audible_cli.downloader.shutil.get_terminal_size",
-        lambda *a: os.terminal_size((120, 24)),
-    )
-    with progress.docked_progress(1, stream=FakeTerminal()):
-        progress.take_progressbar(pathlib.Path("takes the only row"), total=10)
-        bar = get_progressbar(pathlib.Path("short.aaxc"), total=1000)
-
-    assert bar.desc.startswith("short.aaxc")
-    assert "…" not in bar.desc
-    bar.close()

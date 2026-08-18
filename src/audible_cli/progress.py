@@ -213,13 +213,20 @@ class Dock:
         return height - count >= max(MIN_SCROLL_ROWS, height // 2)
 
     def _layouts(self) -> list[list[int]]:
-        """Row sets to try, widest first."""
+        """Row sets to try, widest first.
+
+        Whatever fits beats nothing: on a phone with the keyboard up there
+        is no room for eight bars, but there is room for three, and the
+        running total is the last thing to go.
+        """
         everything = list(range(self._rows))
         if self._keep_row is None or self._rows <= 1:
             return [everything]
-        # Half a dock beats none: on a phone with the keyboard up there is
-        # no room for eight bars, but the running total still fits.
-        return [everything, [self._keep_row]]
+        rest = [row for row in everything if row != self._keep_row]
+        return [everything] + [
+            sorted([*rest[:keep], self._keep_row])
+            for keep in range(len(rest) - 1, -1, -1)
+        ]
 
     def _choose_layout(self, height: int) -> list[int] | None:
         for shown in self._layouts():
@@ -759,27 +766,6 @@ def _prefix_budget(ncols: int, bar_format: str | None, **meter: Any) -> int:
     return max(0, closing - opening - 1 - MIN_BAR_COLUMNS)
 
 
-def fit_title(title: str, width: int, total: int, start: int = 0) -> str:
-    """Shorten `title` to what a bar of `width` can show beside its meter.
-
-    For bars drawn outside the dock, which have the same problem with a
-    long name and rather less room to lose.
-    """
-    return _elide(
-        title,
-        _prefix_budget(
-            width,
-            None,
-            n=start,
-            total=total,
-            elapsed=0.0,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-        ),
-    )
-
-
 class DockedProgressBar:
     """One reserved row, rendered by tqdm and placed by the dock."""
 
@@ -1079,9 +1065,10 @@ def take_progressbar(
     dock.settle()
 
     with _rows_lock:
-        # A dock with no room at the moment shows nothing, so the caller is
-        # better off with a plain bar than with a row that stays blank.
-        if _current.dock is not dock or not dock.showing_all or not _current.free_rows:
+        # A row is handed out even when the window is currently too small to
+        # show it. It keeps counting, and it appears the moment there is
+        # room -- which a bar drawn some other way never would.
+        if _current.dock is not dock or not dock.active or not _current.free_rows:
             return None
         row = _current.free_rows.pop(0)
         label = _current.labels[row] if row < len(_current.labels) else ""
