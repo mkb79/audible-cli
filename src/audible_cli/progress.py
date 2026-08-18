@@ -547,7 +547,7 @@ class Dock:
         # What stood on the screen a moment ago, and how wide it was drawn
         # for. Read before the new geometry overwrites either.
         was_shown = [
-            *([RULE * self._width] if self._rule else []),
+            *([RULE * self.width] if self._rule else []),
             *(self._lines[row] for row in self._shown),
         ]
         was_width = self._reserved_width
@@ -714,7 +714,7 @@ class Dock:
             return
         self._paint_write(
             "\x1b7"  # save cursor
-            f"\x1b[{self._top};1H\x1b[2K{RULE * self._width}"
+            f"\x1b[{self._top};1H\x1b[2K{RULE * self.width}"
             "\x1b8"  # put it back
         )
 
@@ -729,7 +729,14 @@ class Dock:
 
     @property
     def width(self) -> int:
-        return self._width
+        """How wide a row may draw, which is one short of the window.
+
+        Filling the last column puts a terminal into pending wrap and it
+        marks the line as continued. On a widen it then pulls the next row
+        back onto it, and the rule and every bar arrive as one glued line.
+        Leaving a column free costs nothing and keeps them separate.
+        """
+        return max(1, self._width - 1)
 
     def _write_atomic(self, text: str) -> None:
         """One whole sequence onto the terminal, with nobody in between.

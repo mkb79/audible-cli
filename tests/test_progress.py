@@ -797,7 +797,7 @@ def test_a_width_change_moves_the_dock_rather_than_ending_it(terminal, monkeypat
         assert dock.enabled
         assert "\x1b[1;15r" in after, "a region for the window it is now"
         assert "\x1b[17;1H" in after, "and the rows painted where it put them"
-        assert dock.width == 60, "the bars are told the width they render for"
+        assert dock.width == 59, "one short of the window, so rows cannot glue"
         assert progress.take_progressbar(pathlib.Path("b"), total=10) is not None
 
 
@@ -1096,7 +1096,7 @@ def test_a_resize_asks_the_rows_what_they_hold_now(terminal, monkeypatch):
         dock.set(0, "for a hundred columns")
         after = "".join(terminal.written[before:])
 
-    assert "rendered for 60" in after, f"repainted the old text: {after!r}"
+    assert "rendered for 59" in after, f"repainted the old text: {after!r}"
 
 
 def test_a_resize_at_the_new_width_is_not_taken_for_a_rewrap(terminal, monkeypatch):
@@ -1388,7 +1388,9 @@ def test_a_rule_is_drawn_above_the_rows(terminal):
         opened = terminal.text
         assert dock._top == 22, "the rule takes the row above the two"
 
-    assert f"\x1b[22;1H\x1b[2K{progress.RULE * 100}" in opened, "no rule drawn"
+    # One short of the window: filling the last column would let the
+    # terminal glue the rule to the row below it on a widen.
+    assert f"\x1b[22;1H\x1b[2K{progress.RULE * 99}" in opened, "no rule drawn"
     assert "\x1b[1;21r" in opened, "and the region stops above it"
 
 
@@ -1415,7 +1417,7 @@ def test_the_rule_is_redrawn_at_the_new_width(terminal, monkeypatch):
         dock.set(0, "anything")
         after = "".join(terminal.written[before:])
 
-    assert f"\x1b[16;1H\x1b[2K{progress.RULE * 60}" in after, (
+    assert f"\x1b[16;1H\x1b[2K{progress.RULE * 59}" in after, (
         f"the rule kept its old width: {after!r}"
     )
 
@@ -1585,3 +1587,39 @@ def test_a_second_change_wipes_only_what_the_dock_held_by_then(terminal, monkeyp
             assert f"\x1b[{line};1H\x1b[2K" not in after, (
                 f"erased line {line}, which it never held"
             )
+
+
+def test_no_row_ever_fills_the_last_column(terminal, monkeypatch):
+    # A row that fills the width puts the terminal into pending wrap, and
+    # it marks the line as continued. Rotating to a wider window then pulls
+    # the next row back onto it, and the rule and every bar arrive as one
+    # glued line -- which is what a phone screenshot showed.
+    with progress.docked_progress(3, stream=terminal, total=10):
+        dock = progress._current.dock
+        bars = [
+            progress.take_progressbar(pathlib.Path(f"a_long_name_{n}.aaxc"), total=1000)
+            for n in range(3)
+        ]
+        for bar in bars:
+            bar.update(500)
+            bar._render(force=True)
+        progress.advance_summary(3)
+
+        drawn = [dock._lines[row] for row in dock._shown]
+        drawn.append(progress.RULE * dock.width)
+
+    for line in drawn:
+        assert len(line) < 100, f"{len(line)} of 100 columns: {line[:40]!r}"
+
+
+@pytest.mark.parametrize("columns", [120, 100, 60, 45, 30])
+def test_a_row_leaves_a_column_free_at_any_width(columns, monkeypatch):
+    monkeypatch.setattr(
+        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((columns, 24))
+    )
+    with progress.Dock(2, stream=FakeTerminal()) as dock:
+        bar = progress.DockedProgressBar(
+            dock, 0, description="a title", total=9_000_000, start=3_000_000, label="1."
+        )
+        assert len(bar._format(12.0)) < columns
+        assert len(progress.RULE * dock.width) < columns
