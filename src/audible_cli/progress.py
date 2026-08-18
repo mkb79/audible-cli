@@ -141,9 +141,6 @@ class Dock:
         # The one row worth keeping when there is no room for all of them.
         self._keep_row = keep_row
         self._rule = rule
-        # Lines the dock held last time it was set up. A smaller one
-        # leaves the difference standing above it.
-        self._held = 0
         # Row numbers on screen, top to bottom. Fewer than all of them when
         # the window is short, so `_top + n` is a position, not a row.
         self._shown = list(range(rows))
@@ -158,6 +155,7 @@ class Dock:
         self._top = 0
         self._width = 80
         self._reserved_width = 0
+        self._reserved_height = 0
         self._rewrapped = False
         self._painting = False
         self._paused = False
@@ -324,6 +322,7 @@ class Dock:
 
             height, self._width = self._measure()
             self._reserved_width = self._width
+            self._reserved_height = height
             shown = self._choose_layout(height)
             if shown is None:
                 self._paused = True
@@ -332,7 +331,6 @@ class Dock:
             self._top = height - self._reserved_rows + 1
             # Scroll the reserved rows into existence, so nothing already on
             # screen ends up underneath them.
-            self._held = self._reserved_rows
             self._scroll_room_into_being(height)
             self._reserve(height)
             self._paint_rule()
@@ -546,15 +544,22 @@ class Dock:
             # plain bars until the window has the space again.
             self._paused = True
             return
+        # What stood on the screen a moment ago, and how wide it was drawn
+        # for. Read before the new geometry overwrites either.
+        was_shown = [
+            *([RULE * self._width] if self._rule else []),
+            *(self._lines[row] for row in self._shown),
+        ]
+        was_width = self._reserved_width
         self._shown = shown
 
         self._width = width
         self._reserved_width = width
+        self._reserved_height = height
         self._rewrapped = False
         self._paused = False
         self._top = height - self._reserved_rows + 1
-        self._wipe_what_it_used_to_hold()
-        self._held = self._reserved_rows
+        self._wipe_what_it_used_to_hold(was_shown, was_width)
         # No scrolling here, unlike the first open. What stands in those
         # rows a moment after a resize is the dock that was there before,
         # and scrolling it up is what put the old bars in the text flow and
@@ -582,14 +587,25 @@ class Dock:
             # the margins. Nobody else would give these back.
             self._release_only()
 
-    def _wipe_what_it_used_to_hold(self) -> None:
-        """Clear the lines a wider dock left above this one.
+    def _wipe_what_it_used_to_hold(self, was_shown: list[str], was_width: int) -> None:
+        """Clear what the dock it used to be left standing above this one.
 
-        Both docks sit on the bottom, so a dock that shrank left its extra
-        rows directly above where the new one starts. They hold nothing but
-        the bars that were there, and no later paint reaches them.
+        Both docks sit on the bottom, so whatever the old one leaves over
+        stands directly above where the new one starts, and no later paint
+        reaches it.
+
+        There is more of it than there were rows. A narrower window rewraps
+        each line, so a row drawn for a hundred columns comes back as three
+        at forty-five. How many follows from the rows themselves rather
+        than from their count: a slot waiting with just its number does not
+        wrap at all. Widening joins nothing back -- these are hard lines --
+        so it only leaves them short.
         """
-        extra = min(self._held - self._reserved_rows, self._top - 1)
+        if self._width >= was_width:
+            standing = len(was_shown)
+        else:
+            standing = sum(max(1, -(-len(text) // self._width)) for text in was_shown)
+        extra = min(standing - self._reserved_rows, self._top - 1)
         if extra <= 0:
             return
         self._paint_write(
@@ -624,7 +640,7 @@ class Dock:
             self._lines[row] = text
             if not self._active:
                 return
-            if self._resized:
+            if self._resized or self._moved():
                 self._reopen_after_resize()
                 # It painted every row already, and asked each for text at
                 # the new width. Painting `text` on top would put back what
@@ -642,6 +658,19 @@ class Dock:
             self._flush()
             self._undo_if_gone()
 
+    def _moved(self) -> bool:
+        """Whether the window is no longer the one we reserved in.
+
+        The handler runs between two bytecodes, so a resize can be minutes
+        old in machine terms before it is noticed -- and a row painted in
+        that gap goes to a line number the terminal has already moved. One
+        measurement is cheap enough to make that impossible.
+        """
+        try:
+            return self._measure() != (self._reserved_height, self._reserved_width)
+        except OSError:
+            return False
+
     def _undo_if_gone(self) -> None:
         if not self._active:
             # The paint was in flight while a signal restored. Whatever of
@@ -657,6 +686,11 @@ class Dock:
         if not self._active:
             # A signal may have restored the terminal between two rows of a
             # repaint. Writing on would put bars back onto the normal screen.
+            return
+        if self._moved():
+            # The window changed and the handler has not run yet. These row
+            # numbers belong to a screen that is already gone.
+            self._resized = True
             return
         if row not in self._shown:
             # A row the window has no space for. It keeps its text and comes
