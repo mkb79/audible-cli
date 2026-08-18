@@ -59,6 +59,17 @@ class FakeTerminal:
         return "".join(self.written)
 
 
+@pytest.fixture(autouse=True)
+def a_terminal_that_can_place_a_cursor(monkeypatch):
+    """`TERM` decides whether the dock even tries.
+
+    Without this the whole file depends on where it is run: a shell has a
+    real `TERM`, a CI runner usually has none, and the dock then declines
+    before any of these tests reach what they are about.
+    """
+    monkeypatch.setenv("TERM", "xterm-256color")
+
+
 @pytest.fixture
 def terminal(monkeypatch):
     """A 24x100 terminal, handed to the dock explicitly.
