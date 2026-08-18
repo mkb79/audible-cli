@@ -80,10 +80,10 @@ def test_a_terminal_too_short_gets_no_dock(terminal, monkeypatch):
     monkeypatch.setattr(
         progress.shutil,
         "get_terminal_size",
-        lambda *a: os.terminal_size((100, progress.MIN_SCROLL_ROWS + 1)),
+        lambda *a: os.terminal_size((100, progress.MIN_SCROLL_ROWS + 2)),
     )
-    # Two rows on top of the minimum that has to stay scrollable is one too
-    # many, so the dock declines rather than squeezing the output.
+    # One row plus the rule above it is what fits here. Another is one too
+    # many, and the dock declines rather than squeezing the output.
     assert progress.Dock(1, stream=terminal).enabled, "control: one row still fits"
     assert not progress.Dock(2, stream=terminal).enabled
 
@@ -96,7 +96,7 @@ def test_the_region_is_set_and_given_back(terminal):
         opened = terminal.text
     closed = terminal.text[len(opened) :]
 
-    assert "\x1b[1;20r" in opened, "reserves the four bottom rows of 24"
+    assert "\x1b[1;19r" in opened, "reserves the four bottom rows of 24"
     assert "\x1b[r" in closed, "hands the whole screen back"
     for row in range(21, 25):
         assert f"\x1b[{row};1H\x1b[2K" in closed, f"row {row} is wiped"
@@ -375,7 +375,7 @@ def test_a_resize_that_fits_moves_the_region_and_repaints(terminal, monkeypatch)
         # rows too and would satisfy the assertions on its own.
         after = "".join(terminal.written[before:])
 
-    region = after.index("\x1b[1;16r")
+    region = after.index("\x1b[1;15r")
     assert region < after.index("\x1b[16;1H"), (
         "the region homes the cursor, so CUP after"
     )
@@ -507,7 +507,7 @@ def test_a_signal_while_the_region_is_being_set_still_gives_it_back(terminal):
     real_write = dock._write
 
     def write_then_get_signalled(text):
-        if "\x1b[1;21r" in text:
+        if "\x1b[1;20r" in text:
             # Before the bytes go out: the dock has recorded the region but
             # the terminal has not got it yet. Firing afterwards would pass
             # even with the flag set after the write.
@@ -524,7 +524,7 @@ def test_a_signal_while_the_region_is_being_set_still_gives_it_back(terminal):
 
     assert not dock.active
     # Whatever the order the two ended up in, the last word is a release
-    assert terminal.text.rindex("\x1b[r") > terminal.text.index("\x1b[1;21r"), (
+    assert terminal.text.rindex("\x1b[r") > terminal.text.index("\x1b[1;20r"), (
         "the reservation that landed after the restore is taken back again"
     )
 
@@ -595,16 +595,20 @@ def test_a_slot_keeps_its_number_while_it_waits(terminal):
         first = progress.take_progressbar(pathlib.Path("a"), total=10)
         assert first._text().startswith("1. a")
         before = len(terminal.written)
-        top = progress._current.dock._top
+        # Where the row sits, which is past the rule the dock draws above it
+        line = progress._current.dock._line_of(first._row)
         first.close()
 
     # The line goes back to the bare number, not to nothing: an idle slot
     # has to keep reading as that slot.
     after = "".join(terminal.written[before:])
-    assert f"\x1b[{top + first._row};1H\x1b[2K1." in after, after[:200]
+    assert f"\x1b[{line};1H\x1b[2K1." in after, after[:200]
 
 
-def test_the_numbers_line_up_past_nine(terminal):
+def test_the_numbers_line_up_past_nine(terminal, monkeypatch):
+    monkeypatch.setattr(
+        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 40))
+    )
     with progress.docked_progress(12, stream=terminal):
         bar = progress.take_progressbar(pathlib.Path("a"), total=10)
         assert bar._text().startswith(" 1. a"), bar._text()
@@ -628,7 +632,7 @@ def test_without_a_total_no_line_is_given_to_one(terminal):
         painted = terminal.text
 
     assert "Overall" not in painted
-    assert "\x1b[1;22r" in painted, "two reserved rows, not three"
+    assert "\x1b[1;21r" in painted, "two reserved rows, not three"
 
 
 def test_the_summary_does_not_outlive_its_block(terminal):
@@ -695,7 +699,8 @@ def test_a_dock_that_would_eat_the_window_is_refused(monkeypatch):
     screen(14)
     assert not progress.Dock(9, stream=FakeTerminal()).enabled, "not on a phone"
 
-    screen(18)
+    screen(20)
+    # Nine rows and the rule make ten, which is exactly half of twenty.
     assert progress.Dock(9, stream=FakeTerminal()).enabled, "exactly half is allowed"
 
 
@@ -743,7 +748,7 @@ def test_a_height_change_wipes_nothing_by_its_old_row_numbers(terminal, monkeypa
         bar._render(force=True)
         during = "".join(terminal.written[before:])
 
-    upto_new_region = during[: during.index("\x1b[1;16r")]
+    upto_new_region = during[: during.index("\x1b[1;15r")]
     assert "\x1b[2K" not in upto_new_region, f"erased something: {upto_new_region!r}"
 
 
@@ -768,7 +773,7 @@ def test_a_width_change_moves_the_dock_rather_than_ending_it(terminal, monkeypat
 
         assert dock.available
         assert dock.enabled
-        assert "\x1b[1;16r" in after, "a region for the window it is now"
+        assert "\x1b[1;15r" in after, "a region for the window it is now"
         assert "\x1b[17;1H" in after, "and the rows painted where it put them"
         assert dock.width == 60, "the bars are told the width they render for"
         assert progress.take_progressbar(pathlib.Path("b"), total=10) is not None
@@ -852,7 +857,7 @@ def test_a_bar_asked_for_after_a_resize_is_never_a_mute_one(terminal, monkeypatc
 
         before = len(terminal.written)
         assert progress.take_progressbar(pathlib.Path("a"), total=10) is not None
-        assert "\x1b[1;16r" in "".join(terminal.written[before:]), (
+        assert "\x1b[1;15r" in "".join(terminal.written[before:]), (
             "settled before the row was handed out"
         )
 
@@ -889,7 +894,7 @@ def test_a_signal_between_marking_and_writing_does_not_strand_the_region(termina
     real_write = dock._write
 
     def write_then_get_resized(text):
-        if "\x1b[1;22r" in text:
+        if "\x1b[1;21r" in text:
             # Exactly as the handler leaves it: the flag set *and* the
             # reservation given up. Without the second half the exit still
             # rescues us and the test proves nothing.
@@ -902,7 +907,7 @@ def test_a_signal_between_marking_and_writing_does_not_strand_the_region(termina
         pass
 
     assert not dock._reserved
-    assert terminal.text.rindex("\x1b[r") > terminal.text.index("\x1b[1;22r")
+    assert terminal.text.rindex("\x1b[r") > terminal.text.index("\x1b[1;21r")
 
 
 def test_the_handler_keeps_its_hands_off_a_paint_in_progress(terminal, monkeypatch):
@@ -960,7 +965,7 @@ def test_a_dock_out_of_room_comes_back_when_the_room_does(terminal, monkeypatch)
         after = "".join(terminal.written[before:])
 
         assert dock.available, "the room came back and the dock did not"
-        assert "\x1b[1;31r" in after, f"no region for this window: {after!r}"
+        assert "\x1b[1;30r" in after, f"no region for this window: {after!r}"
         assert "\x1b[32;1H" in after, "the first row is drawn again"
 
 
@@ -1000,7 +1005,7 @@ def test_a_resize_during_the_rebuild_leaves_no_stale_region(terminal, monkeypatc
         real_write = dock._write
 
         def write_then_turn_again(text):
-            if "\x1b[1;16r" in text:
+            if "\x1b[1;15r" in text:
                 monkeypatch.setattr(
                     progress.shutil,
                     "get_terminal_size",
@@ -1015,7 +1020,7 @@ def test_a_resize_during_the_rebuild_leaves_no_stale_region(terminal, monkeypatc
 
         assert dock._resized, "the second turn is still owed an answer"
         assert not dock._reserved, "margins for a window that is already gone"
-        assert terminal.text.rindex("\x1b[r") > terminal.text.rindex("\x1b[1;16r"), (
+        assert terminal.text.rindex("\x1b[r") > terminal.text.rindex("\x1b[1;15r"), (
             "the stale region is given back, not left set"
         )
 
@@ -1026,7 +1031,7 @@ def test_a_resize_during_the_rebuild_leaves_no_stale_region(terminal, monkeypatc
 
         assert dock.available
 
-    assert "\x1b[1;28r" in after, f"never caught up: {after!r}"
+    assert "\x1b[1;27r" in after, f"never caught up: {after!r}"
 
 
 def test_the_room_is_scrolled_in_from_the_last_row(terminal):
@@ -1177,7 +1182,7 @@ def test_a_resize_during_the_repaint_gives_the_margins_back(terminal, monkeypatc
 
         assert not dock._reserved, "margins for a window that is already gone"
         assert dock._resized, "and the next paint still owes a rebuild"
-        assert terminal.text.rindex("\x1b[r") > terminal.text.rindex("\x1b[1;16r")
+        assert terminal.text.rindex("\x1b[r") > terminal.text.rindex("\x1b[1;15r")
 
 
 # --- fitting a title into the width there is ------------------------------
@@ -1272,7 +1277,7 @@ def test_a_window_too_small_for_all_rows_keeps_the_running_total(terminal, monke
 
         assert not dock.showing_all, "eight bars cannot fit in twelve rows"
         assert dock.available, "but one row can"
-        assert "\x1b[1;11r" in after, f"a region for the one row: {after!r}"
+        assert "\x1b[1;10r" in after, f"a region for the one row: {after!r}"
         assert "Overall" in after, "and the running total drawn in it"
         assert "7/40" in after
         # Row 8 of the dock, but the only one on screen, so the bottom line
@@ -1327,7 +1332,7 @@ def test_the_rows_all_come_back_when_the_window_does(terminal, monkeypatch):
             after = "".join(terminal.written[before:])
 
         assert dock.showing_all
-        assert "\x1b[1;31r" in after, f"no region for all nine rows: {after!r}"
+        assert "\x1b[1;30r" in after, f"no region for all nine rows: {after!r}"
         assert progress.take_progressbar(pathlib.Path("a"), total=10) is not None
 
 
@@ -1343,3 +1348,64 @@ def test_without_a_running_total_there_is_nothing_worth_keeping(terminal, monkey
 
         assert not dock.available
         assert dock.enabled
+
+
+# --- the line that sets the dock off --------------------------------------
+
+
+def test_a_rule_is_drawn_above_the_rows(terminal):
+    with progress.Dock(2, stream=terminal) as dock:
+        opened = terminal.text
+        assert dock._top == 22, "the rule takes the row above the two"
+
+    assert f"\x1b[22;1H\x1b[2K{progress.RULE * 100}" in opened, "no rule drawn"
+    assert "\x1b[1;21r" in opened, "and the region stops above it"
+
+
+def test_the_rule_is_a_row_of_the_dock_not_of_the_output(terminal):
+    # Drawn inside the reserved rows, or the output would scroll over it.
+    with progress.Dock(2, stream=terminal) as dock:
+        assert dock._reserved_rows == 3
+        assert dock._line_of(0) == 23, "the first row sits below the rule"
+        assert dock._line_of(1) == 24
+        closing_from = len(terminal.written)
+    closing = "".join(terminal.written[closing_from:])
+
+    for line in (22, 23, 24):
+        assert f"\x1b[{line};1H\x1b[2K" in closing, f"line {line} left behind"
+
+
+def test_the_rule_is_redrawn_at_the_new_width(terminal, monkeypatch):
+    with progress.Dock(2, stream=terminal) as dock:
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((60, 18))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        before = len(terminal.written)
+        dock.set(0, "anything")
+        after = "".join(terminal.written[before:])
+
+    assert f"\x1b[16;1H\x1b[2K{progress.RULE * 60}" in after, (
+        f"the rule kept its old width: {after!r}"
+    )
+
+
+def test_the_rule_costs_a_row_the_dock_has_to_have(terminal, monkeypatch):
+    # It is reserved like any other, so a window that only just held the
+    # rows no longer does.
+    monkeypatch.setattr(
+        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((100, 18))
+    )
+    assert progress.Dock(9, stream=terminal, rule=False).enabled, "nine fit bare"
+    assert not progress.Dock(9, stream=terminal).enabled, "ten do not"
+
+
+def test_a_dock_without_a_rule_places_its_rows_as_before(terminal):
+    with progress.Dock(2, stream=terminal, rule=False) as dock:
+        assert dock._top == 23
+        assert dock._line_of(0) == 23
+        assert dock._reserved_rows == 2
+        opened = terminal.text
+
+    assert "\x1b[1;22r" in opened
+    assert progress.RULE not in opened

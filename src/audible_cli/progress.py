@@ -47,6 +47,11 @@ if sys.platform == "win32":
 #: fast local disk repaints on every chunk and floods the terminal.
 MIN_REPAINT_INTERVAL = 0.1
 
+#: Drawn across the top of the dock, so the rows read as a block rather
+#: than as the last few log lines. Costs a row; the other three sides would
+#: cost a second row and two columns of a screen already short of both.
+RULE = "\u2500"
+
 #: Dropped first when the window is narrow: the clock costs about twenty
 #: columns, and knowing which download a row is beats knowing its rate.
 COMPACT_METER = "{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}"
@@ -124,11 +129,13 @@ class Dock:
         rows: int,
         stream: IO[str] | None = None,
         keep_row: int | None = None,
+        rule: bool = True,
     ) -> None:
         self._stream = stream if stream is not None else sys.stderr
         self._rows = rows
         # The one row worth keeping when there is no room for all of them.
         self._keep_row = keep_row
+        self._rule = rule
         # Row numbers on screen, top to bottom. Fewer than all of them when
         # the window is short, so `_top + n` is a position, not a row.
         self._shown = list(range(rows))
@@ -210,9 +217,18 @@ class Dock:
 
     def _choose_layout(self, height: int) -> list[int] | None:
         for shown in self._layouts():
-            if self._fits(height, len(shown)):
+            if self._fits(height, len(shown) + self._rule):
                 return shown
         return None
+
+    @property
+    def _reserved_rows(self) -> int:
+        """Lines the dock holds, the rule above them included."""
+        return len(self._shown) + self._rule
+
+    def _line_of(self, position: int) -> int:
+        """Screen line of the `position`-th row on show."""
+        return self._top + self._rule + position
 
     def _takes_escape_sequences(self) -> bool:
         """Whether this terminal can be told where to put the cursor."""
@@ -298,11 +314,13 @@ class Dock:
                 self._paused = True
                 return
             self._shown = shown
-            self._top = height - len(shown) + 1
+            self._top = height - self._reserved_rows + 1
             # Scroll the reserved rows into existence, so nothing already on
             # screen ends up underneath them.
             self._scroll_room_into_being(height)
             self._reserve(height)
+            self._paint_rule()
+            self._flush()
 
     def _reserve(self, height: int, after_resize: bool = False) -> None:
         """Set the scroll region, and take it back if we are already out.
@@ -320,10 +338,10 @@ class Dock:
         # One write, for the same reason as in `_paint`: a sequence spread
         # over several calls is the easy one for a handler to cut in half.
         self._write(
-            f"\x1b[1;{height - len(self._shown)}r"
+            f"\x1b[1;{height - self._reserved_rows}r"
             # Setting the region homes the cursor, so put it back into the
             # scrolling part before ordinary output continues there.
-            f"\x1b[{height - len(self._shown)};1H"
+            f"\x1b[{height - self._reserved_rows};1H"
         )
         self._flush()
 
@@ -361,7 +379,7 @@ class Dock:
             # user's output. Give the margins back, erase nothing -- and keep
             # the cursor, which releasing the margins would otherwise home.
             return "\x1b7\x1b[r\x1b8"
-        for position in range(len(self._shown)):  # wipe what is left
+        for position in range(self._reserved_rows):  # wipe what is left
             parts.append(f"\x1b[{self._top + position};1H\x1b[2K")
         parts.append(f"\x1b[{self._top};1H")
         return "".join(parts)
@@ -522,7 +540,7 @@ class Dock:
         self._reserved_width = width
         self._rewrapped = False
         self._paused = False
-        self._top = height - len(self._shown) + 1
+        self._top = height - self._reserved_rows + 1
         self._scroll_room_into_being(height)
         self._reserve(height, after_resize=True)
         if not self._active:
@@ -536,6 +554,7 @@ class Dock:
         # Ask each line for its text again rather than repainting what was
         # measured for the old width: a bar rendered for 100 columns wraps
         # on 60 and takes the whole dock with it.
+        self._paint_rule()
         for row in self._shown:
             render = self._renderers.get(row)
             if render is not None:
@@ -553,7 +572,7 @@ class Dock:
         moves down. Coming out of a reflow the cursor can be anywhere, and
         the rows would then be cleared with the user's output still in them.
         """
-        self._write(f"\x1b[{height};1H" + "\n" * len(self._shown))
+        self._write(f"\x1b[{height};1H" + "\n" * self._reserved_rows)
 
     # -- painting ---------------------------------------------------------
 
@@ -615,10 +634,20 @@ class Dock:
         self._painting = True
         self._paint_write(
             "\x1b7"  # save cursor
-            f"\x1b[{self._top + position};1H\x1b[2K{text}"  # absolute row
+            f"\x1b[{self._line_of(position)};1H\x1b[2K{text}"  # absolute row
             "\x1b8"  # put it back
         )
         self._painting = False
+
+    def _paint_rule(self) -> None:
+        """Draw the line that sets the dock off from the output above it."""
+        if not self._rule or self._resized or not self._active:
+            return
+        self._paint_write(
+            "\x1b7"  # save cursor
+            f"\x1b[{self._top};1H\x1b[2K{RULE * self._width}"
+            "\x1b8"  # put it back
+        )
 
     def _paint_write(self, text: str) -> None:
         """Write and flush a paint before the handler may come between.
