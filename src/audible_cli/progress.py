@@ -47,6 +47,18 @@ if sys.platform == "win32":
 #: fast local disk repaints on every chunk and floods the terminal.
 MIN_REPAINT_INTERVAL = 0.1
 
+#: Dropped first when the window is narrow: the clock costs about twenty
+#: columns, and knowing which download a row is beats knowing its rate.
+COMPACT_METER = "{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}"
+
+#: Below this much room for the name, the clock goes rather than the name.
+MIN_NAME_COLUMNS = 12
+
+#: Columns the bar keeps for itself. Below this tqdm drops the percentage,
+#: the counts and the bar in that order, leaving a cut-off name and no
+#: progress at all -- which on a phone is most of the line.
+MIN_BAR_COLUMNS = 8
+
 # : Rows that have to stay scrollable. The scrolling part also keeps
 # : half the window, or eight jobs would swallow a phone screen.
 MIN_SCROLL_ROWS = 4
@@ -610,6 +622,42 @@ class Dock:
                 data = data[written:]
 
 
+def _elide(text: str, width: int) -> str:
+    """Shorten to `width`, dropping the middle.
+
+    The ends carry what tells two downloads apart: the series at the front,
+    the episode and the extension at the back.
+    """
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    if width == 1:
+        return "\u2026"
+    head = (width - 1) // 2
+    return text[:head] + "\u2026" + text[len(text) - (width - 1 - head) :]
+
+
+def _prefix_budget(ncols: int, bar_format: str | None, **meter: Any) -> int:
+    """Columns the description may take before the meter starts to suffer.
+
+    Every column the name takes comes off the bar, and once the bar is gone
+    tqdm truncates the line itself -- percentage, counts and all, which is
+    how a long title left nothing but a cut-off title. Rather than guess at
+    the width of a formatted size, ask tqdm what the bar would be with no
+    name at all: that is exactly what there is to spend.
+    """
+    probe = tqdm.tqdm.format_meter(
+        prefix="", ncols=ncols, bar_format=bar_format, **meter
+    )
+    opening = probe.find("|")
+    closing = probe.find("|", opening + 1)
+    if opening < 0 or closing < 0:
+        # No bar to take from, so nothing is safe to spend
+        return 0
+    return max(0, closing - opening - 1 - MIN_BAR_COLUMNS)
+
+
 class DockedProgressBar:
     """One reserved row, rendered by tqdm and placed by the dock."""
 
@@ -628,7 +676,8 @@ class DockedProgressBar:
         self._label = label
         # Not stripped: the label is padded so the numbers line up past
         # nine, and stripping would undo that for the single digits.
-        self._description = f"{label} {description}" if label else description
+        self._lead = f"{label} " if label else ""
+        self._name = description
         self._total = total
         self._n = start
         self._started = time.monotonic()
@@ -669,15 +718,28 @@ class DockedProgressBar:
         return self._format(time.monotonic() - self._started)
 
     def _format(self, elapsed: float) -> str:
+        meter: dict[str, Any] = {
+            "n": self._n,
+            "total": self._total,
+            "elapsed": elapsed,
+            "unit": "B",
+            "unit_scale": True,
+            "unit_divisor": 1024,
+        }
+        ncols = self._dock.width
+        # The number is never shortened. It names the slot, and a slot that
+        # cannot be told from its neighbour is worth less than the two
+        # columns it gives back.
+        bar_format = None
+        room = _prefix_budget(ncols, None, **meter) - len(self._lead)
+        if room < MIN_NAME_COLUMNS:
+            bar_format = COMPACT_METER
+            room = _prefix_budget(ncols, bar_format, **meter) - len(self._lead)
         return tqdm.tqdm.format_meter(
-            n=self._n,
-            total=self._total,
-            elapsed=elapsed,
-            ncols=self._dock.width,
-            prefix=self._description,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
+            ncols=ncols,
+            bar_format=bar_format,
+            prefix=self._lead + _elide(self._name, room),
+            **meter,
         )
 
 

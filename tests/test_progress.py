@@ -593,7 +593,7 @@ def test_every_slot_shows_its_number_from_the_start(terminal):
 def test_a_slot_keeps_its_number_while_it_waits(terminal):
     with progress.docked_progress(2, stream=terminal):
         first = progress.take_progressbar(pathlib.Path("a"), total=10)
-        assert first._description.startswith("1. ")
+        assert first._text().startswith("1. a")
         before = len(terminal.written)
         top = progress._current.dock._top
         first.close()
@@ -607,7 +607,7 @@ def test_a_slot_keeps_its_number_while_it_waits(terminal):
 def test_the_numbers_line_up_past_nine(terminal):
     with progress.docked_progress(12, stream=terminal):
         bar = progress.take_progressbar(pathlib.Path("a"), total=10)
-        assert bar._description.startswith(" 1. "), bar._description
+        assert bar._text().startswith(" 1. a"), bar._text()
 
 
 def test_the_running_total_sits_below_the_slots_and_counts(terminal):
@@ -1178,3 +1178,74 @@ def test_a_resize_during_the_repaint_gives_the_margins_back(terminal, monkeypatc
         assert not dock._reserved, "margins for a window that is already gone"
         assert dock._resized, "and the next paint still owes a rebuild"
         assert terminal.text.rindex("\x1b[r") > terminal.text.rindex("\x1b[1;16r")
+
+
+# --- fitting a title into the width there is ------------------------------
+
+
+def _bar_at(width, name, monkeypatch, label="3."):
+    monkeypatch.setattr(
+        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((width, 24))
+    )
+    dock = progress.Dock(2, stream=FakeTerminal())
+    with dock:
+        return progress.DockedProgressBar(
+            dock, 0, description=name, total=9_000_000, start=3_000_000, label=label
+        )._format(12.0)
+
+
+LONG = "Die Abenteuer des Herrn Sowieso - Folge 42 - Der lange Titel.aaxc"
+
+
+@pytest.mark.parametrize("width", [100, 70, 60, 50, 45, 40, 35, 30, 25])
+def test_the_numbers_survive_any_width_a_phone_has(width, monkeypatch):
+    # tqdm cuts the whole line to fit, so a long enough title took the
+    # percentage, the bar and the counts with it and left only itself.
+    line = _bar_at(width, LONG, monkeypatch)
+
+    assert "2.86M/8.58M" in line, f"no progress left at {width}: {line!r}"
+    assert len(line) <= width
+
+
+def test_the_slot_number_is_never_the_part_that_goes(monkeypatch):
+    assert _bar_at(30, LONG, monkeypatch).startswith("3. ")
+    assert _bar_at(30, LONG, monkeypatch, label=" 1.").startswith(" 1. ")
+
+
+def test_a_title_keeps_both_of_its_ends(monkeypatch):
+    # The front says which series, the back which episode and which format.
+    # Cutting the tail off would leave a row that names no single download.
+    line = _bar_at(60, LONG, monkeypatch)
+
+    assert line.startswith("3. Die Abenteuer")
+    assert "…" in line, "elided in the middle, not at one end"
+    assert ".aaxc" in line.split(" 33%")[0], f"lost the tail: {line!r}"
+
+
+def test_a_title_that_fits_is_left_alone(monkeypatch):
+    line = _bar_at(100, "short.aaxc", monkeypatch)
+
+    assert line.startswith("3. short.aaxc")
+    assert "…" not in line
+
+
+def test_the_clock_goes_before_the_title_does(monkeypatch):
+    # Twenty columns of elapsed, remaining and rate are worth less than
+    # knowing which of eight downloads the row belongs to.
+    wide = _bar_at(100, LONG, monkeypatch)
+    narrow = _bar_at(50, LONG, monkeypatch)
+
+    assert "[00:12<" in wide, "control: the clock is there when there is room"
+    assert "[00:12<" not in narrow, f"kept the clock over the title: {narrow!r}"
+    assert len(narrow.split(" 33%")[0]) > 12, "and spent it on the title"
+
+
+def test_elide_keeps_what_it_promises():
+    assert progress._elide("abcdef", 10) == "abcdef"
+    assert progress._elide("abcdef", 6) == "abcdef"
+    assert progress._elide("abcdef", 5) == "ab…ef"
+    assert progress._elide("abcdef", 2) == "…f", "one column left goes to the tail"
+    assert progress._elide("abcdef", 1) == "…"
+    assert progress._elide("abcdef", 0) == ""
+    for width in range(0, 12):
+        assert len(progress._elide("abcdefgh", width)) <= width
