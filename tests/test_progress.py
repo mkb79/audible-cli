@@ -8,6 +8,7 @@ that everything falls back cleanly where a scroll region is not possible.
 import asyncio
 import os
 import pathlib
+import re
 import signal
 
 import httpx
@@ -1623,3 +1624,28 @@ def test_a_row_leaves_a_column_free_at_any_width(columns, monkeypatch):
         )
         assert len(bar._format(12.0)) < columns
         assert len(progress.RULE * dock.width) < columns
+
+
+def test_the_dock_never_erases_a_line_it_did_not_write(terminal, monkeypatch):
+    # A rewrapped row takes more lines than it had, and clearing that many
+    # would reach past the dock into the output above. It did, and a
+    # warning went with it. A stale bar is cosmetic; a lost warning is not.
+    with progress.docked_progress(4, stream=terminal, total=40):
+        dock = progress._current.dock
+        held = dock._reserved_rows
+
+        monkeypatch.setattr(
+            progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((40, 24))
+        )
+        dock._on_resize(signal.SIGWINCH, None)
+        before = len(terminal.written)
+        progress.advance_summary(1)
+        after = "".join(terminal.written[before:])
+
+        cleared = {int(line) for line in re.findall(r"\x1b\[(\d+);1H\x1b\[2K", after)}
+        ours = set(range(dock._top, 25))
+        gave_up = set(range(dock._top - (held - dock._reserved_rows), dock._top))
+
+    assert cleared <= ours | gave_up, (
+        f"cleared {sorted(cleared - (ours | gave_up))}, which is the user's"
+    )

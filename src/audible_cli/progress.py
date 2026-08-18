@@ -550,7 +550,6 @@ class Dock:
             *([RULE * self.width] if self._rule else []),
             *(self._lines[row] for row in self._shown),
         ]
-        was_width = self._reserved_width
         self._shown = shown
 
         self._width = width
@@ -559,7 +558,7 @@ class Dock:
         self._rewrapped = False
         self._paused = False
         self._top = height - self._reserved_rows + 1
-        self._wipe_what_it_used_to_hold(was_shown, was_width)
+        self._wipe_what_it_used_to_hold(was_shown)
         # No scrolling here, unlike the first open. What stands in those
         # rows a moment after a resize is the dock that was there before,
         # and scrolling it up is what put the old bars in the text flow and
@@ -587,25 +586,22 @@ class Dock:
             # the margins. Nobody else would give these back.
             self._release_only()
 
-    def _wipe_what_it_used_to_hold(self, was_shown: list[str], was_width: int) -> None:
+    def _wipe_what_it_used_to_hold(self, was_shown: list[str]) -> None:
         """Clear what the dock it used to be left standing above this one.
 
         Both docks sit on the bottom, so whatever the old one leaves over
         stands directly above where the new one starts, and no later paint
         reaches it.
 
-        There is more of it than there were rows. A narrower window rewraps
-        each line, so a row drawn for a hundred columns comes back as three
-        at forty-five. How many follows from the rows themselves rather
-        than from their count: a slot waiting with just its number does not
-        wrap at all. Widening joins nothing back -- these are hard lines --
-        so it only leaves them short.
+        Only the rows it no longer uses. A narrower window also rewraps
+        each of them -- a row drawn for a hundred columns comes back as
+        three at forty-five -- and clearing that many looked right on
+        paper. It is a guess about where the terminal put them, and the
+        guess erased a warning the user needed. A stale bar is cosmetic; a
+        warning that never arrives is not, so the rewrapped remainder is
+        left where it is.
         """
-        if self._width >= was_width:
-            standing = len(was_shown)
-        else:
-            standing = sum(max(1, -(-len(text) // self._width)) for text in was_shown)
-        extra = min(standing - self._reserved_rows, self._top - 1)
+        extra = min(len(was_shown) - self._reserved_rows, self._top - 1)
         if extra <= 0:
             return
         self._paint_write(
