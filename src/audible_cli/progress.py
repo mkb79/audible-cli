@@ -56,6 +56,9 @@ RULE = "\u2500"
 #: columns, and knowing which download a row is beats knowing its rate.
 COMPACT_METER = "{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}"
 
+#: What the running total calls itself.
+SUMMARY_PREFIX = "Overall"
+
 #: Below this much room for the name, the clock goes rather than the name.
 MIN_NAME_COLUMNS = 12
 
@@ -845,13 +848,21 @@ class _Summary:
         self._dock.set(self._row, self._text())
 
     def _text(self) -> str:
+        meter: dict[str, Any] = {
+            "n": self._done,
+            "total": self._total,
+            "elapsed": time.monotonic() - self._started,
+            "unit": "job",
+        }
+        ncols = self._dock.width
+        # Nothing here can be shortened, so the clock goes as soon as the
+        # word no longer fits beside a bar worth drawing.
+        fits = _prefix_budget(ncols, None, **meter) >= len(SUMMARY_PREFIX)
         return tqdm.tqdm.format_meter(
-            n=self._done,
-            total=self._total,
-            elapsed=time.monotonic() - self._started,
-            ncols=self._dock.width,
-            prefix="Overall",
-            unit="job",
+            ncols=ncols,
+            bar_format=None if fits else COMPACT_METER,
+            prefix=SUMMARY_PREFIX,
+            **meter,
         )
 
 

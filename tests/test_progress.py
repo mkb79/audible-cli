@@ -1409,3 +1409,30 @@ def test_a_dock_without_a_rule_places_its_rows_as_before(terminal):
 
     assert "\x1b[1;22r" in opened
     assert progress.RULE not in opened
+
+
+@pytest.mark.parametrize("width", [100, 58, 45, 40, 30, 25])
+def test_the_running_total_is_never_cut_mid_number(width, monkeypatch):
+    monkeypatch.setattr(
+        progress.shutil, "get_terminal_size", lambda *a: os.terminal_size((width, 24))
+    )
+    term = FakeTerminal()
+    with progress.docked_progress(2, stream=term, total=40):
+        progress.advance_summary(29)
+        line = progress._current.dock._lines[2]
+
+    assert line.startswith(progress.SUMMARY_PREFIX)
+    assert "29/40" in line, f"lost the count at {width}: {line!r}"
+    assert len(line) <= width
+    # The clock is dropped whole or kept whole. Half of it is a line that
+    # ends in the middle of a number.
+    assert ("[" in line) == ("]" in line), f"cut mid-clock at {width}: {line!r}"
+
+
+def test_the_running_total_keeps_its_clock_when_there_is_room(terminal):
+    # Dropping it at every width would cost the wide case for nothing.
+    with progress.docked_progress(2, stream=terminal, total=40):
+        progress.advance_summary(29)
+        line = progress._current.dock._lines[2]
+
+    assert "[00:" in line and "]" in line, f"gave up the clock at 100: {line!r}"
