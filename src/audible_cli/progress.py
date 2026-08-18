@@ -23,6 +23,11 @@ were, or dropped them into the scrollback. So a window that grows taller
 leaves the old rows standing until the next log line scrolls them away.
 Clearing them means deciding where they must have gone, and being wrong
 about that erases the output of whoever is watching.
+
+Every library of this kind stops here. Those that redraw relative to the
+cursor leave the same remnants, `enlighten` reserves rows as this does
+and records the limit in its FAQ, and the ones that get it right own the
+alternate screen and lose the log with it.
 """
 
 from __future__ import annotations
