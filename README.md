@@ -261,19 +261,22 @@ audible -p "mypassword" download --asin <ASIN>
 
 `audible-cli` can run headless in CI, for example to export your library on a
 schedule. Signed Audible API requests need only two pieces of device
-authentication, so there is no need to store your whole config directory. From
-your `auth.json` you need:
+authentication, so there is no need to store your whole config directory.
+
+First authenticate locally if you have not already (`audible quickstart`, or
+`audible manage auth-file add`). That writes an `auth.json` into your config
+directory. From it you need two values:
 
 - `adp_token`
 - `device_private_key` (a PEM block)
 
 Store them as repository **secrets**, and the marketplace as a plain
-**variable**:
+**variable**. With [`gh`](https://cli.github.com/) and `jq` you can read both
+straight from `auth.json`:
 
 ```shell
-# device_private_key.pem holds the PEM from your auth.json's "device_private_key"
-gh secret set AUDIBLE_DEVICE_PRIVATE_KEY < device_private_key.pem
-gh secret set AUDIBLE_ADP_TOKEN            # paste the adp_token value
+jq -r .device_private_key auth.json | gh secret set AUDIBLE_DEVICE_PRIVATE_KEY
+jq -r .adp_token          auth.json | gh secret set AUDIBLE_ADP_TOKEN
 gh variable set AUDIBLE_COUNTRY_CODE --body us
 ```
 
@@ -293,7 +296,6 @@ jobs:
   export:
     runs-on: ubuntu-latest
     env:
-      AUDIBLE_CONFIG_DIR: ${{ runner.temp }}/audible
       AUDIBLE_COUNTRY_CODE: ${{ vars.AUDIBLE_COUNTRY_CODE }}
     steps:
       - uses: actions/setup-python@v5
@@ -302,6 +304,11 @@ jobs:
 
       - name: Install audible-cli
         run: pip install audible-cli
+
+      # runner.temp is not available in a job-level env block, so set the
+      # config dir here where the runner context (via $RUNNER_TEMP) exists.
+      - name: Set config dir
+        run: echo "AUDIBLE_CONFIG_DIR=$RUNNER_TEMP/audible" >> "$GITHUB_ENV"
 
       - name: Create ephemeral Audible auth
         env:
