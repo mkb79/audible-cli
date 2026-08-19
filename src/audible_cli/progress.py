@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import atexit
 import contextlib
+import dataclasses
 import os
 import pathlib
 import shutil
@@ -465,12 +466,22 @@ class Dock:
     # -- signals ----------------------------------------------------------
 
     def _install(self, number: int, handler: Any) -> None:
-        # Read the old disposition first: `signal.signal` returns it only
-        # once ours is installed, and a signal in between would find none
-        # recorded and fall back to killing the process.
-        with contextlib.suppress(ValueError, OSError):
-            self._previous_handlers[number] = signal.getsignal(number)
+        """Take over one signal, and remember what held it before.
+
+        Recorded before installing, because `signal.signal` returns the old
+        disposition only once ours is in place and a signal in between
+        would find nothing recorded. Taken back off the record if the
+        install then fails, so nothing claims a handler it does not have:
+        off the main thread Python refuses outright, and then only `atexit`
+        is left to put the terminal back.
+        """
+        previous = None
+        try:
+            previous = signal.getsignal(number)
+            self._previous_handlers[number] = previous
             signal.signal(number, handler)
+        except (ValueError, OSError):
+            self._previous_handlers.pop(number, None)
 
     def _install_handlers(self) -> None:
         for name in _CAUGHT_SIGNALS:
@@ -672,32 +683,30 @@ class Dock:
         # One write, not three: a handler runs between bytecodes and would
         # cut a split sequence in half. Not a guarantee, but the text has no
         # newline, so a line-buffered stream holds it.
-        self._painting = True
-        self._paint_write(
-            "\x1b7"  # save cursor
-            f"\x1b[{self._line_of(position)};1H\x1b[2K{text}"  # absolute row
-            "\x1b8"  # put it back
-        )
-        self._painting = False
+        self._paint_line(self._line_of(position), text)
 
     def _paint_rule(self) -> None:
         """Draw the line that sets the dock off from the output above it."""
         if not self._rule or self._resized or not self._active:
             return
-        self._paint_write(
-            "\x1b7"  # save cursor
-            f"\x1b[{self._top};1H\x1b[2K{RULE * self.width}"
-            "\x1b8"  # put it back
-        )
+        self._paint_line(self._top, RULE * self.width)
 
-    def _paint_write(self, text: str) -> None:
-        """Write and flush a paint before the handler may come between.
+    def _paint_line(self, line: int, text: str) -> None:
+        """Put one line on the screen, saving the cursor around it.
 
-        The paint carries no newline, so a line-buffered stream keeps it. A
-        resize landing after the write but before the flush would put its
-        release out first and this on top of it, on rows that are nobody's.
+        `_painting` covers the whole of it. The terminal keeps a single
+        saved cursor, so a handler writing its own save while this one is
+        out would take the position this write is going to restore.
         """
-        self._write_now(text)
+        self._painting = True
+        try:
+            self._write_now(
+                "\x1b7"  # save cursor
+                f"\x1b[{line};1H\x1b[2K{text}"  # absolute line
+                "\x1b8"  # put it back
+            )
+        finally:
+            self._painting = False
 
     @property
     def width(self) -> int:
@@ -934,12 +943,13 @@ class _Summary:
         )
 
 
+@dataclasses.dataclass
 class _Current:
     """The dock this process is using, if any."""
 
     dock: Dock | None = None
-    free_rows: list[int] = []  # noqa: RUF012
-    labels: list[str] = []  # noqa: RUF012
+    free_rows: list[int] = dataclasses.field(default_factory=list)
+    labels: list[str] = dataclasses.field(default_factory=list)
     summary: _Summary | None = None
     disabled: bool = False
 
@@ -987,7 +997,8 @@ def grow_summary_total(n: int = 1) -> None:
 
 def progress_disabled() -> bool:
     """Whether the caller asked for no progress bars at all."""
-    return _current.disabled
+    with _rows_lock:
+        return _current.disabled
 
 
 @contextlib.contextmanager

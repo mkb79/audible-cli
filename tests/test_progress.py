@@ -10,6 +10,7 @@ import os
 import pathlib
 import re
 import signal
+import threading
 
 import httpx
 import pytest
@@ -1242,21 +1243,21 @@ def test_a_resize_during_the_repaint_gives_the_margins_back(terminal, monkeypatc
         )
         dock._on_resize(signal.SIGWINCH, None)
 
-        real_paint_write = dock._paint_write
+        real_paint_line = dock._paint_line
 
-        def turn_mid_paint(text):
-            if "\x1b[17;1H" in text:  # the first row of the rebuilt dock
+        def turn_mid_paint(line, text):
+            if line == 17:  # the first row of the rebuilt dock
                 monkeypatch.setattr(
                     progress.shutil,
                     "get_terminal_size",
                     lambda *a, **kw: os.terminal_size((90, 26)),
                 )
                 dock._on_resize(signal.SIGWINCH, None)  # `_painting` is on
-            real_paint_write(text)
+            real_paint_line(line, text)
 
-        dock._paint_write = turn_mid_paint
+        dock._paint_line = turn_mid_paint
         dock.set(0, "anything")
-        dock._paint_write = real_paint_write
+        dock._paint_line = real_paint_line
 
         assert not dock._reserved, "margins for a window that is already gone"
         assert dock._resized, "and the next paint still owes a rebuild"
@@ -1677,3 +1678,71 @@ def test_the_dock_never_erases_a_line_it_does_not_own(size, terminal, monkeypatc
     assert cleared <= ours, (
         f"cleared {sorted(cleared - ours)}, which the dock does not own"
     )
+
+
+def test_the_rule_is_drawn_under_the_same_guard_as_a_row(terminal):
+    # Every save-and-restore the dock writes has to be covered, not just
+    # the ones for worker rows. The terminal keeps one saved cursor, so a
+    # handler writing its own while this is out takes the position the
+    # write is about to restore.
+    with progress.Dock(2, stream=terminal) as dock:
+        during = []
+        real = dock._write_now
+
+        def note(text):
+            if progress.RULE in text:
+                during.append(dock._painting)
+            real(text)
+
+        dock._write_now = note
+        dock._paint_rule()
+        dock._write_now = real
+
+    assert during == [True], "the rule was drawn with the handler free to cut in"
+
+
+def test_the_guard_is_lifted_even_when_a_write_throws(terminal):
+    with progress.Dock(1, stream=terminal) as dock:
+
+        def boom(text):
+            raise RuntimeError("the stream went away")
+
+        real = dock._write_now
+        dock._write_now = boom
+        try:
+            with pytest.raises(RuntimeError):
+                dock._paint_line(24, "anything")
+        finally:
+            dock._write_now = real  # or the block cannot close either
+
+        assert not dock._painting, "the handler is locked out for good"
+
+
+def test_a_signal_it_could_not_take_is_not_recorded(terminal, monkeypatch):
+    # Python refuses signal.signal off the main thread. Recording the
+    # handler anyway leaves the dock believing it can put the terminal back
+    # on SIGTERM when nothing was ever installed.
+    def refuse(number, handler):
+        raise ValueError("signal only works in main thread")
+
+    monkeypatch.setattr(progress.signal, "signal", refuse)
+    dock = progress.Dock(2, stream=terminal)
+    with dock:
+        assert dock._previous_handlers == {}, "claims handlers it has not got"
+        assert dock.active, "and carries on, with atexit as the last word"
+
+
+def test_off_the_main_thread_the_dock_still_gives_the_region_back(terminal):
+    # No signal handlers there, so the ordinary exit is all there is.
+    done = []
+
+    def run():
+        with progress.Dock(2, stream=terminal):
+            done.append("open")
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    thread.join()
+
+    assert done == ["open"]
+    assert "\x1b[r" in terminal.text, "left the region set behind it"
