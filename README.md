@@ -257,6 +257,108 @@ audible -p "mypassword" download --asin <ASIN>
 
 ---
 
+## 🤖 Continuous integration (GitHub Actions)
+
+`audible-cli` can run headless in CI, for example to export your library on a
+schedule. Signed Audible API requests need only two pieces of device
+authentication, so there is no need to store your whole config directory. From
+your `auth.json` you need:
+
+- `adp_token`
+- `device_private_key` (a PEM block)
+
+Store them as repository **secrets**, and the marketplace as a plain
+**variable**:
+
+```shell
+# device_private_key.pem holds the PEM from your auth.json's "device_private_key"
+gh secret set AUDIBLE_DEVICE_PRIVATE_KEY < device_private_key.pem
+gh secret set AUDIBLE_ADP_TOKEN            # paste the adp_token value
+gh variable set AUDIBLE_COUNTRY_CODE --body us
+```
+
+The workflow builds an ephemeral `auth.json` and `config.toml` on the runner.
+Because both `adp_token` and `device_private_key` are present, `audible-cli`
+treats it as an unencrypted auth file and uses ADP request signing:
+
+```yaml
+name: Audible export
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * *"
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    env:
+      AUDIBLE_CONFIG_DIR: ${{ runner.temp }}/audible
+      AUDIBLE_COUNTRY_CODE: ${{ vars.AUDIBLE_COUNTRY_CODE }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install audible-cli
+        run: pip install audible-cli
+
+      - name: Create ephemeral Audible auth
+        env:
+          AUDIBLE_ADP_TOKEN: ${{ secrets.AUDIBLE_ADP_TOKEN }}
+          AUDIBLE_DEVICE_PRIVATE_KEY: ${{ secrets.AUDIBLE_DEVICE_PRIVATE_KEY }}
+        run: |
+          mkdir -p "$AUDIBLE_CONFIG_DIR"
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          config_dir = Path(os.environ["AUDIBLE_CONFIG_DIR"])
+          country_code = os.environ["AUDIBLE_COUNTRY_CODE"]
+
+          private_key = os.environ["AUDIBLE_DEVICE_PRIVATE_KEY"]
+          # audible currently expects the PEM to end with a newline.
+          if not private_key.endswith("\n"):
+              private_key += "\n"
+
+          auth = {
+              "adp_token": os.environ["AUDIBLE_ADP_TOKEN"],
+              "device_private_key": private_key,
+          }
+
+          (config_dir / "auth.json").write_text(json.dumps(auth), encoding="utf-8")
+          (config_dir / "config.toml").write_text(
+              f'''
+          [APP]
+          primary_profile = "ci"
+
+          [profile.ci]
+          auth_file = "auth.json"
+          country_code = "{country_code}"
+          '''.strip(),
+              encoding="utf-8",
+          )
+          PY
+
+          chmod 700 "$AUDIBLE_CONFIG_DIR"
+          chmod 600 "$AUDIBLE_CONFIG_DIR/auth.json"
+
+      - name: Run audible-cli
+        run: audible library list
+```
+
+Only the two credentials required for ADP signing are stored as secrets; access
+and refresh tokens, cookies, and account details are never uploaded, and the
+auth files exist only for the lifetime of the runner.
+
+> ⚠️ These credentials grant access to your Audible account. Run authenticated
+> workflows only from trusted branches, scheduled runs, or manual dispatches,
+> never from arbitrary pull-request code.
+
+---
+
 ## 🧩 Built-in commands
 
 - **activation-bytes** → Manage DRM activation keys  
