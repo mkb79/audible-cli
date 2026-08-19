@@ -277,7 +277,7 @@ straight from `auth.json`:
 ```shell
 jq -r .device_private_key auth.json | gh secret set AUDIBLE_DEVICE_PRIVATE_KEY
 jq -r .adp_token          auth.json | gh secret set AUDIBLE_ADP_TOKEN
-gh variable set AUDIBLE_COUNTRY_CODE --body us
+gh variable set AUDIBLE_COUNTRY_CODE --body us   # your marketplace: us, uk, de, fr, ca, au, ...
 ```
 
 At runtime the workflow writes a minimal `auth.json` (just those two values)
