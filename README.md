@@ -260,17 +260,17 @@ audible -p "mypassword" download --asin <ASIN>
 ## 🤖 Continuous integration (GitHub Actions)
 
 `audible-cli` can run headless in CI, for example to export your library on a
-schedule. Signed Audible API requests need only two pieces of device
-authentication, so there is no need to store your whole config directory.
+schedule. A runner only needs two values from your local `auth.json` to
+authenticate, so there is no need to upload the whole config directory.
 
-First authenticate locally if you have not already (`audible quickstart`, or
-`audible manage auth-file add`). That writes an `auth.json` into your config
-directory. From it you need two values:
+If you have not authenticated yet, do it once locally with `audible quickstart`
+(or `audible manage auth-file add`). This writes an `auth.json` into your config
+directory. The two values a runner needs are:
 
 - `adp_token`
 - `device_private_key` (a PEM block)
 
-Store them as repository **secrets**, and the marketplace as a plain
+Add them as repository **secrets**, and your marketplace as a plain
 **variable**. With [`gh`](https://cli.github.com/) and `jq` you can read both
 straight from `auth.json`:
 
@@ -280,9 +280,9 @@ jq -r .adp_token          auth.json | gh secret set AUDIBLE_ADP_TOKEN
 gh variable set AUDIBLE_COUNTRY_CODE --body us
 ```
 
-The workflow builds an ephemeral `auth.json` and `config.toml` on the runner.
-Because both `adp_token` and `device_private_key` are present, `audible-cli`
-treats it as an unencrypted auth file and uses ADP request signing:
+At runtime the workflow writes a minimal `auth.json` (just those two values)
+plus a small `config.toml`, which is enough for `audible-cli` to sign API
+requests without an interactive login:
 
 ```yaml
 name: Audible export
@@ -356,9 +356,9 @@ jobs:
         run: audible library list
 ```
 
-Only the two credentials required for ADP signing are stored as secrets; access
-and refresh tokens, cookies, and account details are never uploaded, and the
-auth files exist only for the lifetime of the runner.
+Only these two values are stored as secrets; access and refresh tokens, cookies,
+and account details are never uploaded, and the auth files exist only for the
+lifetime of the runner.
 
 > ⚠️ These credentials grant access to your Audible account. Run authenticated
 > workflows only from trusted branches, scheduled runs, or manual dispatches,
