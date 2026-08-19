@@ -1867,3 +1867,13 @@ def test_choosing_a_layout_does_not_grow_with_the_job_count():
 
     assert big._choose_layout(24) is not None
     assert len(big._choose_layout(24)) < 20, "picked more rows than fit"
+
+
+def test_nothing_to_download_shows_a_total_of_none(terminal):
+    # `--all` on a library that is already on disk queues nothing, and the
+    # summary is then counting against zero.
+    with progress.docked_progress(4, stream=terminal, total=0):
+        progress.advance_summary(0)
+        line = progress._current.dock._lines[4]
+
+    assert "0/0" in line, f"the summary did not survive an empty queue: {line!r}"

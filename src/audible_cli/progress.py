@@ -1197,7 +1197,12 @@ def docked_progress(
 def take_progressbar(
     destination: pathlib.Path, total: int, start: int = 0
 ) -> DockedProgressBar | None:
-    """A docked bar, or None when there is no dock or no row left."""
+    """A docked bar, or None when there is no dock or no row left.
+
+    A row is handed out even when the window is currently too small to
+    show it. The bar counts either way and appears the moment there is
+    room, which a bar drawn some other way never would.
+    """
     with _rows_lock:
         if _current.disabled:
             return None
@@ -1210,9 +1215,6 @@ def take_progressbar(
     dock.settle()
 
     with _rows_lock:
-        # A row is handed out even when the window is currently too small to
-        # show it. It keeps counting, and it appears the moment there is
-        # room -- which a bar drawn some other way never would.
         if _current.dock is not dock or not dock.active or not _current.free_rows:
             return None
         row = _current.free_rows.pop(0)
