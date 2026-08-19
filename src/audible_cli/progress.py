@@ -42,6 +42,7 @@ import signal
 import sys
 import threading
 import time
+import unicodedata
 from collections.abc import Callable, Iterator
 from types import FrameType
 from typing import IO, Any
@@ -64,12 +65,25 @@ MIN_REPAINT_INTERVAL = 0.1
 #: cost a second row and two columns of a screen already short of both.
 RULE = "\u2500"
 
+#: Where the stream cannot carry the drawing characters. A terminal set to
+#: ascii turns one of them into six visible escaped characters, and the
+#: rows then wrap through the whole reserved area.
+ASCII_RULE = "-"
+
 #: Dropped first when the window is narrow: the clock costs about twenty
 #: columns, and knowing which download a row is beats knowing its rate.
 COMPACT_METER = "{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}"
 
 #: What the running total calls itself.
 SUMMARY_PREFIX = "Overall"
+
+#: Dropped after the clock, when even a bar of one column would push the
+#: counts off the end. tqdm trims from the right, and the counts are what
+#: the row is for.
+TIGHT_METER = "{desc}{n_fmt}/{total_fmt}"
+
+#: Just the counts, rendered unpadded, to see whether they survived.
+COUNTS_ONLY = "{n_fmt}/{total_fmt}"
 
 #: Below this much room for the name, the clock goes rather than the name.
 MIN_NAME_COLUMNS = 12
@@ -170,6 +184,7 @@ class Dock:
         self._painting = False
         self._paused = False
         self._fd = self._descriptor()
+        self._unicode = self._carries_drawing_characters()
         self.enabled = self._usable()
 
     def settle(self) -> None:
@@ -204,6 +219,25 @@ class Dock:
         """Whether every row has a place, so one may be handed out."""
         return self.available and len(self._shown) == self._rows
 
+    def _carries_drawing_characters(self) -> bool:
+        """Whether the rule and the bar can go down this stream as they are.
+
+        With `PYTHONIOENCODING=ascii` a text stream escapes what it cannot
+        encode, so one rule character arrives as six and every row runs off
+        the end of its line.
+        """
+        encoding = getattr(self._stream, "encoding", None) or "utf-8"
+        try:
+            (RULE + "\u2588").encode(encoding)
+        except (LookupError, UnicodeEncodeError):
+            return False
+        return True
+
+    @property
+    def ascii_only(self) -> bool:
+        """Whether rows must keep to characters the stream can carry."""
+        return not self._unicode
+
     def _usable(self) -> bool:
         if self._rows <= 0:
             return False
@@ -222,27 +256,22 @@ class Dock:
         """Whether reserving `count` rows still leaves the window usable."""
         return height - count >= max(MIN_SCROLL_ROWS, height // 2)
 
-    def _layouts(self) -> list[list[int]]:
-        """Row sets to try, widest first.
+    def _choose_layout(self, height: int) -> list[int] | None:
+        """The most rows this window can hold, or None for none at all.
 
         Whatever fits beats nothing: on a phone with the keyboard up there
         is no room for eight bars, but there is room for three, and the
-        running total is the last thing to go.
+        running total is the last thing to go. Worked out from the height
+        rather than by trying every set, because `--jobs` has no upper
+        bound and building them all is quadratic in it.
         """
-        everything = list(range(self._rows))
-        if self._keep_row is None or self._rows <= 1:
-            return [everything]
-        rest = [row for row in everything if row != self._keep_row]
-        return [everything] + [
-            sorted([*rest[:keep], self._keep_row])
-            for keep in range(len(rest) - 1, -1, -1)
-        ]
-
-    def _choose_layout(self, height: int) -> list[int] | None:
-        for shown in self._layouts():
-            if self._fits(height, len(shown) + self._rule):
-                return shown
-        return None
+        room = height - max(MIN_SCROLL_ROWS, height // 2) - self._rule
+        if room >= self._rows:
+            return list(range(self._rows))
+        if self._keep_row is None or self._rows <= 1 or room < 1:
+            return None
+        others = [row for row in range(self._rows) if row != self._keep_row]
+        return sorted([*others[: room - 1], self._keep_row])
 
     @property
     def _reserved_rows(self) -> int:
@@ -488,9 +517,11 @@ class Dock:
             self._install(getattr(signal, name), self._on_terminating_signal)
         if hasattr(signal, "SIGWINCH"):
             self._install(signal.SIGWINCH, self._on_resize)
+        if hasattr(signal, "SIGTSTP"):
+            self._install(signal.SIGTSTP, self._on_suspend)
 
     def _restore_handlers(self) -> None:
-        ours = (self._on_terminating_signal, self._on_resize)
+        ours = (self._on_terminating_signal, self._on_resize, self._on_suspend)
         for number, handler in self._previous_handlers.items():
             with contextlib.suppress(ValueError, OSError, TypeError):
                 # Somebody may have installed their own handler while the
@@ -516,6 +547,36 @@ class Dock:
             return
         signal.signal(number, signal.SIG_DFL)
         os.kill(os.getpid(), number)
+
+    def _on_suspend(self, number: int, frame: FrameType | None) -> None:
+        """Give the terminal back before the process stops, and take it again.
+
+        Ctrl-Z stops us where we stand: no `__exit__`, no `atexit`. Without
+        this the shell comes back inside our margins and every command it
+        runs scrolls in the space we reserved.
+        """
+        if self._reserved and not self._painting:
+            self._write_raw("\x1b7\x1b[r\x1b8")
+            self._reserved = False
+        # Whatever the window did while we were away, the next paint works
+        # it out rather than trusting the geometry from before.
+        self._resized = True
+
+        previous = self._previous_handlers.get(number)
+        if previous is signal.SIG_IGN:
+            # Started with it ignored, by a parent or a job-control-less
+            # shell. Reserving rows must not turn that into a stop.
+            return
+        if callable(previous):
+            previous(number, frame)
+            return
+
+        # Stop for real, which needs the default disposition back. Execution
+        # carries on here when the shell brings us forward again.
+        signal.signal(number, signal.SIG_DFL)
+        os.kill(os.getpid(), number)
+        with contextlib.suppress(ValueError, OSError):
+            signal.signal(number, self._on_suspend)
 
     def _on_resize(self, number: int, frame: FrameType | None) -> None:
         # At once, with the one sequence that needs no geometry: stale
@@ -689,7 +750,8 @@ class Dock:
         """Draw the line that sets the dock off from the output above it."""
         if not self._rule or self._resized or not self._active:
             return
-        self._paint_line(self._top, RULE * self.width)
+        rule = ASCII_RULE if self.ascii_only else RULE
+        self._paint_line(self._top, rule * self.width)
 
     def _paint_line(self, line: int, text: str) -> None:
         """Put one line on the screen, saving the cursor around it.
@@ -759,20 +821,45 @@ class Dock:
                 data = data[written:]
 
 
+def _columns(text: str) -> int:
+    """How many columns `text` takes on screen.
+
+    Not how many characters it has: a Japanese title is half as long and
+    twice as wide, and a row measured by character count runs off the end
+    and takes the counts with it.
+    """
+    return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
+
+
+def _take(text: str, columns: int, *, from_end: bool = False) -> str:
+    """As much of `text` as fits in `columns`, by width rather than count."""
+    taken: list[str] = []
+    left = columns
+    for char in reversed(text) if from_end else text:
+        need = 2 if unicodedata.east_asian_width(char) in "WF" else 1
+        if need > left:
+            break
+        left -= need
+        taken.append(char)
+    return "".join(reversed(taken)) if from_end else "".join(taken)
+
+
 def _elide(text: str, width: int) -> str:
-    """Shorten to `width`, dropping the middle.
+    """Shorten to `width` columns, dropping the middle.
 
     The ends carry what tells two downloads apart: the series at the front,
     the episode and the extension at the back.
     """
     if width <= 0:
         return ""
-    if len(text) <= width:
+    if _columns(text) <= width:
         return text
     if width == 1:
         return "\u2026"
     head = (width - 1) // 2
-    return text[:head] + "\u2026" + text[len(text) - (width - 1 - head) :]
+    front = _take(text, head)
+    back = _take(text, width - 1 - _columns(front), from_end=True)
+    return front + "\u2026" + back
 
 
 def _prefix_budget(ncols: int, bar_format: str | None, **meter: Any) -> int:
@@ -793,6 +880,23 @@ def _prefix_budget(ncols: int, bar_format: str | None, **meter: Any) -> int:
         # No bar to take from, so nothing is safe to spend
         return 0
     return max(0, closing - opening - 1 - MIN_BAR_COLUMNS)
+
+
+def _keeping_the_counts(line: str, ncols: int, prefix: str, **meter: Any) -> str:
+    """`line`, or a tighter rendering if the counts did not survive it.
+
+    tqdm cuts the line to the column count from the right, so a narrow
+    window loses the numbers first. Better to give up the bar than to show
+    `9999/1000` for nine thousand of ten.
+    """
+    counts = tqdm.tqdm.format_meter(
+        prefix="", ncols=None, bar_format=COUNTS_ONLY, **meter
+    )
+    if counts in line:
+        return line
+    return tqdm.tqdm.format_meter(
+        prefix=prefix, ncols=ncols, bar_format=TIGHT_METER, **meter
+    )
 
 
 class DockedProgressBar:
@@ -865,6 +969,7 @@ class DockedProgressBar:
             "unit": "B",
             "unit_scale": True,
             "unit_divisor": 1024,
+            "ascii": self._dock.ascii_only,
         }
         ncols = self._dock.width
         # The number is never shortened. It names the slot, and a slot that
@@ -875,10 +980,13 @@ class DockedProgressBar:
         if room < MIN_NAME_COLUMNS:
             bar_format = COMPACT_METER
             room = _prefix_budget(ncols, bar_format, **meter) - len(self._lead)
-        return tqdm.tqdm.format_meter(
-            ncols=ncols,
-            bar_format=bar_format,
-            prefix=self._lead + _elide(self._name, room),
+        prefix = self._lead + _elide(self._name, room)
+        return _keeping_the_counts(
+            tqdm.tqdm.format_meter(
+                ncols=ncols, bar_format=bar_format, prefix=prefix, **meter
+            ),
+            ncols,
+            prefix,
             **meter,
         )
 
@@ -930,15 +1038,21 @@ class _Summary:
             "total": self._total,
             "elapsed": time.monotonic() - self._started,
             "unit": "job",
+            "ascii": self._dock.ascii_only,
         }
         ncols = self._dock.width
         # Nothing here can be shortened, so the clock goes as soon as the
         # word no longer fits beside a bar worth drawing.
         fits = _prefix_budget(ncols, None, **meter) >= len(SUMMARY_PREFIX)
-        return tqdm.tqdm.format_meter(
-            ncols=ncols,
-            bar_format=None if fits else COMPACT_METER,
-            prefix=SUMMARY_PREFIX,
+        return _keeping_the_counts(
+            tqdm.tqdm.format_meter(
+                ncols=ncols,
+                bar_format=None if fits else COMPACT_METER,
+                prefix=SUMMARY_PREFIX,
+                **meter,
+            ),
+            ncols,
+            SUMMARY_PREFIX,
             **meter,
         )
 

@@ -1746,3 +1746,124 @@ def test_off_the_main_thread_the_dock_still_gives_the_region_back(terminal):
 
     assert done == ["open"]
     assert "\x1b[r" in terminal.text, "left the region set behind it"
+
+
+# --- what the free-running review turned up --------------------------------
+
+
+def test_ctrl_z_gives_the_terminal_back_before_the_process_stops(terminal):
+    # Ctrl-Z stops the process where it stands: no `__exit__`, no `atexit`.
+    # Without a handler the shell comes back inside our margins and every
+    # command it runs scrolls in the space we reserved.
+    if not hasattr(signal, "SIGTSTP"):
+        pytest.skip("no job control here")
+
+    with progress.Dock(2, stream=terminal) as dock:
+        assert signal.getsignal(signal.SIGTSTP) == dock._on_suspend
+        before = len(terminal.written)
+        dock._previous_handlers[signal.SIGTSTP] = signal.SIG_IGN  # do not stop
+        dock._on_suspend(signal.SIGTSTP, None)
+        given_back = "".join(terminal.written[before:])
+
+        assert "\x1b[r" in given_back, "stopped with the region still set"
+        assert not dock._reserved
+        assert dock._resized, "and the next paint measures again"
+
+
+def test_the_suspend_handler_is_handed_back_with_the_others(terminal):
+    if not hasattr(signal, "SIGTSTP"):
+        pytest.skip("no job control here")
+
+    before = signal.getsignal(signal.SIGTSTP)
+    with progress.Dock(2, stream=terminal):
+        pass
+
+    assert signal.getsignal(signal.SIGTSTP) is before
+
+
+def test_a_stream_that_cannot_carry_the_drawing_characters_gets_plain_ones(
+    terminal, monkeypatch
+):
+    # With PYTHONIOENCODING=ascii a text stream escapes what it cannot
+    # encode, so one rule character arrives as six and every row runs off
+    # the end of its line.
+    terminal.encoding = "ascii"
+    with progress.docked_progress(1, stream=terminal, total=10):
+        dock = progress._current.dock
+        bar = progress.take_progressbar(pathlib.Path("t.aaxc"), total=1000)
+        bar.update(500)
+        bar._render(force=True)
+        row = dock._lines[0]
+        assert dock.ascii_only
+
+        drawn = "".join(terminal.written)
+        assert progress.RULE not in drawn, "drew a character the stream escapes"
+        assert row.encode("ascii", "backslashreplace").decode() == row
+
+
+def test_a_utf8_stream_keeps_the_drawing_characters(terminal):
+    with progress.docked_progress(1, stream=terminal, total=10):
+        assert not progress._current.dock.ascii_only
+        assert progress.RULE in "".join(terminal.written)
+
+
+@pytest.mark.parametrize("columns", [100, 60, 45])
+def test_a_wide_title_still_leaves_room_for_the_counts(columns, monkeypatch):
+    # A Japanese title is half as long and twice as wide. Measuring it by
+    # character count runs the row off the end and takes the counts along.
+    monkeypatch.setattr(
+        progress.shutil,
+        "get_terminal_size",
+        lambda *a, **kw: os.terminal_size((columns, 24)),
+    )
+    with progress.Dock(2, stream=FakeTerminal()) as dock:
+        bar = progress.DockedProgressBar(
+            dock,
+            0,
+            description="漢" * 30 + ".aaxc",
+            total=9_000_000,
+            start=3_000_000,
+            label="1.",
+        )
+        line = bar._format(12.0)
+
+    assert "2.86M/8.58M" in line, f"the counts went with the title: {line!r}"
+    assert progress._columns(line) < columns, "wider than the window"
+
+
+def test_columns_counts_what_a_terminal_shows():
+    assert progress._columns("abc") == 3
+    assert progress._columns("漢") == 2
+    assert progress._columns("漢字abc") == 7
+    # Six columns carry one wide character, the mark and one more; a
+    # third would be seven.
+    assert progress._elide("漢" * 10, 6) == "漢…漢"
+    assert progress._columns(progress._elide("漢" * 10, 6)) <= 6
+    for width in range(0, 12):
+        assert progress._columns(progress._elide("漢字abc", width)) <= width
+
+
+@pytest.mark.parametrize("columns", [100, 40, 25, 20])
+def test_the_running_total_never_shows_a_number_that_is_not_true(columns, monkeypatch):
+    # tqdm trims from the right, so `9999/10000` became `9999/1000` --
+    # which reads as ten times done.
+    monkeypatch.setattr(
+        progress.shutil,
+        "get_terminal_size",
+        lambda *a, **kw: os.terminal_size((columns, 24)),
+    )
+    term = FakeTerminal()
+    with progress.docked_progress(2, stream=term, total=10000):
+        progress.advance_summary(9999)
+        line = progress._current.dock._lines[2]
+
+    assert "9999/10000" in line, f"showed a number that is not true: {line!r}"
+
+
+def test_choosing_a_layout_does_not_grow_with_the_job_count():
+    # `--jobs` has no upper bound, and building every candidate set was
+    # quadratic in it.
+    big = progress.Dock(5000, stream=FakeTerminal(tty=False), keep_row=4999)
+
+    assert big._choose_layout(24) is not None
+    assert len(big._choose_layout(24)) < 20, "picked more rows than fit"
