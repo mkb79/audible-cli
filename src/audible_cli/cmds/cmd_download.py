@@ -1012,11 +1012,11 @@ async def cli(session, api_client, **params):
     )
 
     if resolve_podcasts:
-        await library.resolve_podcasts(start_date=start_date, end_date=end_date)
-        # Replaced in place rather than removed one by one: taking items out
-        # of the list being walked moves the rest along under the walk, and
-        # every second parent in a row was stepped over.
-        library.data[:] = [i for i in library if not i.is_parent_podcast()]
+        # The parents go: they are what the episodes came from, and a
+        # parent has no audio of its own to download.
+        await library.resolve_podcasts(
+            start_date=start_date, end_date=end_date, remove_parents=True
+        )
 
     # collect jobs
     jobs = []

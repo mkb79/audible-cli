@@ -1,9 +1,11 @@
-"""Resolving podcasts has to take every parent out of the library.
+"""Resolving podcasts, and who takes the parents out.
 
-The parents are replaced by their episodes. One left behind is picked up
-again as a job, and the command then makes a directory for episodes that
-are already queued elsewhere.
+The episodes are added to the library and the parents stay: they are
+ordinary entries to list and to export. Only a download asks for them to
+go, because a parent carries no audio of its own.
 """
+
+import asyncio
 
 import pytest
 from click.testing import CliRunner
@@ -11,6 +13,76 @@ from click.testing import CliRunner
 from audible_cli.cmds import cmd_download
 from audible_cli.config import Session
 from audible_cli.models import Library
+
+
+def an_item(asin, title, parent=False):
+    item = {
+        "asin": asin,
+        "title": title,
+        "content_delivery_type": "PodcastParent" if parent else "SinglePartBook",
+        "has_children": parent,
+        "purchase_date": "2020-01-01T00:00:00.000Z",
+    }
+    if parent:
+        item["content_type"] = "Podcast"
+    return item
+
+
+def a_library(*items, api_client=None):
+    return Library({"items": list(items)}, api_client=api_client)
+
+
+@pytest.fixture
+def neighbouring_parents(monkeypatch):
+    """Three shows in a row, which is what removing one at a time skipped.
+
+    Each hands back one episode, the way the real call does.
+    """
+
+    async def fake_children(self, **request_params):
+        return a_library(an_item(f"{self.asin}EP", f"{self.title} Episode"))
+
+    monkeypatch.setattr("audible_cli.models.LibraryItem.get_child_items", fake_children)
+    return a_library(
+        an_item("BOOK0001", "A Book"),
+        an_item("CAST0001", "First Show", parent=True),
+        an_item("CAST0002", "Second Show", parent=True),
+        an_item("CAST0003", "Third Show", parent=True),
+        an_item("BOOK0002", "Another Book"),
+    )
+
+
+# --- the model ------------------------------------------------------------
+
+
+def test_the_shows_stay_unless_they_are_asked_to_go(neighbouring_parents):
+    asyncio.run(neighbouring_parents.resolve_podcasts())
+
+    assert sorted(i.asin for i in neighbouring_parents) == [
+        "BOOK0001",
+        "BOOK0002",
+        "CAST0001",
+        "CAST0001EP",
+        "CAST0002",
+        "CAST0002EP",
+        "CAST0003",
+        "CAST0003EP",
+    ]
+
+
+def test_asking_takes_every_show_out_including_neighbours(neighbouring_parents):
+    asyncio.run(neighbouring_parents.resolve_podcasts(remove_parents=True))
+
+    assert sorted(i.asin for i in neighbouring_parents) == [
+        "BOOK0001",
+        "BOOK0002",
+        "CAST0001EP",
+        "CAST0002EP",
+        "CAST0003EP",
+    ], "a show was left behind, or something else went with them"
+
+
+# --- and the command that asks ---------------------------------------------
 
 
 class FakeHTTPSession:
@@ -32,61 +104,29 @@ def session(monkeypatch):
     return Session()
 
 
-def an_item(asin, title, parent=False):
-    item = {
-        "asin": asin,
-        "title": title,
-        "content_delivery_type": "PodcastParent" if parent else "SinglePartBook",
-        "has_children": parent,
-        "purchase_date": "2020-01-01T00:00:00.000Z",
-    }
-    if parent:
-        item["content_type"] = "Podcast"
-    return item
-
-
-@pytest.fixture
-def library_of_neighbouring_parents(monkeypatch):
-    """Three parents in a row, which is what the old removal skipped over."""
+def test_the_download_command_asks_for_the_shows_to_go(
+    monkeypatch, session, neighbouring_parents, tmp_path
+):
+    asked = {}
+    queued = []
 
     async def fake_from_api_full_sync(cls, api_client, **request_params):
-        return Library(
-            {
-                "items": [
-                    an_item("BOOK0001", "A Book"),
-                    an_item("CAST0001", "First Show", parent=True),
-                    an_item("CAST0002", "Second Show", parent=True),
-                    an_item("CAST0003", "Third Show", parent=True),
-                    an_item("BOOK0002", "Another Book"),
-                ]
-            },
-            api_client=api_client,
-        )
+        return neighbouring_parents
 
-    async def fake_resolve(self, **kwargs):
-        """What the real one does: add the episodes, leave the parents."""
-        episodes = [
-            an_item(f"{parent.asin}EP", f"{parent.title} Episode")
-            for parent in self
-            if parent.is_parent_podcast()
-        ]
-        self.data.extend(Library({"items": episodes}, api_client=self._client).data)
+    real_resolve = Library.resolve_podcasts
+
+    async def note(self, **kwargs):
+        asked.update(kwargs)
+        await real_resolve(self, **kwargs)
+
+    async def record(*args, **kwargs):
+        queued.append(kwargs["item"].asin if "item" in kwargs else args[3].asin)
+        return True
 
     monkeypatch.setattr(
         Library, "from_api_full_sync", classmethod(fake_from_api_full_sync)
     )
-    monkeypatch.setattr(Library, "resolve_podcasts", fake_resolve)
-
-
-def test_resolving_queues_the_episodes_and_no_parent(
-    monkeypatch, session, library_of_neighbouring_parents, tmp_path
-):
-    queued = []
-
-    async def record(*args, **kwargs):
-        queued.append(kwargs.get("item", args[3] if len(args) > 3 else None).asin)
-        return True
-
+    monkeypatch.setattr(Library, "resolve_podcasts", note)
     monkeypatch.setattr(cmd_download, "download_cover", record)
 
     result = CliRunner().invoke(
@@ -106,6 +146,7 @@ def test_resolving_queues_the_episodes_and_no_parent(
     )
 
     assert result.exception is None, result.output
+    assert asked.get("remove_parents") is True, asked
     # The books and every episode, and not one of the shows they came from
     assert sorted(queued) == [
         "BOOK0001",
@@ -114,7 +155,7 @@ def test_resolving_queues_the_episodes_and_no_parent(
         "CAST0002EP",
         "CAST0003EP",
     ], queued
-    # A parent left behind is picked up as a job of its own and makes a
+    # A show left behind is picked up as a job of its own and makes a
     # directory for episodes that are queued already
-    left_behind = sorted(p.name for p in tmp_path.iterdir() if p.is_dir())
-    assert left_behind == [], f"a show was still in the library: {left_behind}"
+    left = sorted(p.name for p in tmp_path.iterdir() if p.is_dir())
+    assert left == [], f"a show was still in the library: {left}"

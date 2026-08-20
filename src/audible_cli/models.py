@@ -691,14 +691,27 @@ class Library(BaseList):
     async def resolve_podcasts(
             self,
             start_date: datetime | None = None,
-            end_date: datetime | None = None
+            end_date: datetime | None = None,
+            remove_parents: bool = False
     ):
+        """Add the episodes of every parent podcast to the library.
+
+        The parents stay unless `remove_parents` is asked for. They are
+        ordinary entries to list and to export; only a download has no use
+        for them, because a parent carries no audio of its own.
+        """
         podcast_items = await asyncio.gather(
             *[i.get_child_items(start_date=start_date, end_date=end_date)
               for i in self if i.is_parent_podcast()]
         )
         for i in podcast_items:
             self.data.extend(i.data)
+
+        if remove_parents:
+            # Replaced in place rather than removed one at a time: taking
+            # items out of the list being walked moves the rest along under
+            # the walk, and every second parent in a row was stepped over.
+            self.data[:] = [i for i in self if not i.is_parent_podcast()]
 
 
 class Catalog(BaseList):
