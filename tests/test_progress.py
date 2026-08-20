@@ -224,8 +224,8 @@ def test_nothing_outside_the_dock_can_build_a_bar():
     package = pathlib.Path("src/audible_cli")
     named = {path.name for path in package.rglob("*.py") if "tqdm" in path.read_text()}
 
-    assert named == {"progress.py", "_logging.py"}, (
-        f"the old bar is within reach of {sorted(named - {'progress.py', '_logging.py'})}"
+    assert named == {"progress.py"}, (
+        f"the old bar is within reach of {sorted(named - {'progress.py'})}"
     )
 
 

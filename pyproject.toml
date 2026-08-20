@@ -141,7 +141,6 @@ exclude = [
     "src/audible_cli/constants.py",
     "src/audible_cli/decorators.py",
     "src/audible_cli/downloader.py",
-    "src/audible_cli/_logging.py",
     "src/audible_cli/__main__.py",
     "src/audible_cli/models.py",
     "src/audible_cli/plugins.py",
