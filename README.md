@@ -275,13 +275,12 @@ directory. The two values a runner needs are:
 
 Add them as repository **secrets** and your marketplace as a plain **variable**.
 With [`gh`](https://cli.github.com/) and `jq` you can read both straight from
-`auth.json`. Pass `-R OWNER/REPO` so the values go to the repository you mean,
-not whichever one your shell happens to be in:
+`auth.json`:
 
 ```shell
-jq -r .device_private_key auth.json | gh secret set AUDIBLE_DEVICE_PRIVATE_KEY -R OWNER/REPO
-jq -r .adp_token          auth.json | gh secret set AUDIBLE_ADP_TOKEN          -R OWNER/REPO
-gh variable set AUDIBLE_COUNTRY_CODE -R OWNER/REPO --body us   # your marketplace: us, uk, de, ...
+jq -r .device_private_key auth.json | gh secret set AUDIBLE_DEVICE_PRIVATE_KEY
+jq -r .adp_token          auth.json | gh secret set AUDIBLE_ADP_TOKEN
+gh variable set AUDIBLE_COUNTRY_CODE --body de   # your Audible marketplace
 ```
 
 Then the workflow is just:
