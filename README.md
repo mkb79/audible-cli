@@ -257,6 +257,70 @@ audible -p "mypassword" download --asin <ASIN>
 
 ---
 
+## 🤖 Continuous integration (GitHub Actions)
+
+`audible-cli` can run headless in CI, for example to export your library on a
+schedule. The [`setup-audible-cli`](https://github.com/mkb79/setup-audible-cli)
+action installs `audible-cli` and configures a minimal, ephemeral Audible
+authentication on the runner, so later steps can run `audible` commands.
+
+Signed Audible API requests need only two values from your local `auth.json`, so
+there is no need to upload the whole config directory. If you have not
+authenticated yet, do it once locally with `audible quickstart` (or
+`audible manage auth-file add`); this writes an `auth.json` into your config
+directory. The two values a runner needs are:
+
+- `adp_token`
+- `device_private_key` (a PEM block)
+
+Add them as repository **secrets** and your marketplace as a plain **variable**.
+With [`gh`](https://cli.github.com/) and `jq` you can read both straight from
+`auth.json`:
+
+```shell
+jq -r .device_private_key auth.json | gh secret set AUDIBLE_DEVICE_PRIVATE_KEY
+jq -r .adp_token          auth.json | gh secret set AUDIBLE_ADP_TOKEN
+gh variable set AUDIBLE_COUNTRY_CODE --body de   # your Audible marketplace
+```
+
+Then the workflow is just:
+
+```yaml
+name: Audible export
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * *"
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: mkb79/setup-audible-cli@v1
+        with:
+          adp-token: ${{ secrets.AUDIBLE_ADP_TOKEN }}
+          device-private-key: ${{ secrets.AUDIBLE_DEVICE_PRIVATE_KEY }}
+          country-code: ${{ vars.AUDIBLE_COUNTRY_CODE }}
+
+      - run: audible library export --format json --output library.json
+```
+
+Only these two values are stored as secrets; access and refresh tokens, cookies,
+and account details are never uploaded, and the runner's auth files exist only
+for the lifetime of the job. See the
+[`setup-audible-cli`](https://github.com/mkb79/setup-audible-cli) action for its
+full set of inputs and outputs.
+
+> ⚠️ These credentials grant access to your Audible account. Run authenticated
+> workflows only from trusted branches, scheduled runs, or manual dispatches,
+> never from arbitrary pull-request code.
+
+A live example: [earshot](https://github.com/DanMat/earshot) refreshes its data
+from Audible on a daily schedule using this action.
+
+---
+
 ## 🧩 Built-in commands
 
 - **activation-bytes** → Manage DRM activation keys  
