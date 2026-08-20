@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- `--resolve-podcasts` now takes every parent out of the library, not every second one where several sit next to each other
+- `--resolve-podcasts` now takes every parent out of the library, not every second one where several sit next to each other (#305)
 - A podcast episode that is already downloaded no longer costs a voucher on every run (#299)
 - A cover size a title does not offer is reported as a warning, not an error (#300)
 - A request to Audible's CDE host is tried up to three times when it gets no answer (#298)
