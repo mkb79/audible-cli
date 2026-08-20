@@ -711,7 +711,7 @@ class Library(BaseList):
              DeprecationWarning,
             stacklevel=2
         )
-        return self.resolve_podcasts(start_date, end_date)
+        return await self.resolve_podcasts(start_date, end_date)
 
     async def resolve_podcasts(
             self,

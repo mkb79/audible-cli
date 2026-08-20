@@ -49,7 +49,11 @@ def neighbouring_parents(monkeypatch):
     """
 
     async def fake_children(self, **request_params):
-        return a_library(an_item(f"{self.asin}EP", f"{self.title} Episode"))
+        # `_children` as the real one leaves it, or a show that survived a
+        # resolve would trip over None before it could show the symptom
+        # this file is about.
+        self._children = a_library(an_item(f"{self.asin}EP", f"{self.title} Episode"))
+        return self._children
 
     monkeypatch.setattr("audible_cli.models.LibraryItem.get_child_items", fake_children)
     return a_library(
@@ -94,7 +98,8 @@ def test_asking_takes_every_show_out_including_neighbours(neighbouring_parents):
 def test_a_catalog_resolves_the_same_way(monkeypatch):
     # The two lists share the body, so the switch has to work on both.
     async def fake_children(self, **request_params):
-        return a_library(an_item(f"{self.asin}EP", f"{self.title} Episode"))
+        self._children = a_library(an_item(f"{self.asin}EP", f"{self.title} Episode"))
+        return self._children
 
     monkeypatch.setattr("audible_cli.models.LibraryItem.get_child_items", fake_children)
     shows = [
@@ -105,7 +110,14 @@ def test_a_catalog_resolves_the_same_way(monkeypatch):
 
     kept = a_catalog(*shows)
     asyncio.run(kept.resolve_podcasts())
-    assert len(kept) == 6, "the shows should still be there beside the episodes"
+    assert sorted(i.asin for i in kept) == [
+        "CAST0001",
+        "CAST0001EP",
+        "CAST0002",
+        "CAST0002EP",
+        "CAST0003",
+        "CAST0003EP",
+    ], "the shows should still be there beside the episodes"
 
     stripped = a_catalog(*shows)
     asyncio.run(stripped.resolve_podcasts(remove_parents=True))
@@ -210,3 +222,19 @@ def test_the_dates_reach_the_episodes(monkeypatch):
     asyncio.run(library.resolve_podcasts(start_date="from", end_date="until"))
 
     assert asked == [{"start_date": "from", "end_date": "until"}], asked
+
+
+def test_the_deprecated_spelling_actually_resolves(monkeypatch, recwarn):
+    # `resolve_podcats` handed back the coroutine of the method it forwards
+    # to instead of awaiting it, so it warned and then did nothing.
+    async def fake_children(self, **request_params):
+        self._children = a_library(an_item(f"{self.asin}EP", "An Episode"))
+        return self._children
+
+    monkeypatch.setattr("audible_cli.models.LibraryItem.get_child_items", fake_children)
+    library = a_library(an_item("CAST0001", "A Show", parent=True))
+
+    asyncio.run(library.resolve_podcats())
+
+    assert sorted(i.asin for i in library) == ["CAST0001", "CAST0001EP"]
+    assert any(issubclass(w.category, DeprecationWarning) for w in recwarn)
