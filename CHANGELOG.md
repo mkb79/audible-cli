@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- The deprecated `resolve_podcats()` handed back a coroutine instead of awaiting it, so it warned and then did nothing (#305)
+- `--resolve-podcasts` now takes every parent podcast out of the library, not every second one where several sit next to each other (#305)
 - A podcast episode that is already downloaded no longer costs a voucher on every run (#299)
 - A cover size a title does not offer is reported as a warning, not an error (#300)
 - A request to Audible's CDE host is tried up to three times when it gets no answer (#298)
@@ -22,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- `resolve_podcasts()` on `Library` and `Catalog` takes a `remove_parents` argument, for callers that want the episodes without the shows they came from (#305)
 - Standalone builds for arm64 on Linux and Windows; the macOS build stays Apple silicon only (#296)
 - Release download names now carry the architecture, for example `audible_win_arm64.zip`; the previous names stay until 15 November 2026 (#296)
 - A `pycryptodome` extra for platforms `cryptography` publishes no wheel for (#296)
