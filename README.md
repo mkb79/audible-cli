@@ -338,6 +338,20 @@ Default: `info`
 
 ---
 
+## 📊 Progress display
+
+`download` reserves the bottom rows of the terminal for one progress line per job
+plus one for the queue. Log output scrolls above them and stays in the scrollback
+when the command finishes.
+
+Resizing the window during a download can leave a copy of the old lines standing
+above the new ones until the next log line scrolls them away. A program cannot see
+what the terminal did with rows it has already drawn, so this is a limit shared by
+every tool that pins progress without taking the whole screen. Pass `--no-progress`
+to turn the display off.
+
+---
+
 ## 🧩 Add-ons
 
 - [audible-cli-flask](https://github.com/mkb79/audible-cli-flask) → Run `audible-cli` in a Flask web server  

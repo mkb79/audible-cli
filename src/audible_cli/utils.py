@@ -10,7 +10,6 @@ from difflib import SequenceMatcher
 import aiofiles
 import click
 import httpx
-import tqdm
 from audible import Authenticator
 from audible.client import raise_for_status
 from audible.exceptions import (
@@ -24,6 +23,7 @@ from click import echo, prompt, secho
 from PIL import Image
 
 from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
+from .progress import progress_disabled, take_progressbar
 
 
 logger = logging.getLogger("audible_cli.utils")
@@ -286,6 +286,11 @@ class DummyProgressBar:
     def update(self, *args, **kwargs):
         pass
 
+    def close(self):
+        # Callers release a bar by closing it, and a bar that shows nothing
+        # still has to accept that
+        pass
+
 
 class Downloader:
     def __init__(
@@ -307,13 +312,17 @@ class Downloader:
         self._expected_content_type = content_type
 
     def _progressbar(self, total: int):
-        return tqdm.tqdm(
-            desc=click.format_filename(self._file, shorten=True),
-            total=total,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024
-        )
+        if progress_disabled():
+            return DummyProgressBar()
+
+        docked = take_progressbar(self._file, total=total)
+        if docked is not None:
+            return docked
+
+        # No row from the dock, so nothing. A bar placed the old way drifts
+        # with the log output and draws over its neighbours, and the dock is
+        # meant to be the only way progress is shown.
+        return DummyProgressBar()
 
     def _file_okay(self):
         if not self._file.parent.is_dir():
