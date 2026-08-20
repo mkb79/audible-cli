@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Standalone builds for arm64 on Linux and Windows; the macOS build stays Apple silicon only (#296)
 - Release download names now carry the architecture, for example `audible_win_arm64.zip`; the previous names stay until 15 November 2026 (#296)
 - A `pycryptodome` extra for platforms `cryptography` publishes no wheel for (#296)
-- Documentation for running audible-cli in CI with GitHub Actions, storing only the two device credentials needed for ADP signing (#303)
+- Documentation for running audible-cli in CI with GitHub Actions via the `setup-audible-cli` action, storing only the two device credentials needed for ADP signing (#303)
 
 ## [0.5.1] - 2026-08-15
 

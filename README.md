@@ -260,29 +260,31 @@ audible -p "mypassword" download --asin <ASIN>
 ## 🤖 Continuous integration (GitHub Actions)
 
 `audible-cli` can run headless in CI, for example to export your library on a
-schedule. A runner only needs two values from your local `auth.json` to
-authenticate, so there is no need to upload the whole config directory.
+schedule. The [`setup-audible-cli`](https://github.com/mkb79/setup-audible-cli)
+action installs `audible-cli` and configures a minimal, ephemeral Audible
+authentication on the runner, so later steps can run `audible` commands.
 
-If you have not authenticated yet, do it once locally with `audible quickstart`
-(or `audible manage auth-file add`). This writes an `auth.json` into your config
+Signed Audible API requests need only two values from your local `auth.json`, so
+there is no need to upload the whole config directory. If you have not
+authenticated yet, do it once locally with `audible quickstart` (or
+`audible manage auth-file add`); this writes an `auth.json` into your config
 directory. The two values a runner needs are:
 
 - `adp_token`
 - `device_private_key` (a PEM block)
 
-Add them as repository **secrets**, and your marketplace as a plain
-**variable**. With [`gh`](https://cli.github.com/) and `jq` you can read both
-straight from `auth.json`:
+Add them as repository **secrets** and your marketplace as a plain **variable**.
+With [`gh`](https://cli.github.com/) and `jq` you can read both straight from
+`auth.json`. Pass `-R OWNER/REPO` so the values go to the repository you mean,
+not whichever one your shell happens to be in:
 
 ```shell
-jq -r .device_private_key auth.json | gh secret set AUDIBLE_DEVICE_PRIVATE_KEY
-jq -r .adp_token          auth.json | gh secret set AUDIBLE_ADP_TOKEN
-gh variable set AUDIBLE_COUNTRY_CODE --body us   # your marketplace: us, uk, de, fr, ca, au, ...
+jq -r .device_private_key auth.json | gh secret set AUDIBLE_DEVICE_PRIVATE_KEY -R OWNER/REPO
+jq -r .adp_token          auth.json | gh secret set AUDIBLE_ADP_TOKEN          -R OWNER/REPO
+gh variable set AUDIBLE_COUNTRY_CODE -R OWNER/REPO --body us   # your marketplace: us, uk, de, ...
 ```
 
-At runtime the workflow writes a minimal `auth.json` (just those two values)
-plus a small `config.toml`, which is enough for `audible-cli` to sign API
-requests without an interactive login:
+Then the workflow is just:
 
 ```yaml
 name: Audible export
@@ -295,74 +297,28 @@ on:
 jobs:
   export:
     runs-on: ubuntu-latest
-    env:
-      AUDIBLE_COUNTRY_CODE: ${{ vars.AUDIBLE_COUNTRY_CODE }}
     steps:
-      - uses: actions/setup-python@v5
+      - uses: mkb79/setup-audible-cli@v1
         with:
-          python-version: "3.12"
+          adp-token: ${{ secrets.AUDIBLE_ADP_TOKEN }}
+          device-private-key: ${{ secrets.AUDIBLE_DEVICE_PRIVATE_KEY }}
+          country-code: ${{ vars.AUDIBLE_COUNTRY_CODE }}
 
-      - name: Install audible-cli
-        run: pip install audible-cli
-
-      # runner.temp is not available in a job-level env block, so set the
-      # config dir here where the runner context (via $RUNNER_TEMP) exists.
-      - name: Set config dir
-        run: echo "AUDIBLE_CONFIG_DIR=$RUNNER_TEMP/audible" >> "$GITHUB_ENV"
-
-      - name: Create ephemeral Audible auth
-        env:
-          AUDIBLE_ADP_TOKEN: ${{ secrets.AUDIBLE_ADP_TOKEN }}
-          AUDIBLE_DEVICE_PRIVATE_KEY: ${{ secrets.AUDIBLE_DEVICE_PRIVATE_KEY }}
-        run: |
-          mkdir -p "$AUDIBLE_CONFIG_DIR"
-
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          config_dir = Path(os.environ["AUDIBLE_CONFIG_DIR"])
-          country_code = os.environ["AUDIBLE_COUNTRY_CODE"]
-
-          private_key = os.environ["AUDIBLE_DEVICE_PRIVATE_KEY"]
-          # audible currently expects the PEM to end with a newline.
-          if not private_key.endswith("\n"):
-              private_key += "\n"
-
-          auth = {
-              "adp_token": os.environ["AUDIBLE_ADP_TOKEN"],
-              "device_private_key": private_key,
-          }
-
-          (config_dir / "auth.json").write_text(json.dumps(auth), encoding="utf-8")
-          (config_dir / "config.toml").write_text(
-              f'''
-          [APP]
-          primary_profile = "ci"
-
-          [profile.ci]
-          auth_file = "auth.json"
-          country_code = "{country_code}"
-          '''.strip(),
-              encoding="utf-8",
-          )
-          PY
-
-          chmod 700 "$AUDIBLE_CONFIG_DIR"
-          chmod 600 "$AUDIBLE_CONFIG_DIR/auth.json"
-
-      - name: Run audible-cli
-        run: audible library list
+      - run: audible library export --format json --output library.json
 ```
 
 Only these two values are stored as secrets; access and refresh tokens, cookies,
-and account details are never uploaded, and the auth files exist only for the
-lifetime of the runner.
+and account details are never uploaded, and the runner's auth files exist only
+for the lifetime of the job. See the
+[`setup-audible-cli`](https://github.com/mkb79/setup-audible-cli) action for its
+full set of inputs and outputs.
 
 > ⚠️ These credentials grant access to your Audible account. Run authenticated
 > workflows only from trusted branches, scheduled runs, or manual dispatches,
 > never from arbitrary pull-request code.
+
+A live example: [earshot](https://github.com/DanMat/earshot) refreshes its data
+from Audible on a daily schedule using this action.
 
 ---
 
