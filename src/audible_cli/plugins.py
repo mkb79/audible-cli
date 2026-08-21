@@ -142,7 +142,10 @@ class BrokenCommand(click.Command):
 
     def invoke(self, ctx):
         """Report the failure instead of doing nothing."""
-        logger.error(
+        # CRITICAL, not ERROR: the command the user just typed cannot run
+        # at all, and no verbosity should be able to leave them staring at
+        # an exit code with nothing said about it.
+        logger.critical(
             "The %s plugin could not be loaded. Contact its author for help.",
             self.name,
             exc_info=self.failure,

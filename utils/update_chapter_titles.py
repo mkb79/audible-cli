@@ -146,7 +146,7 @@ class FFMeta:
                 f"{self.count_chapters()}."
             )
 
-        echo(f"Found {self.count_chapters()} chapters to prepare.")
+        echo(f"Found {self.count_chapters()} chapters to prepare.", err=True)
 
         num_chap = 0
         for chapter in api_meta.get_chapters():
@@ -169,14 +169,14 @@ class FFMeta:
         if api_meta.count_chapters() != self.count_chapters():
             # This happens on some of my books
             # but runtime is identical +- few ms
-            echo("Missmatch between chapter numbers.")
-            click.confirm("Do you want to continue?", abort=True)
+            echo("Missmatch between chapter numbers.", err=True)
+            click.confirm("Do you want to continue?", abort=True, err=True)
 
-        echo(f"Found {self.count_chapters()} chapters to prepare.")
+        echo(f"Found {self.count_chapters()} chapters to prepare.", err=True)
 
         api_chapters = api_meta.get_chapters()
         if separate_branding:
-            echo("Separate Audible Brand Intro and Outro to own Chapter.")
+            echo("Separate Audible Brand Intro and Outro to own Chapter.", err=True)
             api_chapters.sort(key=operator.itemgetter("start_offset_ms"))
 
             first = api_chapters[0]
@@ -256,7 +256,7 @@ def cli(ffmeta, apimeta, outfile, separate_branding):
     else:
         ffmeta_class.update_title_from_api_meta(apimeta)
     ffmeta_class.write(outfile)
-    click.echo(f"Replaced all titles. Save file to {outfile}")
+    click.echo(f"Replaced all titles. Save file to {outfile}", err=True)
 
 
 def main(*args, **kwargs):

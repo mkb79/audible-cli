@@ -7,8 +7,10 @@ The rule these tests hold is the plain one -- stdout is the answer, stderr
 is everything said about producing it.
 """
 
+import io
 import logging
 import warnings
+from unittest import mock
 
 import click
 import pytest
@@ -208,9 +210,12 @@ def test_a_failure_while_logging_does_not_reach_the_command():
     raising = logging.raiseExceptions
     logging.raiseExceptions = False
     try:
-        handler.emit(record)
+        with mock.patch.object(handler, "handleError") as reported:
+            handler.emit(record)
     finally:
         logging.raiseExceptions = raising
+
+    reported.assert_called_once_with(record)
 
 
 def test_a_detailed_console_log_replaces_the_terse_one(log):
@@ -225,7 +230,15 @@ def test_a_detailed_console_log_replaces_the_terse_one(log):
     ]
 
     assert len(consoles) == 1
-    assert not isinstance(consoles[0], _logging.ClickEchoHandler)
+
+    stream = io.StringIO()
+    consoles[0].setStream(stream)
+    log.warning("said once")
+
+    assert stream.getvalue().count("said once") == 1
+    # The detailed layout, which is what asking for this handler buys.
+    assert "WARNING [audible_cli]" in stream.getvalue()
+    assert "test_logging.py:" in stream.getvalue()
 
 
 @pytest.mark.parametrize("level", ["WARNING", "ERROR", "CRITICAL"])
@@ -335,3 +348,33 @@ def test_the_log_file_option_keeps_a_record(log, tmp_path):
     assert result.stderr == "warning: worth keeping\n"
     assert "WARNING [audible_cli]" in path.read_text(encoding="utf-8")
     assert "worth keeping" in path.read_text(encoding="utf-8")
+
+
+def test_handing_the_warnings_back_leaves_the_logger_as_it_was(log):
+    # Removing the handler is only half of it. Left with propagate off and
+    # nothing attached, a later captureWarnings by anybody else routes
+    # every warning into silence.
+    warnings_logger = logging.getLogger("py.warnings")
+    before = warnings_logger.propagate
+
+    _logging.log_helper.capture_warnings(True)
+    _logging.log_helper.capture_warnings(False)
+
+    assert warnings_logger.propagate is before
+    assert not any(
+        handler.get_name() == _logging.CONSOLE_HANDLER
+        for handler in warnings_logger.handlers
+    )
+
+
+def test_the_log_file_option_makes_the_directory_it_needs(log, tmp_path):
+    path = tmp_path / "not" / "there" / "audible.log"
+
+    @click.command()
+    @log_file_option
+    def cmd():
+        log.warning("into a fresh directory")
+
+    CliRunner().invoke(cmd, ["--log-file", str(path)], catch_exceptions=False)
+
+    assert "into a fresh directory" in path.read_text(encoding="utf-8")

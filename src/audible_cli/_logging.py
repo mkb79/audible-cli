@@ -52,6 +52,9 @@ LEVEL_COLORS = {
 #: either adds, leaving the logger with two handlers of the same name.
 _handler_lock = threading.RLock()
 
+#: What `py.warnings` propagated before `capture_warnings` touched it.
+_warnings_propagate: bool | None = None
+
 audible_cli_logger = logging.getLogger(LOGGER_NAME)
 
 # What a library is supposed to do: hold a handler that discards, so that
@@ -265,16 +268,30 @@ class AudibleCliLogHelper:
         Args:
             status: True to capture, False to hand warnings back.
         """
+        global _warnings_propagate  # noqa: PLW0603
+
         logging.captureWarnings(status)
 
         warnings_logger = logging.getLogger("py.warnings")
-        if status:
-            click_basic_config(warnings_logger)
-        else:
-            with _handler_lock:
-                for handler in list(warnings_logger.handlers):
-                    if handler.get_name() == CONSOLE_HANDLER:
-                        warnings_logger.removeHandler(handler)
+        with _handler_lock:
+            if status:
+                if _warnings_propagate is None:
+                    _warnings_propagate = warnings_logger.propagate
+                click_basic_config(warnings_logger)
+                return
+
+            for handler in list(warnings_logger.handlers):
+                if handler.get_name() == CONSOLE_HANDLER:
+                    warnings_logger.removeHandler(handler)
+
+            # Handing the warnings back means leaving that logger as it
+            # was found. Without this it keeps `propagate = False` from
+            # `click_basic_config` and no handler either, so a later
+            # `captureWarnings(True)` by anybody else would route them
+            # into silence.
+            if _warnings_propagate is not None:
+                warnings_logger.propagate = _warnings_propagate
+                _warnings_propagate = None
 
 
 log_helper = AudibleCliLogHelper()

@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - `--log-file PATH` writes the log to a file as well, with timestamp, module and line (#306)
+- `NO_COLOR` and `FORCE_COLOR` decide whether diagnostics are coloured (#306)
 - Standalone builds for arm64 on Linux and Windows; the macOS build stays Apple silicon only (#296)
 - Release download names now carry the architecture, for example `audible_win_arm64.zip`; the previous names stay until 15 November 2026 (#296)
 - A `pycryptodome` extra for platforms `cryptography` publishes no wheel for (#296)
