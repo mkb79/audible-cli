@@ -145,7 +145,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v9.0.0
+      uses: astral-sh/setup-uv@v10.0.1
       with:
         # A cache saved under one tag is not readable from another, and a
         # release only ever runs from a tag, so it would upload caches no
