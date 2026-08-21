@@ -10,6 +10,7 @@ Needs at least ffmpeg 4.4
 
 
 import json
+import logging
 import operator
 import pathlib
 import re
@@ -22,10 +23,12 @@ from glob import glob
 from shutil import which
 
 import click
-from click import echo, secho
 
 from audible_cli.decorators import pass_session
 from audible_cli.exceptions import AudibleCliException
+
+
+logger = logging.getLogger("audible_cli.cmds.cmd_decrypt")
 
 
 class ChapterError(AudibleCliException):
@@ -165,7 +168,7 @@ class ApiChapterInfo:
         return self._chapter_info["is_accurate"]
 
     def _separate_intro_outro(self, chapters):
-        echo("Separate Audible Brand Intro and Outro to own Chapter.")
+        logger.info("Separate Audible Brand Intro and Outro to own Chapter.")
         chapters.sort(key=operator.itemgetter("start_offset_ms"))
 
         first = chapters[0]
@@ -201,7 +204,7 @@ class ApiChapterInfo:
         return chapters
 
     def _remove_intro_outro(self, chapters):
-        echo("Delete Audible Brand Intro and Outro.")
+        logger.info("Delete Audible Brand Intro and Outro.")
         chapters.sort(key=operator.itemgetter("start_offset_ms"))
 
         intro_dur_ms = self.get_intro_duration_ms()
@@ -295,16 +298,16 @@ class FFMeta:
         remove_intro_outro: bool = False
     ) -> None:
         if not chapter_info.is_accurate():
-            echo("Metadata from API is not accurate. Skip.")
+            logger.warning("Metadata from API is not accurate. Skip.")
             return
 
         if chapter_info.count_chapters() != self.count_chapters():
             if force_rebuild_chapters:
-                echo("Force rebuild chapters due to chapter mismatch.")
+                logger.info("Force rebuild chapters due to chapter mismatch.")
             else:
                 raise ChapterError("Chapter mismatch")
 
-        echo(f"Found {chapter_info.count_chapters()} chapters to prepare.")
+        logger.info("Found %s chapters to prepare.", chapter_info.count_chapters())
 
         api_chapters = chapter_info.get_chapters(separate_intro_outro, remove_intro_outro)
 
@@ -403,7 +406,7 @@ class FfmpegFileDecrypter:
             except ChapterError:
                 voucher_filename = _get_chapter_filename(self._source)
                 self._api_chapter = ApiChapterInfo.from_file(voucher_filename)
-            echo(f"Using chapters from {voucher_filename}")
+            logger.info("Using chapters from %s", voucher_filename)
         return self._api_chapter
 
     @property
@@ -459,9 +462,9 @@ class FfmpegFileDecrypter:
 
         if outfile.exists():
             if self._overwrite:
-                secho(f"Overwrite {outfile}: already exists", fg="blue")
+                logger.info("Overwrite %s: already exists", outfile)
             else:
-                secho(f"Skip {outfile}: already exists", fg="blue")
+                logger.info("Skip %s: already exists", outfile)
                 return
 
         base_cmd = [
@@ -494,7 +497,7 @@ class FfmpegFileDecrypter:
                 self.ffmeta.write(metafile)
             except ChapterError:
                 if self._skip_rebuild_chapters:
-                    echo("Skip rebuild chapters due to chapter mismatch.")
+                    logger.warning("Skip rebuild chapters due to chapter mismatch.")
                 else:
                     raise
             else:
@@ -548,7 +551,7 @@ class FfmpegFileDecrypter:
 
         subprocess.check_output(base_cmd, text=True)  # noqa: S603
 
-        echo(f"File decryption successful: {outfile}")
+        logger.info("File decryption successful: %s", outfile)
 
 @click.command("decrypt")
 @click.argument("files", nargs=-1)
