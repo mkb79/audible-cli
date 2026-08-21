@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import pathlib
 from collections.abc import Callable
 from functools import partial, wraps
 from types import SimpleNamespace
@@ -11,7 +12,7 @@ from click.core import Parameter, ParameterSource
 from packaging.version import parse
 
 from . import __version__
-from ._logging import _normalize_logger
+from ._logging import _normalize_logger, log_helper
 from .config import Session
 from .utils import datetime_type
 
@@ -70,12 +71,21 @@ def add_param_to_session(ctx: click.Context, param, value):
 
 
 def version_option(func=None, **kwargs):
+    """Add a `--version` option to the decorated command.
+
+    The version goes out whole and on its own line: a caller reading it
+    must not have to strip an update notice off the end, and an update
+    check that fails must not leave the line unfinished. The notice
+    itself goes to stderr.
+
+    Keyword arguments are passed to the underlying ``click.option``
+    decorator.
+    """
     def callback(ctx, param, value):
         if not value or ctx.resilient_parsing:
             return
 
-        message = f"audible-cli, version {__version__}"
-        click.echo(message, color=ctx.color, nl=False)
+        click.echo(f"audible-cli, version {__version__}", color=ctx.color)
 
         url = "https://api.github.com/repos/mkb79/audible-cli/releases/latest"
         headers = {"Accept": "application/vnd.github.v3+json"}
@@ -95,12 +105,13 @@ def version_option(func=None, **kwargs):
         html_url = content["html_url"]
         if latest_version > current_version:
             click.echo(
-                f" (update available)\nVisit {html_url} "
+                f"An update is available. Visit {html_url} "
                 f"for information about the new release.",
-                color=ctx.color
+                color=ctx.color,
+                err=True
             )
         else:
-            click.echo(" (up-to-date)", color=ctx.color)
+            click.echo("Up-to-date.", color=ctx.color, err=True)
 
         ctx.exit()
 
@@ -175,6 +186,44 @@ def verbosity_option(func=None, *, cli_logger=None, **kwargs):
     cli_logger = _normalize_logger(cli_logger)
 
     option = click.option("--verbosity", "-v", **kwargs)
+
+    if callable(func):
+        return option(func)
+
+    return option
+
+
+def log_file_option(func=None, **kwargs):
+    """Add a `--log-file` option to the decorated command.
+
+    The file gets the detailed layout with timestamp, module and line, and
+    follows ``--verbosity``. A missing parent directory is created.
+
+    Keyword arguments are passed to the underlying ``click.option``
+    decorator.
+    """
+    def callback(ctx, param, value):
+        if value is None:
+            return
+
+        if not value.parent.is_dir():
+            value.parent.mkdir(parents=True)
+
+        log_helper.set_file_logger(value)
+
+    kwargs.setdefault(
+        "type", click.Path(path_type=pathlib.Path, dir_okay=False)
+    )
+    kwargs.setdefault("metavar", "PATH")
+    kwargs.setdefault("expose_value", False)
+    kwargs.setdefault(
+        "help", "Write the log to PATH as well, in full detail. The level "
+                "follows --verbosity."
+    )
+    kwargs.setdefault("is_eager", True)
+    kwargs.setdefault("callback", callback)
+
+    option = click.option("--log-file", **kwargs)
 
     if callable(func):
         return option(func)
@@ -281,16 +330,13 @@ def page_size_option(
             return
 
         if ctx.get_parameter_source("page_size") == ParameterSource.COMMANDLINE:
-            click.echo(
-                "Note: --bunch-size is deprecated and ignored because --page-size was provided.",
-                err=True,
+            logger.warning(
+                "--bunch-size is deprecated and ignored because --page-size "
+                "was provided."
             )
             return
 
-        click.echo(
-            "Warning: --bunch-size is deprecated. Please use --page-size.",
-            err=True,
-        )
+        logger.warning("--bunch-size is deprecated. Please use --page-size.")
         add_param_to_session(ctx, SimpleNamespace(name="page_size"), value)
         add_param_to_session(ctx, SimpleNamespace(name="bunch_size"), value)
 

@@ -4,9 +4,10 @@ import pathlib
 
 import click
 from audible import Authenticator
-from click import echo, secho
+from click import echo
 from tabulate import tabulate
 
+from .._dialog import DialogOption
 from ..constants import AVAILABLE_MARKETPLACES
 from ..decorators import pass_session
 from ..utils import build_auth_file
@@ -69,20 +70,23 @@ def list_profiles(session):
 @click.option(
     "--profile", "-P",
     prompt="Please enter the profile name",
-    help="The profile name to add to config."
+    help="The profile name to add to config.",
+    cls=DialogOption,
 )
 @click.option(
     "--country-code", "-cc",
     prompt="Please enter the country code",
     type=click.Choice(AVAILABLE_MARKETPLACES),
-    help="The country code for the profile."
+    help="The country code for the profile.",
+    cls=DialogOption,
 )
 @click.option(
     "--auth-file", "-f",
     type=click.Path(exists=False, file_okay=True),
     prompt="Please enter name for the auth file",
     help="The auth file name (without dir) to be added. "
-         "The auth file must exist."
+         "The auth file must exist.",
+    cls=DialogOption,
 )
 @click.option(
     "--is-primary",
@@ -112,18 +116,19 @@ def add_profile(ctx, session, profile, country_code, auth_file, is_primary):
 )
 @pass_session
 def remove_profile(session, profile):
-    """Remove one or multiple profile(s) from config file."""
-    profiles = session.config.data.get("profile")
+    """Remove one or multiple profile(s) from config file.
+
+    Through the config class, like `add` does, and written once after the
+    loop rather than once per profile.
+    """
     for p in profile:
-        if p not in profiles:
-            secho(
-                f"Profile '{p}' doesn't exist. Can't remove it.", fg="red")
-        else:
-            del profiles[p]
-            echo(f"Profile '{p}' removed from config")
+        if not session.config.has_profile(p):
+            logger.error("Profile %s doesn't exist. Can't remove it.", p)
+            continue
+
+        session.config.delete_profile(p, write_config=False)
 
     session.config.write_config()
-    echo("Changes successful saved to config file.")
 
 
 @pass_session
@@ -141,7 +146,8 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
     type=click.Path(exists=False, file_okay=True),
     prompt="Please enter name for the auth file",
     callback=check_if_auth_file_not_exists,
-    help="The auth file name (without dir) to be added."
+    help="The auth file name (without dir) to be added.",
+    cls=DialogOption,
 )
 @click.option(
     "--password", "-p",
@@ -150,20 +156,23 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
 @click.option(
     "--audible-username", "-au",
     prompt="Please enter the audible username",
-    help="The audible username to authenticate."
+    help="The audible username to authenticate.",
+    cls=DialogOption,
 )
 @click.option(
     "--audible-password", "-ap",
     hide_input=True,
     confirmation_prompt=True,
     prompt="Please enter the password for the audible user",
-    help="The password for the audible user."
+    help="The password for the audible user.",
+    cls=DialogOption,
 )
 @click.option(
     "--country-code", "-cc",
     type=click.Choice(AVAILABLE_MARKETPLACES),
     prompt="Please enter the country code",
-    help="The country code for the marketplace you want to authenticate."
+    help="The country code for the marketplace you want to authenticate.",
+    cls=DialogOption,
 )
 @click.option(
     "--external-login",
@@ -207,7 +216,8 @@ def check_if_auth_file_exists(session, ctx, param, value):
     type=click.Path(exists=False, file_okay=True),
     callback=check_if_auth_file_exists,
     prompt="Please enter name for the auth file",
-    help="The auth file name (without dir) to be added."
+    help="The auth file name (without dir) to be added.",
+    cls=DialogOption,
 )
 @click.option(
     "--password", "-p",
@@ -219,6 +229,6 @@ def remove_auth_file(auth_file, password):
     device_name = auth.device_info["device_name"]
     auth.refresh_access_token()
     auth.deregister_device()
-    echo(f"{device_name} deregistered")
+    logger.info("%s deregistered", device_name)
     auth_file.unlink()
-    echo(f"{auth_file} removed from config dir")
+    logger.info("%s removed from config dir", auth_file)
