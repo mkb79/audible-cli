@@ -5,9 +5,11 @@ everything said about the work. These are the cases where the line is easy
 to cross back over, so they are held here rather than left to review.
 """
 
+import io
 import logging
 import pathlib
 import re
+import sys
 from unittest import mock
 
 import click
@@ -15,7 +17,7 @@ import pytest
 from audible.exceptions import FileEncryptionError
 from click.testing import CliRunner
 
-from audible_cli import __version__, _logging
+from audible_cli import __version__, _dialog, _logging
 from audible_cli.cli import cli
 from audible_cli.cmds.cmd_quickstart import cli as quickstart
 from audible_cli.config import Session
@@ -102,6 +104,16 @@ def test_the_reason_for_a_password_prompt_travels_with_the_prompt(tmp_path):
     assert "Auth file is encrypted" in result.stderr
     assert "Please enter the auth-file password" in result.stderr
     assert result.stdout == "the payload\n"
+
+
+def test_the_selection_output_is_bound_to_the_diagnostic_stream():
+    # The other test checks that every call site hands questionary an
+    # output. This one checks that the output points where it should --
+    # and that it follows sys.stderr rather than capturing it at import,
+    # which is what lets a test see anything at all.
+    captured = io.StringIO()
+    with mock.patch.object(sys, "stderr", captured):
+        assert _dialog.selection_output().stdout is captured
 
 
 def test_a_selection_list_does_not_draw_on_the_payload_stream():
