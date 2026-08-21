@@ -111,12 +111,15 @@ class ClickEchoHandler(logging.Handler):
     """
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Write one record."""
+        """Write one record.
+
+        A failure on the way out is reported through logging, never raised
+        into the command that happened to log at the wrong moment. Hence
+        the bare except and :meth:`handleError`.
+        """
         try:
             click.echo(self.format(record), err=True, color=_color_wanted())
         except Exception:
-            # A failure while logging is reported through logging, never
-            # raised into the command that happened to log.
             self.handleError(record)
 
 
@@ -237,6 +240,10 @@ class AudibleCliLogHelper:
         anywhere. Give it the console handler, or the capture would be a
         way of silencing warnings rather than of collecting them.
 
+        Handing the warnings back puts that logger's propagation the way it
+        was found: left off with no handler attached, a later
+        ``captureWarnings(True)`` by anybody else would route into silence.
+
         Args:
             status: True to capture, False to hand warnings back.
         """
@@ -256,8 +263,6 @@ class AudibleCliLogHelper:
                 if handler.get_name() == CONSOLE_HANDLER:
                     warnings_logger.removeHandler(handler)
 
-            # Left with `propagate = False` and no handler, a later
-            # `captureWarnings(True)` by anybody else routes into silence.
             if _warnings_propagate is not None:
                 warnings_logger.propagate = _warnings_propagate
                 _warnings_propagate = None
@@ -285,8 +290,6 @@ def click_basic_config(logger: logging.Logger | str | None = None) -> logging.Lo
     handler.setFormatter(ColorFormatter())
 
     with _handler_lock:
-        # By name rather than by clearing the list: a handler somebody
-        # else attached is not ours to throw away.
         for attached in list(logger.handlers):
             if attached.get_name() == CONSOLE_HANDLER:
                 logger.removeHandler(attached)

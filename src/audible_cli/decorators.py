@@ -71,13 +71,20 @@ def add_param_to_session(ctx: click.Context, param, value):
 
 
 def version_option(func=None, **kwargs):
+    """Add a `--version` option to the decorated command.
+
+    The version goes out whole and on its own line: a caller reading it
+    must not have to strip an update notice off the end, and an update
+    check that fails must not leave the line unfinished. The notice
+    itself goes to stderr.
+
+    Keyword arguments are passed to the underlying ``click.option``
+    decorator.
+    """
     def callback(ctx, param, value):
         if not value or ctx.resilient_parsing:
             return
 
-        # Whole and on its own line: a caller reading the version must not
-        # have to strip an update notice off the end, and a failing update
-        # check must not leave the line unfinished.
         click.echo(f"audible-cli, version {__version__}", color=ctx.color)
 
         url = "https://api.github.com/repos/mkb79/audible-cli/releases/latest"

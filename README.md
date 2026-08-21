@@ -360,6 +360,9 @@ audible --log-file audible.log download --all
 
 Colour follows the terminal, and honours `NO_COLOR` and `FORCE_COLOR`.
 
+Questions go to stderr too, so `2>` on an interactive command hides them;
+use `--log-file` to keep a record instead.
+
 ---
 
 ## 📊 Progress display

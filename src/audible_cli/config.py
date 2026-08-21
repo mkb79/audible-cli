@@ -309,8 +309,6 @@ class Session:
                     locale=country_code)
                 break
             except (FileEncryptionError, ValueError):
-                # Together on the conversation channel: apart, a raised
-                # verbosity leaves the question without its reason.
                 say("Auth file is encrypted but no/wrong password is provided")
                 password = ask(
                     "Please enter the auth-file password (or enter to exit)",

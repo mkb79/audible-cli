@@ -3,6 +3,12 @@
 Both go to stderr, together. Apart, either half can be lost on its own: a
 raised verbosity strips an explanation off the prompt it belongs to, and a
 redirect swallows a question the command is still waiting on.
+
+stderr rather than stdout is also where the platform puts a question: on a
+terminal, `input()` writes its prompt there whatever click is told, so
+`click.prompt` and `click.confirm` land on stderr either way. Redirecting
+that stream therefore hides the conversation, and `2> log` on a command
+that asks something will look like a hang.
 """
 
 import contextlib
