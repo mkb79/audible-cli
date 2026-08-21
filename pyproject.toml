@@ -62,7 +62,7 @@ dev = [
     "pytest>=8.4.2",
     # Pinned: the enabled rule families pull in new stable rules on an
     # upgrade, which would turn the gate red without a code change
-    "ruff==0.16.2"
+    "ruff==0.16.3"
 ]
 
 [tool.hatch.build.targets.sdist]
