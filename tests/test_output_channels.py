@@ -5,6 +5,7 @@ everything said about the work. These are the cases where the line is easy
 to cross back over, so they are held here rather than left to review.
 """
 
+import inspect
 import io
 import logging
 import pathlib
@@ -14,6 +15,7 @@ from unittest import mock
 
 import click
 import pytest
+from audible import Authenticator
 from audible.exceptions import FileEncryptionError
 from click.testing import CliRunner
 
@@ -22,7 +24,7 @@ from audible_cli.cli import cli
 from audible_cli.cmds.cmd_quickstart import cli as quickstart
 from audible_cli.config import Session
 from audible_cli.plugins import BrokenCommand
-from audible_cli.utils import prompt_external_callback
+from audible_cli.utils import build_auth_file, prompt_external_callback
 
 
 @pytest.fixture(autouse=True)
@@ -163,3 +165,36 @@ def test_the_wizard_leaves_the_payload_stream_empty(tmp_path, monkeypatch):
 
     assert result.stdout == ""
     assert "quickstart utility" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("maker", "external"),
+    [("from_login", False), ("from_login_external", True)],
+)
+def test_every_login_callback_is_one_of_ours(tmp_path, maker, external):
+    # The library's own callbacks hold their half of the conversation with
+    # print and input, which puts it back on stdout. Whichever ones it
+    # offers, audible-cli has to bring its own -- so the expectation is
+    # read off the library rather than written down here, and a callback
+    # added by a future version fails this instead of slipping through.
+    wanted = {
+        name
+        for name in inspect.signature(getattr(Authenticator, maker)).parameters
+        if name.endswith("_callback")
+    }
+
+    with mock.patch("audible_cli.utils.Authenticator") as authenticator:
+        build_auth_file(
+            filename=tmp_path / "auth.json",
+            username="someone",
+            password="secret",  # noqa: S106
+            country_code="de",
+            external_login=external,
+        )
+
+    passed = getattr(authenticator, maker).call_args.kwargs
+    given = {name: cb for name, cb in passed.items() if name.endswith("_callback")}
+
+    assert set(given) == wanted
+    for name, callback in given.items():
+        assert callback.__module__ == "audible_cli.utils", name

@@ -175,6 +175,23 @@ def prompt_otp_callback() -> str:
     return str(guess).strip().lower()
 
 
+def prompt_cvf_callback() -> str:
+    """Helper function for handling the code Amazon sends by mail or SMS."""
+    say("Amazon has sent a verification code by mail or SMS.")
+    guess = ask("Please enter CVF Code")
+    return str(guess).strip().lower()
+
+
+def prompt_approval_callback() -> None:
+    """Helper function for handling an approval alert."""
+    say("Approval alert detected! Amazon sends you a mail.")
+    ask(
+        "Please press ENTER when you approve the notification",
+        default="",
+        show_default=False,
+    )
+
+
 EXTERNAL_LOGIN_INSTRUCTIONS = """\
 Please copy the following url and insert it into a web browser of your choice:
 
@@ -254,7 +271,9 @@ def build_auth_file(
             password=password,
             locale=country_code,
             captcha_callback=prompt_captcha_callback,
-            otp_callback=prompt_otp_callback)
+            otp_callback=prompt_otp_callback,
+            cvf_callback=prompt_cvf_callback,
+            approval_callback=prompt_approval_callback)
 
     device_name = auth.device_info["device_name"]
     logger.info("Successfully registered %s.", device_name)
