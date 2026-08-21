@@ -89,8 +89,7 @@ an authentication to the audible server is necessary to register a new device.
             default=False)
 
         if d["use_existing_auth_file"]:
-            echo()
-            echo("Use existing auth file for new profile.")
+            logger.info("Use existing auth file for new profile.")
 
             return d
 

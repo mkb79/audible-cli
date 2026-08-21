@@ -2,6 +2,7 @@
 
 See https://github.com/click-contrib/click-plugins.
 """
+import logging
 import os
 import pathlib
 import sys
@@ -101,6 +102,9 @@ def from_entry_point(entry_point_group):
     return decorator
 
 
+logger = logging.getLogger("audible_cli.plugins")
+
+
 class BrokenCommand(click.Command):
     """Stand in for a plugin that failed to load.
 
@@ -122,6 +126,13 @@ class BrokenCommand(click.Command):
         else:
             icon = "\u2020"
 
+        # Both callers build this inside their `except` block, so the
+        # exception is still live here. Keeping the triple lets `invoke`
+        # hand it to the logger as exc_info, where the traceback is
+        # appended in its own shape instead of wearing a level prefix down
+        # its left edge.
+        self.failure = sys.exc_info()
+
         self.help = (
             "\nWarning: entry point could not be loaded. Contact "
             "its author for help.\n\n\b\n"
@@ -130,8 +141,12 @@ class BrokenCommand(click.Command):
             icon + f" Warning: could not load plugin. See `{util_name} {self.name} --help`.")
 
     def invoke(self, ctx):
-        """Print the traceback instead of doing nothing."""
-        click.echo(self.help, color=ctx.color, err=True)
+        """Report the failure instead of doing nothing."""
+        logger.error(
+            "The %s plugin could not be loaded. Contact its author for help.",
+            self.name,
+            exc_info=self.failure,
+        )
         ctx.exit(1)
 
     def parse_args(self, ctx, args):

@@ -226,10 +226,8 @@ def build_auth_file(
             captcha_callback=prompt_captcha_callback,
             otp_callback=prompt_otp_callback)
 
-    echo()
-
     device_name = auth.device_info["device_name"]
-    secho(f"Successfully registered {device_name}.", bold=True)
+    logger.info("Successfully registered %s.", device_name)
 
     if not filename.parent.exists():
         filename.parent.mkdir(parents=True)

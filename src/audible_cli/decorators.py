@@ -75,8 +75,11 @@ def version_option(func=None, **kwargs):
         if not value or ctx.resilient_parsing:
             return
 
-        message = f"audible-cli, version {__version__}"
-        click.echo(message, color=ctx.color, nl=False)
+        # The version itself is what was asked for and goes out whole, on
+        # its own line: a caller reading it must not have to strip an
+        # update notice off the end, and an update check that fails must
+        # not leave the line unfinished.
+        click.echo(f"audible-cli, version {__version__}", color=ctx.color)
 
         url = "https://api.github.com/repos/mkb79/audible-cli/releases/latest"
         headers = {"Accept": "application/vnd.github.v3+json"}
@@ -96,12 +99,13 @@ def version_option(func=None, **kwargs):
         html_url = content["html_url"]
         if latest_version > current_version:
             click.echo(
-                f" (update available)\nVisit {html_url} "
+                f"An update is available. Visit {html_url} "
                 f"for information about the new release.",
-                color=ctx.color
+                color=ctx.color,
+                err=True
             )
         else:
-            click.echo(" (up-to-date)", color=ctx.color)
+            click.echo("Up-to-date.", color=ctx.color, err=True)
 
         ctx.exit()
 
@@ -196,6 +200,9 @@ def log_file_option(func=None, **kwargs):
     def callback(ctx, param, value):
         if value is None:
             return
+
+        if not value.parent.is_dir():
+            value.parent.mkdir(parents=True)
 
         log_helper.set_file_logger(value)
 
@@ -318,16 +325,13 @@ def page_size_option(
             return
 
         if ctx.get_parameter_source("page_size") == ParameterSource.COMMANDLINE:
-            click.echo(
-                "Note: --bunch-size is deprecated and ignored because --page-size was provided.",
-                err=True,
+            logger.warning(
+                "--bunch-size is deprecated and ignored because --page-size "
+                "was provided."
             )
             return
 
-        click.echo(
-            "Warning: --bunch-size is deprecated. Please use --page-size.",
-            err=True,
-        )
+        logger.warning("--bunch-size is deprecated. Please use --page-size.")
         add_param_to_session(ctx, SimpleNamespace(name="page_size"), value)
         add_param_to_session(ctx, SimpleNamespace(name="bunch_size"), value)
 

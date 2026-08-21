@@ -308,7 +308,10 @@ class Session:
                     locale=country_code)
                 break
             except (FileEncryptionError, ValueError):
-                logger.info(
+                # Travels with its prompt rather than through the logger: a
+                # verbosity that hides the reason but leaves the question
+                # standing puts the user in front of an unexplained prompt.
+                click.echo(
                     "Auth file is encrypted but no/wrong password is provided"
                 )
                 password = click.prompt(
