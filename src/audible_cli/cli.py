@@ -11,6 +11,7 @@ from .cmds import build_in_cmds, cmd_quickstart
 from .config import get_plugin_dir
 from .constants import PLUGIN_ENTRY_POINT
 from .decorators import (
+    log_file_option,
     password_option,
     profile_option,
     verbosity_option,
@@ -33,6 +34,7 @@ CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 @password_option
 @version_option
 @verbosity_option(cli_logger=logger)
+@log_file_option
 def cli():
     """Entrypoint for all other subcommands and groups."""
 
@@ -41,6 +43,7 @@ def cli():
 @click.pass_context
 @version_option
 @verbosity_option(cli_logger=logger)
+@log_file_option
 def quickstart(ctx):
     """Entrypoint for the quickstart command."""
     try:

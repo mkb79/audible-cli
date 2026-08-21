@@ -12,7 +12,6 @@ import click
 import httpx
 import questionary
 from audible.exceptions import NotFoundError
-from click import echo
 
 from ..constants import (
     AAX_CONTENT_TYPES,
@@ -744,7 +743,7 @@ def queue_job(
 
 def display_counter():
     if counter.has_downloads():
-        echo("The download ended with the following result:")
+        logger.info("The download ended with the following result:")
         for k, v in counter.as_dict().items():
             if v == 0:
                 continue
@@ -756,11 +755,11 @@ def display_counter():
             elif k == "voucher":
                 diff = v - counter.voucher_saved
                 if diff > 0:
-                    echo(f"Unsaved voucher: {diff}")
+                    logger.info("Unsaved voucher: %s", diff)
                 continue
-            echo(f"New {k} files: {v}")
+            logger.info("New %s files: %s", k, v)
     else:
-        echo("No new files downloaded.")
+        logger.info("No new files downloaded.")
 
 
 @click.command("download")

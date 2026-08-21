@@ -15,6 +15,7 @@ import pytest
 from click.testing import CliRunner
 
 from audible_cli import _logging
+from audible_cli.decorators import log_file_option
 
 
 @pytest.fixture(autouse=True)
@@ -316,3 +317,21 @@ def test_handing_the_warnings_back_stops_the_routing(log):
     assert not any(
         handler.get_name() == _logging.CONSOLE_HANDLER for handler in handlers
     )
+
+
+def test_the_log_file_option_keeps_a_record(log, tmp_path):
+    # What `> log.txt` used to do, only better: the console stays terse on
+    # stderr while the file gets the detailed layout.
+    path = tmp_path / "audible.log"
+
+    @click.command()
+    @log_file_option
+    def cmd():
+        log.warning("worth keeping")
+
+    result = CliRunner().invoke(cmd, ["--log-file", str(path)], catch_exceptions=False)
+
+    assert result.stdout == ""
+    assert result.stderr == "warning: worth keeping\n"
+    assert "WARNING [audible_cli]" in path.read_text(encoding="utf-8")
+    assert "worth keeping" in path.read_text(encoding="utf-8")

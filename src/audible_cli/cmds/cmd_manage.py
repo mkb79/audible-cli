@@ -4,7 +4,7 @@ import pathlib
 
 import click
 from audible import Authenticator
-from click import echo, secho
+from click import echo
 from tabulate import tabulate
 
 from ..constants import AVAILABLE_MARKETPLACES
@@ -113,17 +113,17 @@ def add_profile(ctx, session, profile, country_code, auth_file, is_primary):
 @pass_session
 def remove_profile(session, profile):
     """Remove one or multiple profile(s) from config file."""
-    profiles = session.config.data.get("profile")
+    # Through the config class, like `add` does, so that removing a profile
+    # is reported in one place and in one voice. Written once at the end
+    # rather than once per profile, hence write_config=False.
     for p in profile:
-        if p not in profiles:
-            secho(
-                f"Profile '{p}' doesn't exist. Can't remove it.", fg="red")
-        else:
-            del profiles[p]
-            echo(f"Profile '{p}' removed from config")
+        if not session.config.has_profile(p):
+            logger.error("Profile %s doesn't exist. Can't remove it.", p)
+            continue
+
+        session.config.delete_profile(p, write_config=False)
 
     session.config.write_config()
-    echo("Changes successful saved to config file.")
 
 
 @pass_session
@@ -219,6 +219,6 @@ def remove_auth_file(auth_file, password):
     device_name = auth.device_info["device_name"]
     auth.refresh_access_token()
     auth.deregister_device()
-    echo(f"{device_name} deregistered")
+    logger.info("%s deregistered", device_name)
     auth_file.unlink()
-    echo(f"{auth_file} removed from config dir")
+    logger.info("%s removed from config dir", auth_file)

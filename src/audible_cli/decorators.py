@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import pathlib
 from collections.abc import Callable
 from functools import partial, wraps
 from types import SimpleNamespace
@@ -11,7 +12,7 @@ from click.core import Parameter, ParameterSource
 from packaging.version import parse
 
 from . import __version__
-from ._logging import _normalize_logger
+from ._logging import _normalize_logger, log_helper
 from .config import Session
 from .utils import datetime_type
 
@@ -175,6 +176,42 @@ def verbosity_option(func=None, *, cli_logger=None, **kwargs):
     cli_logger = _normalize_logger(cli_logger)
 
     option = click.option("--verbosity", "-v", **kwargs)
+
+    if callable(func):
+        return option(func)
+
+    return option
+
+
+def log_file_option(func=None, **kwargs):
+    """Add a `--log-file` option to the decorated command.
+
+    The console stays terse and goes to stderr, which leaves nothing to
+    redirect for anyone who wants to keep a record. This writes the same
+    log to a file, in the detailed layout with timestamp, module and line.
+
+    Keyword arguments are passed to the underlying ``click.option``
+    decorator.
+    """
+    def callback(ctx, param, value):
+        if value is None:
+            return
+
+        log_helper.set_file_logger(value)
+
+    kwargs.setdefault(
+        "type", click.Path(path_type=pathlib.Path, dir_okay=False)
+    )
+    kwargs.setdefault("metavar", "PATH")
+    kwargs.setdefault("expose_value", False)
+    kwargs.setdefault(
+        "help", "Write the log to PATH as well, in full detail. The level "
+                "follows --verbosity."
+    )
+    kwargs.setdefault("is_eager", True)
+    kwargs.setdefault("callback", callback)
+
+    option = click.option("--log-file", **kwargs)
 
     if callable(func):
         return option(func)
