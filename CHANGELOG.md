@@ -17,11 +17,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- Log output now goes to stderr, so stdout carries only what a command produces; `audible download … > log.txt` needs `2>` or the new `--log-file` from now on (#306)
+- Nine remaining status messages became log messages, so `--verbosity` reaches them too (#306)
+- `--version` prints the version alone; the update notice goes to stderr (#306)
 - Progress bars now hold their line: a ruled block at the bottom of the terminal with one numbered line per worker and one for the queue, which follows the window through a resize and keeps the queue line when there is no room for the rest; `--no-progress` turns it off (#302)
 - A title too long for the window loses its middle instead of the bar and the counts it was pushing off the line (#302)
 
 ### Added
 
+- `--log-file PATH` writes the log to a file as well, with timestamp, module and line (#306)
 - Standalone builds for arm64 on Linux and Windows; the macOS build stays Apple silicon only (#296)
 - Release download names now carry the architecture, for example `audible_win_arm64.zip`; the previous names stay until 15 November 2026 (#296)
 - A `pycryptodome` extra for platforms `cryptography` publishes no wheel for (#296)
