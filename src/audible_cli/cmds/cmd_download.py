@@ -13,6 +13,7 @@ import httpx
 import questionary
 from audible.exceptions import NotFoundError
 
+from .._dialog import selection_output
 from ..constants import (
     AAX_CONTENT_TYPES,
     AAXC_CONTENT_TYPES,
@@ -1049,7 +1050,8 @@ async def cli(session, api_client, **params):
 
                 answer = await questionary.checkbox(
                     f"Found the following matches for '{title}'. Which you want to download?",
-                    choices=choices
+                    choices=choices,
+                    output=selection_output(),
                 ).unsafe_ask_async()
                 if answer is not None:
                     [jobs.append(i) for i in answer]

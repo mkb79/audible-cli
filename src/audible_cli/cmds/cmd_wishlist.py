@@ -8,6 +8,7 @@ import httpx
 import questionary
 from click import echo
 
+from .._dialog import selection_output
 from ..decorators import pass_client, timeout_option, wrap_async
 from ..models import Catalog, Wishlist
 from ..utils import export_to_csv
@@ -198,14 +199,19 @@ async def add_wishlist(client, asin, title):
             choices=[
                 questionary.Choice(title="by title", value="title"),
                 questionary.Choice(title="by asin", value="asin")
-            ]
+            ],
+            output=selection_output(),
         ).unsafe_ask_async()
 
         if q == "asin":
-            q = await questionary.text("Please enter the asin").unsafe_ask_async()
+            q = await questionary.text(
+                "Please enter the asin", output=selection_output()
+            ).unsafe_ask_async()
             asin.append(q)
         else:
-            q = await questionary.text("Please enter the title").unsafe_ask_async()
+            q = await questionary.text(
+                "Please enter the title", output=selection_output()
+            ).unsafe_ask_async()
             title.append(q)
 
     for t in title:
@@ -226,7 +232,8 @@ async def add_wishlist(client, asin, title):
 
             answer = await questionary.checkbox(
                 f"Found the following matches for '{t}'. Which you want to add?",
-                choices=choices
+                choices=choices,
+                output=selection_output(),
             ).unsafe_ask_async()
 
             if answer is not None:
@@ -283,7 +290,8 @@ async def remove_wishlist(client, asin, title):
 
         asin = await questionary.checkbox(
             "Select item(s) which you want to remove from whishlist",
-            choices=choices
+            choices=choices,
+            output=selection_output(),
         ).unsafe_ask_async()
 
     for t in title:
@@ -298,7 +306,8 @@ async def remove_wishlist(client, asin, title):
 
             answer = await questionary.checkbox(
                 f"Found the following matches for '{t}'. Which you want to remove?",
-                choices=choices
+                choices=choices,
+                output=selection_output(),
             ).unsafe_ask_async()
 
             if answer is not None:

@@ -6,6 +6,8 @@ to cross back over, so they are held here rather than left to review.
 """
 
 import logging
+import pathlib
+import re
 from unittest import mock
 
 import click
@@ -15,8 +17,10 @@ from click.testing import CliRunner
 
 from audible_cli import __version__, _logging
 from audible_cli.cli import cli
+from audible_cli.cmds.cmd_quickstart import cli as quickstart
 from audible_cli.config import Session
 from audible_cli.plugins import BrokenCommand
+from audible_cli.utils import prompt_external_callback
 
 
 @pytest.fixture(autouse=True)
@@ -70,9 +74,9 @@ def test_a_broken_plugin_reports_itself_on_stderr():
 
 
 def test_the_reason_for_a_password_prompt_travels_with_the_prompt(tmp_path):
-    # The mirror-image mistake: sent through the logger, a verbosity that
-    # quiets the explanation still leaves the question standing, and the
-    # user faces a bare password prompt with no idea why.
+    # Explanation and question on one stream, and neither of them through
+    # the logger: at CRITICAL the reason would be gone while the question
+    # waited on, and the user would face a bare password prompt.
     (tmp_path / "config.toml").write_text(
         '[APP]\nprimary_profile = "one"\n\n'
         '[profile.one]\nauth_file = "one.json"\ncountry_code = "de"\n'
@@ -81,9 +85,11 @@ def test_the_reason_for_a_password_prompt_travels_with_the_prompt(tmp_path):
 
     session = Session()
     session._app_dir = tmp_path
+    logging.getLogger("audible_cli").setLevel(logging.CRITICAL)
 
     @click.command()
     def cmd():
+        click.echo("the payload")
         session.get_auth_for_profile("one")
 
     with mock.patch(
@@ -93,5 +99,55 @@ def test_the_reason_for_a_password_prompt_travels_with_the_prompt(tmp_path):
         # An empty answer is how the prompt is told to give up.
         result = CliRunner().invoke(cmd, [], input="\n")
 
-    assert "Auth file is encrypted" in result.stdout
-    assert "Auth file is encrypted" not in result.stderr
+    assert "Auth file is encrypted" in result.stderr
+    assert "Please enter the auth-file password" in result.stderr
+    assert result.stdout == "the payload\n"
+
+
+def test_a_selection_list_does_not_draw_on_the_payload_stream():
+    # questionary renders through prompt_toolkit, which draws on stdout
+    # unless it is handed somewhere else. Every call site has to hand it
+    # somewhere else, so the rule is checked at the source.
+    package = pathlib.Path("src/audible_cli")
+    asking = []
+
+    for path in package.rglob("*.py"):
+        text = path.read_text()
+        for call in re.finditer(
+            r"questionary\.(?:select|text|checkbox)\((?:[^()]|\([^()]*\))*\)", text
+        ):
+            if "output=selection_output()" not in call.group():
+                asking.append(f"{path.name}: {call.group()[:60]}")
+
+    assert asking == [], f"drawing on stdout: {asking}"
+
+
+def test_the_external_login_asks_on_the_conversation_channel():
+    # The audible library holds this conversation with print and input,
+    # which puts half of it on stdout. audible-cli brings its own.
+    @click.command()
+    def cmd():
+        click.echo("the payload")
+        click.echo(
+            prompt_external_callback("https://amazon.example/ap/signin"), err=True
+        )
+
+    result = CliRunner().invoke(
+        cmd, [], input="https://amazon.example/ap/maplanding?token=abc\n"
+    )
+
+    assert result.stdout == "the payload\n"
+    assert "https://amazon.example/ap/signin" in result.stderr
+    assert "Please insert the copied url" in result.stderr
+    assert result.stderr.rstrip().endswith("maplanding?token=abc")
+
+
+def test_the_wizard_leaves_the_payload_stream_empty(tmp_path, monkeypatch):
+    # Nothing a wizard says is a product. Redirecting stdout must not
+    # swallow a single question.
+    monkeypatch.setenv("AUDIBLE_CONFIG_DIR", str(tmp_path))
+
+    result = CliRunner().invoke(quickstart, [], input="\n" * 4 + "n\nn\nn\nn\n")
+
+    assert result.stdout == ""
+    assert "quickstart utility" in result.stderr

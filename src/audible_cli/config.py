@@ -10,6 +10,7 @@ from audible import AsyncClient, Authenticator
 from audible.exceptions import FileEncryptionError
 
 from . import __version__
+from ._dialog import ask, say
 from .constants import (
     CONFIG_DIR_ENV,
     CONFIG_FILE,
@@ -308,13 +309,11 @@ class Session:
                     locale=country_code)
                 break
             except (FileEncryptionError, ValueError):
-                # Travels with its prompt rather than through the logger: a
-                # verbosity that hides the reason but leaves the question
-                # standing puts the user in front of an unexplained prompt.
-                click.echo(
-                    "Auth file is encrypted but no/wrong password is provided"
-                )
-                password = click.prompt(
+                # Explanation and question together, on the conversation
+                # channel: apart, a raised verbosity or a redirect leaves
+                # the one without the other.
+                say("Auth file is encrypted but no/wrong password is provided")
+                password = ask(
                     "Please enter the auth-file password (or enter to exit)",
                     hide_input=True,
                     default="")
