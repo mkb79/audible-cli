@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Log output now goes to stderr, so stdout carries only what a command produces; `audible download … > log.txt` needs `2>` or the new `--log-file` from now on (#306)
 - Nine remaining status messages became log messages, so `--verbosity` reaches them too (#306)
 - `--version` prints the version alone; the update notice goes to stderr (#306)
+- Prompts and the sentences explaining them moved to stderr with the rest, so a redirected stdout no longer swallows half of `quickstart` (#306)
 - Progress bars now hold their line: a ruled block at the bottom of the terminal with one numbered line per worker and one for the queue, which follows the window through a resize and keeps the queue line when there is no room for the rest; `--no-progress` turns it off (#302)
 - A title too long for the window loses its middle instead of the bar and the counts it was pushing off the line (#302)
 
