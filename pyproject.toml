@@ -29,6 +29,10 @@ dependencies = [
     "httpx>=0.27.2,<0.29",
     "packaging>=26.2",
     "Pillow>=12.3.0",
+    # Imported directly by `_dialog` for `create_output`, so it is declared
+    # here rather than borrowed from questionary. Capped below 4 because a
+    # major release is where that entry point could move.
+    "prompt_toolkit>=3.0.52,<4",
     "tabulate>=0.10.0",
     "toml>=0.10.2",
     "tqdm>=4.69.0",
