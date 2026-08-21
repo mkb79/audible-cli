@@ -75,10 +75,9 @@ def version_option(func=None, **kwargs):
         if not value or ctx.resilient_parsing:
             return
 
-        # The version itself is what was asked for and goes out whole, on
-        # its own line: a caller reading it must not have to strip an
-        # update notice off the end, and an update check that fails must
-        # not leave the line unfinished.
+        # Whole and on its own line: a caller reading the version must not
+        # have to strip an update notice off the end, and a failing update
+        # check must not leave the line unfinished.
         click.echo(f"audible-cli, version {__version__}", color=ctx.color)
 
         url = "https://api.github.com/repos/mkb79/audible-cli/releases/latest"
@@ -190,9 +189,8 @@ def verbosity_option(func=None, *, cli_logger=None, **kwargs):
 def log_file_option(func=None, **kwargs):
     """Add a `--log-file` option to the decorated command.
 
-    The console stays terse and goes to stderr, which leaves nothing to
-    redirect for anyone who wants to keep a record. This writes the same
-    log to a file, in the detailed layout with timestamp, module and line.
+    The file gets the detailed layout with timestamp, module and line, and
+    follows ``--verbosity``. A missing parent directory is created.
 
     Keyword arguments are passed to the underlying ``click.option``
     decorator.

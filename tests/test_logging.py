@@ -1,10 +1,8 @@
 """The log has to stay out of the way of the payload.
 
-Every command writes its result to stdout: a JSON response, an exported
-library, a list of titles. A diagnostic printed to the same place ends up
-inside the result, and a shell has no way to tell which line was which.
-The rule these tests hold is the plain one -- stdout is the answer, stderr
-is everything said about producing it.
+A command that produces something writes it to stdout: a JSON response, a
+list of titles. A diagnostic printed there ends up inside the result, and
+a shell has no way to tell which line was which.
 """
 
 import io
@@ -79,8 +77,7 @@ def test_every_level_goes_the_same_way(log):
 
 
 def test_a_module_logger_reaches_the_same_handler(log):
-    # What every module in the package actually does: getLogger(__name__),
-    # which is a child of the one the handler hangs on.
+    # Every module logs to a child of the logger the handler hangs on.
     child = logging.getLogger("audible_cli.cmds.cmd_download")
 
     out, err = run(lambda: child.warning("from a command"))
@@ -198,9 +195,8 @@ def test_configuring_twice_does_not_say_everything_twice(log):
 
 
 def test_a_failure_while_logging_does_not_reach_the_command():
-    # The handler contract: whatever goes wrong on the way out, the command
-    # that happened to log carries on. Here the record cannot be rendered
-    # at all, because its arguments do not fit its message.
+    # The record cannot be rendered at all, because its arguments do not
+    # fit its message. That must reach handleError, not the command.
     handler = _logging.ClickEchoHandler()
     handler.setFormatter(_logging.ColorFormatter())
     record = logging.LogRecord(
@@ -236,7 +232,6 @@ def test_a_detailed_console_log_replaces_the_terse_one(log):
     log.warning("said once")
 
     assert stream.getvalue().count("said once") == 1
-    # The detailed layout, which is what asking for this handler buys.
     assert "WARNING [audible_cli]" in stream.getvalue()
     assert "test_logging.py:" in stream.getvalue()
 
@@ -295,8 +290,7 @@ def test_naming_the_same_file_twice_keeps_one_handler(log, tmp_path):
 
 
 def test_the_file_log_is_written_as_utf_8(log, tmp_path):
-    # Titles carry umlauts and worse. Left to the platform default, this
-    # file is unreadable on a Windows box.
+    # Titles carry umlauts and worse; the platform default may not.
     path = tmp_path / "audible.log"
     _logging.log_helper.set_file_logger(path)
 
@@ -309,9 +303,8 @@ def test_the_file_log_is_written_as_utf_8(log, tmp_path):
 
 
 def test_captured_warnings_still_come_out_somewhere(log):
-    # captureWarnings hands them to the py.warnings logger, which carries a
-    # NullHandler and no route anywhere. Capturing must not be a way of
-    # silencing them.
+    # captureWarnings hands them to py.warnings, which carries a
+    # NullHandler and no route anywhere.
     _logging.log_helper.capture_warnings(True)
     try:
         _, err = run(lambda: warnings.warn("something is off", stacklevel=1))
@@ -333,8 +326,7 @@ def test_handing_the_warnings_back_stops_the_routing(log):
 
 
 def test_the_log_file_option_keeps_a_record(log, tmp_path):
-    # What `> log.txt` used to do, only better: the console stays terse on
-    # stderr while the file gets the detailed layout.
+    # The console stays terse on stderr; the file gets the detailed layout.
     path = tmp_path / "audible.log"
 
     @click.command()
@@ -351,9 +343,8 @@ def test_the_log_file_option_keeps_a_record(log, tmp_path):
 
 
 def test_handing_the_warnings_back_leaves_the_logger_as_it_was(log):
-    # Removing the handler is only half of it. Left with propagate off and
-    # nothing attached, a later captureWarnings by anybody else routes
-    # every warning into silence.
+    # Removing the handler is only half of it: left with propagate off, a
+    # later captureWarnings by anybody else routes into silence.
     warnings_logger = logging.getLogger("py.warnings")
     before = warnings_logger.propagate
 

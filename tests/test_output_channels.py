@@ -3,8 +3,7 @@
 One rule: stdout carries the result a command was asked for, stderr
 carries everything else -- narration, diagnostics, and the conversation
 with the person at the terminal, questions included. These are the cases
-where the line is easy to cross back over, so they are held here rather
-than left to review.
+where the line is easy to cross back over.
 """
 
 import inspect
@@ -108,7 +107,6 @@ def test_the_reason_for_a_password_prompt_travels_with_the_prompt(tmp_path):
         "audible_cli.config.Authenticator.from_file",
         side_effect=FileEncryptionError("encrypted"),
     ):
-        # An empty answer is how the prompt is told to give up.
         result = CliRunner().invoke(cmd, [], input="\n")
 
     assert "Auth file is encrypted" in result.stderr
@@ -117,10 +115,9 @@ def test_the_reason_for_a_password_prompt_travels_with_the_prompt(tmp_path):
 
 
 def test_the_selection_output_is_bound_to_the_diagnostic_stream():
-    # The other test checks that every call site hands questionary an
-    # output. This one checks that the output points where it should --
-    # and that it follows sys.stderr rather than capturing it at import,
-    # which is what lets a test see anything at all.
+    # The neighbouring test checks that every call site hands questionary
+    # an output; this one, that the output points where it should and
+    # follows sys.stderr rather than capturing it at import.
     captured = io.StringIO()
     with mock.patch.object(sys, "stderr", captured):
         assert _dialog.selection_output().stdout is captured
@@ -145,10 +142,8 @@ def test_a_selection_list_does_not_draw_on_the_payload_stream():
 
 
 def test_the_wizard_leaves_the_payload_stream_empty(tmp_path, monkeypatch):
-    # Nothing a wizard says is a product. Redirecting stdout must not
-    # swallow a single question -- including the last one, which is why
-    # this walks the whole way to the closing confirmation instead of
-    # stopping at the welcome text.
+    # Nothing a wizard says is a product, and a redirect must swallow no
+    # question -- including the last, hence the walk to the end.
     monkeypatch.setenv("AUDIBLE_CONFIG_DIR", str(tmp_path))
     answers = "\nde\n\nn\nn\nn\nsomeone\nsecret\nsecret\ny\n"
 
@@ -182,8 +177,7 @@ def test_an_option_that_asks_for_itself_asks_on_stderr():
     ],
 )
 def test_each_login_question_is_asked_on_stderr(callback, answer, expected):
-    # Ownership is not enough: a callback that went back to print and
-    # input would still be ours by module and still be wrong.
+    # The neighbouring test checks who owns these; this one, what they do.
     @click.command()
     def cmd():
         click.echo("the payload")
@@ -268,9 +262,8 @@ def test_every_login_callback_is_one_of_ours(tmp_path, maker, external):
 
 
 def test_the_log_file_option_is_on_the_real_command_line(tmp_path, monkeypatch):
-    # The other log-file test decorates a command of its own making, so it
-    # would still pass with the option taken off the entry points. This one
-    # goes through the group, which is also what puts --verbosity in play.
+    # Through the group, so the option is exercised where it is declared,
+    # and --verbosity is in play.
     monkeypatch.setenv("AUDIBLE_CONFIG_DIR", str(tmp_path))
     (tmp_path / "config.toml").write_text(
         '[APP]\nprimary_profile = "one"\n\n'

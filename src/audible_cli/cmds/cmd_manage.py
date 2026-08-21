@@ -117,9 +117,8 @@ def add_profile(ctx, session, profile, country_code, auth_file, is_primary):
 @pass_session
 def remove_profile(session, profile):
     """Remove one or multiple profile(s) from config file."""
-    # Through the config class, like `add` does, so that removing a profile
-    # is reported in one place and in one voice. Written once at the end
-    # rather than once per profile, hence write_config=False.
+    # Through the config class, like `add` does, and written once after
+    # the loop rather than once per profile.
     for p in profile:
         if not session.config.has_profile(p):
             logger.error("Profile %s doesn't exist. Can't remove it.", p)

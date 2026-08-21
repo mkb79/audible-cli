@@ -127,10 +127,8 @@ class BrokenCommand(click.Command):
             icon = "\u2020"
 
         # Both callers build this inside their `except` block, so the
-        # exception is still live here. Keeping the triple lets `invoke`
-        # hand it to the logger as exc_info, where the traceback is
-        # appended in its own shape instead of wearing a level prefix down
-        # its left edge.
+        # failure is still live and `invoke` can hand it to the logger as
+        # exc_info.
         self.failure = sys.exc_info()
 
         self.help = (
@@ -141,10 +139,9 @@ class BrokenCommand(click.Command):
             icon + f" Warning: could not load plugin. See `{util_name} {self.name} --help`.")
 
     def invoke(self, ctx):
-        """Report the failure instead of doing nothing."""
-        # CRITICAL, not ERROR: the command the user just typed cannot run
-        # at all, and no verbosity should be able to leave them staring at
-        # an exit code with nothing said about it.
+        """Log the load failure and exit."""
+        # CRITICAL, not ERROR: the command that was just typed cannot run
+        # at all, and no verbosity may leave that unsaid.
         logger.critical(
             "The %s plugin could not be loaded. Contact its author for help.",
             self.name,

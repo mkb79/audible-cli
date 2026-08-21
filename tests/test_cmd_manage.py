@@ -70,8 +70,8 @@ def test_removing_a_profile_leaves_the_others_alone(tmp_path):
 
 
 def test_a_profile_that_is_not_there_does_not_stop_the_others(tmp_path):
-    # Reported and carried on, rather than raised: asking to remove three
-    # profiles should not leave the run half done because one was a typo.
+    # Reported and carried on, rather than raised: one typo must not
+    # leave the rest of the run undone.
     profile_config(tmp_path, "one", "two")
     session = Session()
     session._app_dir = tmp_path
@@ -86,8 +86,7 @@ def test_a_profile_that_is_not_there_does_not_stop_the_others(tmp_path):
 
 
 def test_the_removal_is_told_once_and_on_stderr(tmp_path, narrating):
-    # It used to be said twice: the command echoed it to stdout and the
-    # config class logged it. And the save was reported twice as well.
+    # Once, on stderr, from the config class -- and nothing on stdout.
     profile_config(tmp_path, "one", "two")
     session = Session()
     session._app_dir = tmp_path

@@ -28,8 +28,7 @@ async def cli(client, asin):
             first_delay=CDE_FIRST_DELAY,
         )
     except NotFoundError:
-        # Not the product the command was asked for, so not on the stream
-        # the product goes out on: `... | jq` must not be handed this.
+        # Not the product, so not on the stream the product goes out on.
         logger.info("No annotations found for asin %s", asin)
     else:
         click.echo(r)

@@ -25,13 +25,12 @@ LOGGER_NAME = "audible_cli"
 #: handler instead of printing every line twice.
 CONSOLE_HANDLER = "audible-cli-console"
 
-#: Prefix for file handler names. The destination is appended, so that
-#: asking for the same file twice replaces the handler while two different
-#: files keep two handlers, as they did before handlers had names at all.
+#: Prefix for file handler names. The destination is appended, so the same
+#: path replaces its handler while a second path adds one.
 FILE_HANDLER = "audible-cli-file"
 
-#: Layout for handlers that write somewhere durable, where the extra
-#: context earns its width. The console stays terse.
+#: Layout for the handlers attached through `log_helper`, where the extra
+#: context earns its width. The handler the command line runs on stays terse.
 RECORD_FORMAT = (
     "%(asctime)s %(levelname)s [%(name)s] %(filename)s:%(lineno)d: %(message)s"
 )
@@ -57,9 +56,9 @@ _warnings_propagate: bool | None = None
 
 audible_cli_logger = logging.getLogger(LOGGER_NAME)
 
-# What a library is supposed to do: hold a handler that discards, so that
-# importing the package configures nothing and Python does not fall back to
-# `lastResort`. The command line adds its own in `click_basic_config`.
+# Importing the package must configure nothing, and must not leave Python
+# falling back to `lastResort`. The command line adds its own handler in
+# `click_basic_config`.
 audible_cli_logger.addHandler(logging.NullHandler())
 
 
@@ -85,7 +84,7 @@ def _color_wanted() -> bool | None:
 
 
 class ColorFormatter(logging.Formatter):
-    """Put the level in front of a record, coloured where colour survives.
+    """Put the level in front of the levels in :data:`LEVEL_COLORS`.
 
     Only the message is prefixed. A traceback keeps its own shape, because
     :meth:`logging.Formatter.format` appends it after calling this method
@@ -93,14 +92,7 @@ class ColorFormatter(logging.Formatter):
     """
 
     def formatMessage(self, record: logging.LogRecord) -> str:  # noqa: N802
-        """Render the message, prefixed with its level.
-
-        Args:
-            record: The record being formatted.
-
-        Returns:
-            The message, one level prefix per line.
-        """
+        """Render the message, prefixing every line of it."""
         message = super().formatMessage(record)
         color = LEVEL_COLORS.get(record.levelno)
         if color is None:
@@ -113,35 +105,23 @@ class ColorFormatter(logging.Formatter):
 class ClickEchoHandler(logging.Handler):
     """Write records to stderr, through click.
 
-    ``click.echo`` rather than a plain stream write: it drops the colour
-    escapes when the destination is not a terminal, and on Windows it goes
-    through colorama, where the escapes would otherwise be printed as text.
+    ``click.echo`` rather than a plain stream write: it decides about the
+    colour escapes by looking at the destination, and on Windows it goes
+    through colorama, where they would otherwise be printed as text.
     """
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Write one record.
-
-        Args:
-            record: The record to write.
-        """
+        """Write one record."""
         try:
             click.echo(self.format(record), err=True, color=_color_wanted())
         except Exception:
-            # The contract for a handler: a failure while logging is
-            # reported through logging, never raised into the command that
-            # happened to log at the wrong moment.
+            # A failure while logging is reported through logging, never
+            # raised into the command that happened to log.
             self.handleError(record)
 
 
 def _normalize_logger(logger: logging.Logger | str | None) -> logging.Logger:
-    """Take a logger or its name, and return the logger.
-
-    Args:
-        logger: A logger, a logger name, or None for the root logger.
-
-    Returns:
-        The logger itself.
-    """
+    """Take a logger, its name, or None for the root, and return the logger."""
     if not isinstance(logger, logging.Logger):
         logger = logging.getLogger(logger)
 
@@ -149,13 +129,7 @@ def _normalize_logger(logger: logging.Logger | str | None) -> logging.Logger:
 
 
 def _set_level(target: logging.Logger | logging.Handler, level: str | int) -> None:
-    """Set a level on a logger or a handler.
-
-    Args:
-        target: The logger or handler to set.
-        level: A level name or number, as :meth:`logging.Logger.setLevel`
-            takes it.
-    """
+    """Set a level on a logger or a handler, by name or by number."""
     target.setLevel(level.upper() if isinstance(level, str) else level)
 
 
@@ -203,11 +177,7 @@ def _attach(handler: logging.Handler, name: str, level: str | int | None) -> Non
 
 
 def _detach(name: str) -> None:
-    """Remove any handler carrying a name.
-
-    Args:
-        name: The handler name to look for.
-    """
+    """Remove any handler carrying a name."""
     with _handler_lock:
         for handler in list(audible_cli_logger.handlers):
             if handler.get_name() == name:
@@ -232,7 +202,9 @@ class AudibleCliLogHelper:
         """Write the package log to stderr, in full detail.
 
         Replaces the terse handler the command line installs: there is room
-        for one console log, not two saying the same thing twice.
+        for one console log, not two saying the same thing twice. This one
+        writes straight to the stream, so it carries no colour and does not
+        go through colorama on Windows.
 
         Args:
             level: A level for this handler, or None to follow the package.
@@ -284,11 +256,8 @@ class AudibleCliLogHelper:
                 if handler.get_name() == CONSOLE_HANDLER:
                     warnings_logger.removeHandler(handler)
 
-            # Handing the warnings back means leaving that logger as it
-            # was found. Without this it keeps `propagate = False` from
-            # `click_basic_config` and no handler either, so a later
-            # `captureWarnings(True)` by anybody else would route them
-            # into silence.
+            # Left with `propagate = False` and no handler, a later
+            # `captureWarnings(True)` by anybody else routes into silence.
             if _warnings_propagate is not None:
                 warnings_logger.propagate = _warnings_propagate
                 _warnings_propagate = None
@@ -300,8 +269,8 @@ log_helper = AudibleCliLogHelper()
 def click_basic_config(logger: logging.Logger | str | None = None) -> logging.Logger:
     """Give a logger the terse, coloured, stderr-bound console handler.
 
-    This is what the command line runs on. Anything the package logs lands
-    on stderr from here, whatever the level.
+    This is what the command line runs on. Handlers attached by anybody
+    else are left alone; only an earlier one of ours is replaced.
 
     Args:
         logger: The logger to configure, by name or by object.
@@ -316,9 +285,8 @@ def click_basic_config(logger: logging.Logger | str | None = None) -> logging.Lo
     handler.setFormatter(ColorFormatter())
 
     with _handler_lock:
-        # Replace by name rather than clear the list: calling this twice
-        # must not double every line, and a handler somebody else attached
-        # is not ours to throw away.
+        # By name rather than by clearing the list: a handler somebody
+        # else attached is not ours to throw away.
         for attached in list(logger.handlers):
             if attached.get_name() == CONSOLE_HANDLER:
                 logger.removeHandler(attached)

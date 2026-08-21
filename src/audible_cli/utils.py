@@ -210,9 +210,8 @@ def prompt_external_callback(url: str) -> str:
     """Ask for the login url a browser was redirected to.
 
     The audible library has a callback of its own, but it holds the
-    conversation with `print` and `input`, which puts half of it on stdout.
-    The browser route it tries first has nothing to say, so that one is
-    still worth asking for before falling back to the questions.
+    conversation with `print` and `input`. The browser route it tries
+    first has nothing to print, so that one is still worth asking for.
     """
     # import readline to prevent issues when input URL in
     # CLI prompt when using macOS

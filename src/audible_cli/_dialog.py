@@ -1,14 +1,8 @@
-"""The conversation with the person at the terminal.
+"""Questions and the sentences that explain them.
 
-Questions and the sentences that explain them go to stderr, and they go
-there together. Apart, either half can be lost on its own: send the
-explanation through the log and a raised verbosity leaves a bare password
-prompt on the screen; leave the question on stdout and a redirect swallows
-it while the command waits for an answer nobody can see it asking for.
-
-Both on stderr keeps stdout free for what a command produces, even while
-it is asking. And it keeps the whole exchange out of the log file, where a
-transcript of questions would be noise.
+Both go to stderr, together. Apart, either half can be lost on its own: a
+raised verbosity strips an explanation off the prompt it belongs to, and a
+redirect swallows a question the command is still waiting on.
 """
 
 import contextlib
@@ -26,9 +20,9 @@ def _prompting_on_stderr():
 
     :meth:`click.Option.prompt_for_value` reaches for ``click.core.prompt``
     and ``click.core.confirm`` directly and takes no ``err`` of its own.
-    Copying that method here would work today and fall behind quietly: it
-    grows features between releases. Binding the two names for the length
-    of one call does not.
+    Binding the two names beats copying that method, which grows features
+    between releases. The patch is process-wide and assumes, as a command
+    line may, that two prompts are not running at once.
     """
     original = click.core.prompt, click.core.confirm
     click.core.prompt = functools.partial(click.prompt, err=True)
@@ -47,52 +41,23 @@ class DialogOption(click.Option):
     """
 
     def prompt_for_value(self, ctx: click.Context) -> Any:
-        """Ask for this option's value.
-
-        Args:
-            ctx: The context the option is being processed in.
-
-        Returns:
-            The value the person gave.
-        """
+        """Ask for this option's value, on stderr."""
         with _prompting_on_stderr():
             return super().prompt_for_value(ctx)
 
 
 def say(message: object = "", **styles) -> None:
-    """Write one line of the conversation.
-
-    Args:
-        message: The line, or anything that can be printed. Empty for
-            a blank one.
-        **styles: Passed to :func:`click.secho`, e.g. ``bold=True``.
-    """
+    """Write one line of the conversation. Styles go to :func:`click.secho`."""
     click.secho(str(message), err=True, **styles)
 
 
 def ask(text: str, **kwargs) -> Any:
-    """Ask for a value.
-
-    Args:
-        text: The question.
-        **kwargs: Passed to :func:`click.prompt`.
-
-    Returns:
-        Whatever :func:`click.prompt` returns for the answer.
-    """
+    """Ask for a value. Keyword arguments go to :func:`click.prompt`."""
     return click.prompt(text, err=True, **kwargs)
 
 
 def confirm(text: str, **kwargs) -> bool:
-    """Ask a yes-or-no question.
-
-    Args:
-        text: The question.
-        **kwargs: Passed to :func:`click.confirm`.
-
-    Returns:
-        The answer.
-    """
+    """Ask a yes-or-no question. Keyword arguments go to :func:`click.confirm`."""
     return click.confirm(text, err=True, **kwargs)
 
 
@@ -100,11 +65,6 @@ def selection_output() -> Any:
     """Point a questionary prompt at the same stream as the rest.
 
     questionary renders through prompt_toolkit, which draws on stdout
-    unless it is given somewhere else. Pass this as ``output=`` so a
-    selection list does not end up on the one stream that is supposed to
-    stay clean.
-
-    Returns:
-        A prompt_toolkit output writing to stderr.
+    unless it is given somewhere else. Pass as ``output=``.
     """
     return create_output(stdout=sys.stderr)
