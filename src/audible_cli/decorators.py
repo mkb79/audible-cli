@@ -12,6 +12,7 @@ from click.core import Parameter, ParameterSource
 from packaging.version import parse
 
 from . import __version__
+from ._dialog import say
 from ._logging import _normalize_logger, log_helper
 from .config import Session
 from .utils import datetime_type
@@ -104,14 +105,13 @@ def version_option(func=None, **kwargs):
 
         html_url = content["html_url"]
         if latest_version > current_version:
-            click.echo(
+            say(
                 f"An update is available. Visit {html_url} "
                 f"for information about the new release.",
-                color=ctx.color,
-                err=True
+                color=ctx.color
             )
         else:
-            click.echo("Up-to-date.", color=ctx.color, err=True)
+            say("Up-to-date.", color=ctx.color)
 
         ctx.exit()
 
