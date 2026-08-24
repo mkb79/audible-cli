@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- `--version` no longer exits 1 with the error glued to the version when the update check cannot reach GitHub (#309)
 - A podcast episode that is already downloaded no longer costs a voucher on every run (#299)
 - A cover size a title does not offer is reported as a warning, not an error (#300)
 - A request to Audible's CDE host is tried up to three times when it gets no answer (#298)
@@ -31,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Standalone builds for arm64 on Linux and Windows; the macOS build stays Apple silicon only (#296)
 - Release download names now carry the architecture, for example `audible_win_arm64.zip`; the previous names stay until 15 November 2026 (#296)
 - A `pycryptodome` extra for platforms `cryptography` publishes no wheel for (#296)
+- Documentation for running audible-cli in CI with GitHub Actions via the `setup-audible-cli` action, storing only the two device credentials needed for ADP signing (#303)
 
 ## [0.5.1] - 2026-08-15
 

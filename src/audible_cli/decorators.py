@@ -95,8 +95,17 @@ def version_option(func=None, **kwargs):
             response = httpx.get(url, headers=headers, follow_redirects=True)
             response.raise_for_status()
         except Exception as e:
-            logger.error(e)
-            raise click.Abort() from e
+            # The version was the question and it has been answered. The
+            # update check is a courtesy: it must not glue its message to
+            # the version line, and it must not turn `--version` into a
+            # nonzero exit for a script that only wanted the number.
+            click.echo()
+            click.echo(
+                f"Could not check for a newer release: {e}",
+                color=ctx.color,
+                err=True
+            )
+            ctx.exit()
 
         content = response.json()
 
