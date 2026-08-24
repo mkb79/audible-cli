@@ -1,8 +1,8 @@
 """`--version` answers a question a script may be asking.
 
-The version goes to stdout on a line of its own. The update check that
-follows it is a courtesy: it may fail, and when it does it must not take
-the answer or the exit code with it.
+The version goes to stdout on a line of its own, and nothing else does.
+The update check that follows it is a courtesy on stderr: it may fail,
+and when it does it must not take the answer or the exit code with it.
 """
 
 from unittest import mock
@@ -56,14 +56,15 @@ def test_the_answer_survives_whatever_the_check_raises():
 
 
 @pytest.mark.parametrize(
-    ("tag", "expected"),
+    ("tag", "notice"),
     [
-        ("0.0.1", "(up-to-date)"),
-        ("99.0.0", "(update available)"),
+        ("0.0.1", "Up-to-date."),
+        ("99.0.0", "An update is available."),
     ],
 )
-def test_a_check_that_works_reads_as_it_always_did(tag, expected):
+def test_the_notice_never_shares_the_line_with_the_version(tag, notice):
     result = run(mock.Mock(return_value=release(tag)))
 
     assert result.exit_code == 0
-    assert result.stdout.startswith(f"audible-cli, version {__version__} {expected}")
+    assert result.stdout == f"audible-cli, version {__version__}\n"
+    assert notice in result.stderr

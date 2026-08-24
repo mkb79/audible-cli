@@ -402,6 +402,36 @@ Default: `info`
 
 ---
 
+## 🔀 Output and diagnostics
+
+Every command keeps its two streams apart. **stdout** carries the result you
+asked for: an API response, a list of titles, the activation bytes. **stderr**
+carries everything else — progress, warnings, errors, and the questions an
+interactive command asks. So a pipe only ever receives the payload:
+
+```shell
+audible api library | jq '.items[].title'
+audible library list > titles.txt
+```
+
+To keep a record of a run, use `--log-file` rather than redirecting a stream.
+It writes the same log with a timestamp, module and line, follows `--verbosity`,
+and appends across runs:
+
+```shell
+audible --log-file audible.log download --all
+```
+
+Colour follows the terminal, and honours `NO_COLOR` and `FORCE_COLOR`.
+
+Questions go to stderr too, so `2>` on an interactive command hides the
+question while the command waits for an answer. Keep that stream on screen
+while answering. `--log-file` is no substitute there: it records what the
+command has to say about its work, not the conversation, and deliberately
+so — a password or a captcha answer has no business in a file on disk.
+
+---
+
 ## 📊 Progress display
 
 `download` reserves the bottom rows of the terminal for one progress line per job

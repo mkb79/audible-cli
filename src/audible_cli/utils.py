@@ -18,10 +18,10 @@ from audible.exceptions import (
     RequestError,
     StatusError,
 )
-from audible.login import default_login_url_callback
-from click import echo, prompt, secho
+from audible.login import playwright_external_login_url_callback
 from PIL import Image
 
+from ._dialog import ask, confirm, say
 from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
 from .progress import progress_disabled, take_progressbar
 
@@ -151,31 +151,68 @@ datetime_type = UTCDateTime([
 
 def prompt_captcha_callback(captcha_url: str) -> str:
     """Helper function for handling captcha."""
-    echo("Captcha found")
-    if click.confirm("Open Captcha with default image viewer", default=True):
+    say("Captcha found")
+    if confirm("Open Captcha with default image viewer", default=True):
         captcha = httpx.get(captcha_url).content
         f = io.BytesIO(captcha)
         img = Image.open(f)
         img.show()
     else:
-        echo(
+        say(
             "Please open the following url with a web browser "
             "to get the captcha:"
         )
-        echo(captcha_url)
+        say(captcha_url)
 
-    guess = prompt("Answer for CAPTCHA")
+    guess = ask("Answer for CAPTCHA")
     return str(guess).strip().lower()
 
 
 def prompt_otp_callback() -> str:
     """Helper function for handling 2-factor authentication."""
-    echo("2FA is activated for this account.")
-    guess = prompt("Please enter OTP Code")
+    say("2FA is activated for this account.")
+    guess = ask("Please enter OTP Code")
     return str(guess).strip().lower()
 
 
+def prompt_cvf_callback() -> str:
+    """Helper function for handling the code Amazon sends by mail or SMS."""
+    say("Amazon has sent a verification code by mail or SMS.")
+    guess = ask("Please enter CVF Code")
+    return str(guess).strip().lower()
+
+
+def prompt_approval_callback() -> None:
+    """Helper function for handling an approval alert."""
+    say("Approval alert detected! Amazon sends you a mail.")
+    ask(
+        "Please press ENTER when you approve the notification",
+        default="",
+        show_default=False,
+    )
+
+
+EXTERNAL_LOGIN_INSTRUCTIONS = """\
+Please copy the following url and insert it into a web browser of your choice:
+
+{url}
+
+Now you have to login with your Amazon credentials. After submit your username
+and password you have to do this a second time and solving a captcha before
+sending the login form.
+
+After login, your browser will show you an error page (Page not found). Do not
+worry about this. It has to be like this. Please copy the url from the address
+bar in your browser now."""
+
+
 def prompt_external_callback(url: str) -> str:
+    """Ask for the login url a browser was redirected to.
+
+    The audible library has a callback of its own, but it holds the
+    conversation with `print` and `input`. The browser route it tries
+    first has nothing to print, so that one is still worth asking for.
+    """
     # import readline to prevent issues when input URL in
     # CLI prompt when using macOS
     try:
@@ -183,7 +220,16 @@ def prompt_external_callback(url: str) -> str:
     except ImportError:
         pass
 
-    return default_login_url_callback(url)
+    try:
+        return playwright_external_login_url_callback(url)
+    except ImportError:
+        pass
+
+    say()
+    say(EXTERNAL_LOGIN_INSTRUCTIONS.format(url=url))
+    say()
+
+    return ask("Please insert the copied url (after login)")
 
 
 def full_response_callback(resp: httpx.Response) -> httpx.Response:
@@ -200,8 +246,8 @@ def build_auth_file(
         external_login: bool = False,
         with_username: bool = False
 ) -> None:
-    echo()
-    secho("Login with amazon to your audible account now.", bold=True)
+    say()
+    say("Login with amazon to your audible account now.", bold=True)
 
     # Normalize once: the signature allows a str, but the parent directory is
     # created further down, after the login has already registered the device
@@ -224,12 +270,12 @@ def build_auth_file(
             password=password,
             locale=country_code,
             captcha_callback=prompt_captcha_callback,
-            otp_callback=prompt_otp_callback)
-
-    echo()
+            otp_callback=prompt_otp_callback,
+            cvf_callback=prompt_cvf_callback,
+            approval_callback=prompt_approval_callback)
 
     device_name = auth.device_info["device_name"]
-    secho(f"Successfully registered {device_name}.", bold=True)
+    logger.info("Successfully registered %s.", device_name)
 
     if not filename.parent.exists():
         filename.parent.mkdir(parents=True)

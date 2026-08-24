@@ -29,6 +29,10 @@ dependencies = [
     "httpx>=0.27.2,<0.29",
     "packaging>=26.2",
     "Pillow>=12.3.0",
+    # `_dialog` imports `create_output` directly, so it is declared here
+    # rather than borrowed from questionary, and capped below the major
+    # release that could move it.
+    "prompt_toolkit>=3.0.52,<4",
     "tabulate>=0.10.0",
     "toml>=0.10.2",
     "tqdm>=4.69.0",
@@ -141,7 +145,6 @@ exclude = [
     "src/audible_cli/constants.py",
     "src/audible_cli/decorators.py",
     "src/audible_cli/downloader.py",
-    "src/audible_cli/_logging.py",
     "src/audible_cli/__main__.py",
     "src/audible_cli/models.py",
     "src/audible_cli/plugins.py",

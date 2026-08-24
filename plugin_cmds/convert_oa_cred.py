@@ -7,15 +7,18 @@ OpenAudible and audible-cli.
 
 
 import json
+import logging
 import pathlib
 import re
 
 import audible
 import click
-from click import echo
 
 from audible_cli.decorators import pass_session
 from audible_cli.exceptions import AudibleCliException
+
+
+logger = logging.getLogger("audible_cli.cmds.convert_oa_cred")
 
 
 def extract_data_from_file(credentials):
@@ -139,5 +142,5 @@ def cli(session, input_files):
             target = app_dir / pathlib.Path(name).with_suffix(".json")
             auth = make_auth_file(origin)
             auth.to_file(target)
-            echo(f"Wrote {click.format_filename(target)}")
+            logger.info("Wrote %s", click.format_filename(target))
 
