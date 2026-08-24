@@ -95,16 +95,10 @@ def version_option(func=None, **kwargs):
             response = httpx.get(url, headers=headers, follow_redirects=True)
             response.raise_for_status()
         except Exception as e:
-            # The version was the question and it has been answered. The
-            # update check is a courtesy: it must not glue its message to
-            # the version line, and it must not turn `--version` into a
-            # nonzero exit for a script that only wanted the number.
-            click.echo()
-            click.echo(
-                f"Could not check for a newer release: {e}",
-                color=ctx.color,
-                err=True
-            )
+            # The version was the question and it has been answered. A
+            # failed courtesy call must not turn `--version` into a
+            # nonzero exit for a script that wanted the number.
+            say(f"Could not check for a newer release: {e}", color=ctx.color)
             ctx.exit()
 
         content = response.json()
