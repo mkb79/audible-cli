@@ -424,8 +424,11 @@ audible --log-file audible.log download --all
 
 Colour follows the terminal, and honours `NO_COLOR` and `FORCE_COLOR`.
 
-Questions go to stderr too, so `2>` on an interactive command hides them;
-use `--log-file` to keep a record instead.
+Questions go to stderr too, so `2>` on an interactive command hides the
+question while the command waits for an answer. Keep that stream on screen
+while answering. `--log-file` is no substitute there: it records what the
+command has to say about its work, not the conversation, and deliberately
+so — a password or a captcha answer has no business in a file on disk.
 
 ---
 
