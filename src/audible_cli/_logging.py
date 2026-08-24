@@ -179,12 +179,19 @@ def _attach(handler: logging.Handler, name: str, level: str | int | None) -> Non
         _warn_if_out_of_reach(handler)
 
 
-def _detach(name: str) -> None:
-    """Remove any handler carrying a name."""
+def _detach(name: str, logger: logging.Logger | None = None) -> None:
+    """Remove and close any handler on a logger carrying a name.
+
+    Args:
+        name: The handler name to look for.
+        logger: Where to look, or None for the package logger.
+    """
+    logger = logger or audible_cli_logger
+
     with _handler_lock:
-        for handler in list(audible_cli_logger.handlers):
+        for handler in list(logger.handlers):
             if handler.get_name() == name:
-                audible_cli_logger.removeHandler(handler)
+                logger.removeHandler(handler)
                 handler.close()
 
 
@@ -259,9 +266,7 @@ class AudibleCliLogHelper:
                 click_basic_config(warnings_logger)
                 return
 
-            for handler in list(warnings_logger.handlers):
-                if handler.get_name() == CONSOLE_HANDLER:
-                    warnings_logger.removeHandler(handler)
+            _detach(CONSOLE_HANDLER, warnings_logger)
 
             if _warnings_propagate is not None:
                 warnings_logger.propagate = _warnings_propagate
@@ -290,10 +295,7 @@ def click_basic_config(logger: logging.Logger | str | None = None) -> logging.Lo
     handler.setFormatter(ColorFormatter())
 
     with _handler_lock:
-        for attached in list(logger.handlers):
-            if attached.get_name() == CONSOLE_HANDLER:
-                logger.removeHandler(attached)
-
+        _detach(CONSOLE_HANDLER, logger)
         logger.addHandler(handler)
 
     logger.propagate = False

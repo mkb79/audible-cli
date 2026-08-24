@@ -369,3 +369,35 @@ def test_the_log_file_option_makes_the_directory_it_needs(log, tmp_path):
     CliRunner().invoke(cmd, ["--log-file", str(path)], catch_exceptions=False)
 
     assert "into a fresh directory" in path.read_text(encoding="utf-8")
+
+
+def test_a_replaced_handler_is_closed(log):
+    # Removing without closing leaves it registered with the logging
+    # module. Every path that drops a handler goes through `_detach`.
+    first = next(
+        handler
+        for handler in log.handlers
+        if handler.get_name() == _logging.CONSOLE_HANDLER
+    )
+
+    with mock.patch.object(first, "close", wraps=first.close) as closed:
+        _logging.click_basic_config(log)
+
+    closed.assert_called_once()
+    assert first not in log.handlers
+
+
+def test_the_warnings_handler_is_closed_when_it_is_handed_back(log):
+    _logging.log_helper.capture_warnings(True)
+    warnings_logger = logging.getLogger("py.warnings")
+    attached = next(
+        handler
+        for handler in warnings_logger.handlers
+        if handler.get_name() == _logging.CONSOLE_HANDLER
+    )
+
+    with mock.patch.object(attached, "close", wraps=attached.close) as closed:
+        _logging.log_helper.capture_warnings(False)
+
+    closed.assert_called_once()
+    assert attached not in warnings_logger.handlers
