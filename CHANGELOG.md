@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- `--version` no longer exits 1 with the error glued to the version when the update check cannot reach GitHub (#309)
 - A podcast episode that is already downloaded no longer costs a voucher on every run (#299)
 - A cover size a title does not offer is reported as a warning, not an error (#300)
 - A request to Audible's CDE host is tried up to three times when it gets no answer (#298)
