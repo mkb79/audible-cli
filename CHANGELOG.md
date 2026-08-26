@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- `audible api` no longer drops a query written into the endpoint: `api "library?num_results=5"` used to ask for the library without it (#311)
+- `audible api` no longer repeats a query parameter into oblivion: giving the same key twice used to keep only the last (#311)
+- A malformed `--query`, `--body` or `--indent` is now a usage error instead of a traceback and exit 3 (#311)
+- `audible api` honours `--timeout` like every other command, rather than the library default of 10 seconds (#311)
 - `--version` no longer exits 1 with the error glued to the version when the update check cannot reach GitHub (#309)
 - A podcast episode that is already downloaded no longer costs a voucher on every run (#299)
 - A cover size a title does not offer is reported as a warning, not an error (#300)
@@ -18,6 +22,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- `audible api` takes a path, not a URL. An absolute URL used to be sent as given, with the request signed for that host; the endpoint is now rejected before any credentials are loaded. The other hosts audible-cli talks to move to the new `audible request` (#311)
+- `audible api` requires a JSON response. A 200 carrying something else — an HTML maintenance page, say — used to be quoted into a JSON string and reported as success (#311)
+- `audible api` refuses what it cannot send: a body on a `GET` or a `DELETE`, an endpoint that names nothing, a fragment. The body used to be parsed and then left behind (#311)
+- `audible api -f dict` is gone. It printed the answer as a Python literal, which no json reader takes, and `--indent` was ignored for it; with `--output` it failed with a `TypeError`. `--format` accepts only `json` now, and says it is on its way out (#311)
+- `audible api --param` is now spelled `--query`/`-q`. The old spelling still works and says so; `-p` no longer belongs to this command, because it is the password option on the group (#311)
 - Log output now goes to stderr, so stdout carries only what a command produces; `audible download … > log.txt` needs `2>` or the new `--log-file` from now on (#306)
 - Nine remaining status messages became log messages, so `--verbosity` reaches them too (#306)
 - `--version` prints the version alone; the update notice goes to stderr (#306)
@@ -27,6 +36,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- `audible api --body-file` reads the request body from a file, or from standard input with `-` (#311)
+- `audible api --header/-H` sends a request header, the same name as often as needed; the headers that carry the authentication or describe the body are refused (#311)
+- `audible api --dump-header/-D` writes the status line and the response headers to a file, which is where `total-count` and `continuation-token` come from (#311)
 - `--log-file PATH` writes the log to a file as well, with timestamp, module and line (#306)
 - `NO_COLOR` and `FORCE_COLOR` decide whether diagnostics are coloured (#306)
 - Standalone builds for arm64 on Linux and Windows; the macOS build stays Apple silicon only (#296)

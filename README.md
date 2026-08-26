@@ -337,6 +337,46 @@ Show help:
 audible <command> -h
 ```
 
+### Calling the API
+
+`api` takes a **path**, not a URL — the marketplace comes from the profile or
+from `--country-code`, so it is decided in one place:
+
+```shell
+audible api library -q num_results=10 -q response_groups=product_desc
+audible api "catalog/products/B07J2M2VC7?response_groups=media"
+```
+
+A query written into the path and one given with `--query` add up, and the
+same key may appear more than once. The response has to be JSON; an answer
+that is not gets reported as a failure rather than quoted into one.
+
+The query used to be `--param`, which still works and says it is old. Its
+short form `-p` is gone: on the group it is the password, so
+`audible -p num_results=5 api library` would have offered the query as a
+password. Repeatable request headers go out with `--header`:
+
+```shell
+audible api library -H "Accept-Language: en-US"
+```
+
+A body that is long enough to be awkward on a command line comes from a
+file, or through a pipe:
+
+```shell
+audible api wishlist -m POST --body-file payload.json
+generate-payload | audible api wishlist -m POST --body-file -
+```
+
+Some of what the API tells you arrives in the headers rather than the body —
+`total-count`, and the `continuation-token` a script needs to fetch the next
+page. `--dump-header` writes them to a file while stdout stays JSON:
+
+```shell
+audible api "library?num_results=50" -D headers.txt > page1.json
+grep continuation-token headers.txt
+```
+
 ---
 
 ## 🔧 Plugins & Extensions
