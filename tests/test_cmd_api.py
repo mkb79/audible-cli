@@ -304,9 +304,7 @@ def test_the_answer_can_go_to_a_file(client, tmp_path):
     result = run("library", "-o", str(path))
 
     assert result.exit_code == 0
-    assert json.loads(path.read_text(encoding="utf-8")) == {
-        "items": [{"asin": "B01"}]
-    }
+    assert json.loads(path.read_text(encoding="utf-8")) == {"items": [{"asin": "B01"}]}
     assert result.stdout == ""
 
 
