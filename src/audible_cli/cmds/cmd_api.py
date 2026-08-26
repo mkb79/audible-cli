@@ -10,12 +10,14 @@ audible-cli talks to, and for answers that are not JSON, there is
 import json
 import logging
 import pathlib
+from typing import Any, NoReturn
 
 import click
 import httpx
 from audible.client import raise_for_status
 from click.core import ParameterSource
 
+from ..config import Session
 from ..constants import AVAILABLE_MARKETPLACES
 from ..decorators import pass_session, run_async, timeout_option
 from ..exceptions import AudibleCliException
@@ -24,7 +26,7 @@ from ..exceptions import AudibleCliException
 logger = logging.getLogger("audible_cli.cmds.cmd_api")
 
 
-class ApiPath(click.ParamType):
+class ApiPath(click.ParamType[tuple[str, list[tuple[str, str]]]]):
     """An API path, with an optional query string.
 
     The query is read into pairs and sent as pairs, which means it is
@@ -35,7 +37,12 @@ class ApiPath(click.ParamType):
 
     name = "path"
 
-    def convert(self, value, param, ctx):
+    def convert(
+        self,
+        value: Any,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> tuple[str, list[tuple[str, str]]]:
         """Take the path apart, and refuse anything carrying a host.
 
         Args:
@@ -86,12 +93,17 @@ class ApiPath(click.ParamType):
         return path, query
 
 
-class QueryPair(click.ParamType):
+class QueryPair(click.ParamType[tuple[str, str]]):
     """One `key=value` query parameter."""
 
     name = "key[=value]"
 
-    def convert(self, value, param, ctx):
+    def convert(
+        self,
+        value: Any,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> tuple[str, str]:
         """Split at the first `=` only, so a value may contain more.
 
         A key on its own is a query parameter without a value. httpx sends
@@ -132,12 +144,17 @@ REFUSED_HEADERS = frozenset(
 )
 
 
-class HeaderPair(click.ParamType):
+class HeaderPair(click.ParamType[tuple[str, str]]):
     """One `Name: value` request header."""
 
     name = "name: value"
 
-    def convert(self, value, param, ctx):
+    def convert(
+        self,
+        value: Any,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> tuple[str, str]:
         """Split at the first colon, and refuse what is not ours to set.
 
         Args:
@@ -164,7 +181,7 @@ class HeaderPair(click.ParamType):
         return name, val.strip()
 
 
-def load_json(text):
+def load_json(text: str) -> Any:
     """Read JSON, and only JSON.
 
     Python also reads `NaN` and `Infinity`, which no JSON parser on the
@@ -181,18 +198,23 @@ def load_json(text):
         ValueError: If `text` is not JSON.
     """
 
-    def refuse(constant):
+    def refuse(constant: str) -> NoReturn:
         raise ValueError(f"{constant} is not part of json")
 
     return json.loads(text, parse_constant=refuse)
 
 
-class JsonBody(click.ParamType):
+class JsonBody(click.ParamType[Any]):
     """A request body, given as JSON."""
 
     name = "json"
 
-    def convert(self, value, param, ctx):
+    def convert(
+        self,
+        value: Any,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> Any:
         """Parse the body before anything else happens.
 
         Args:
@@ -209,7 +231,7 @@ class JsonBody(click.ParamType):
             self.fail(f"not valid JSON: {error}", param, ctx)
 
 
-def resolve_body(options):
+def resolve_body(options: dict[str, Any]) -> tuple[Any, bool]:
     """Work out the body to send, and whether one was asked for.
 
     `--body null` parses to None, and so does an option nobody gave, so
@@ -342,7 +364,7 @@ def resolve_body(options):
 @timeout_option
 @pass_session
 @run_async
-async def cli(session, **options):
+async def cli(session: Session, **options: Any) -> None:
     """Send requests to an Audible API endpoint.
 
     ENDPOINT is a path such as `library` or `1.0/library`, and may carry a
