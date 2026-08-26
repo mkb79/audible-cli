@@ -81,8 +81,7 @@ class ApiPath(click.ParamType):
         query = list(url.params.multi_items())
 
         if any(not key for key, _ in query):
-            self.fail(f"{value!r} has a query parameter without a name",
-                      param, ctx)
+            self.fail(f"{value!r} has a query parameter without a name", param, ctx)
 
         return path, query
 
@@ -117,18 +116,20 @@ class QueryPair(click.ParamType):
 #: Header names a caller may not set. They carry the authentication, or
 #: they describe a body this command always writes itself: the body is
 #: JSON, and the client says so.
-REFUSED_HEADERS = frozenset({
-    "authorization",
-    "content-length",
-    "content-type",
-    "host",
-    "proxy-authorization",
-    "transfer-encoding",
-    "x-adp-alg",
-    "x-adp-signature",
-    "x-adp-token",
-    "x-amz-access-token",
-})
+REFUSED_HEADERS = frozenset(
+    {
+        "authorization",
+        "content-length",
+        "content-type",
+        "host",
+        "proxy-authorization",
+        "transfer-encoding",
+        "x-adp-alg",
+        "x-adp-signature",
+        "x-adp-token",
+        "x-amz-access-token",
+    }
+)
 
 
 class HeaderPair(click.ParamType):
@@ -179,6 +180,7 @@ def load_json(text):
     Raises:
         ValueError: If `text` is not JSON.
     """
+
     def refuse(constant):
         raise ValueError(f"{constant} is not part of json")
 
@@ -234,9 +236,7 @@ def resolve_body(options):
 
     if options["body_file"] is not None:
         if given:
-            raise click.UsageError(
-                "--body and --body-file cannot both be given"
-            )
+            raise click.UsageError("--body and --body-file cannot both be given")
         try:
             body = load_json(options["body_file"].read())
         except ValueError as error:
@@ -257,19 +257,21 @@ def resolve_body(options):
 @click.command("api")
 @click.argument("endpoint", type=ApiPath())
 @click.option(
-    "--method", "-m",
+    "--method",
+    "-m",
     type=click.Choice(["GET", "POST", "DELETE", "PUT"], case_sensitive=False),
     default="GET",
     help="The http request method",
     show_default=True,
 )
 @click.option(
-    "--query", "-q",
+    "--query",
+    "-q",
     type=QueryPair(),
     multiple=True,
     help="A query parameter (e.g. num_results=5). Only one parameter "
-         "per option. Multiple options of this type are allowed, including "
-         "the same key more than once.",
+    "per option. Multiple options of this type are allowed, including "
+    "the same key more than once.",
 )
 @click.option(
     "--param",
@@ -279,16 +281,18 @@ def resolve_body(options):
     help="An earlier spelling of --query.",
 )
 @click.option(
-    "--header", "-H",
+    "--header",
+    "-H",
     type=HeaderPair(),
     multiple=True,
     help="A request header (e.g. 'Accept-Language: en-US'). Repeatable, "
-         "including the same name twice. The headers that carry the "
-         "authentication or describe the body belong to the client and "
-         "are refused here.",
+    "including the same name twice. The headers that carry the "
+    "authentication or describe the body belong to the client and "
+    "are refused here.",
 )
 @click.option(
-    "--body", "-b",
+    "--body",
+    "-b",
     type=JsonBody(),
     help="The json formatted body to send",
 )
@@ -296,39 +300,44 @@ def resolve_body(options):
     "--body-file",
     type=click.File("r", encoding="utf-8"),
     help="Read the json formatted body from a file. `-` reads it from "
-         "standard input, which then cannot answer a password prompt.",
+    "standard input, which then cannot answer a password prompt.",
 )
 @click.option(
-    "--indent", "-i",
+    "--indent",
+    "-i",
     type=click.IntRange(min=0),
     help="pretty-printed output with indent level",
 )
 @click.option(
-    "--format", "-f",
+    "--format",
+    "-f",
     type=click.Choice(["json"]),
     default="json",
     deprecated="the answer is json, and json is what this writes",
     help="An earlier choice between json and a Python dict.",
 )
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     type=click.Path(path_type=pathlib.Path),
     help="Write the response to a file, as UTF-8. Worth having over a shell "
-         "redirect on Windows, where `>` writes UTF-16 or the console "
-         "codepage.",
+    "redirect on Windows, where `>` writes UTF-16 or the console "
+    "codepage.",
 )
 @click.option(
-    "--dump-header", "-D",
+    "--dump-header",
+    "-D",
     type=click.Path(path_type=pathlib.Path),
     help="Write the status line and the response headers to a file. The API "
-         "returns `continuation-token` and `total-count` there, which is how "
-         "a script pages through a long answer.",
+    "returns `continuation-token` and `total-count` there, which is how "
+    "a script pages through a long answer.",
 )
 @click.option(
-    "--country-code", "-c",
+    "--country-code",
+    "-c",
     type=click.Choice(AVAILABLE_MARKETPLACES),
     help="Requested Audible marketplace. If not set, the country code for "
-         "the current profile is used.",
+    "the current profile is used.",
 )
 @timeout_option
 @pass_session
@@ -380,10 +389,12 @@ async def cli(session, **options):
     # Written before the status is judged: a failed call is exactly when
     # somebody wants to see what came back.
     if options["dump_header"] is not None:
-        head = (f"{response.http_version} {response.status_code} "
-                f"{response.reason_phrase}\n")
-        head += "".join(f"{name}: {value}\n"
-                        for name, value in response.headers.items())
+        head = (
+            f"{response.http_version} {response.status_code} {response.reason_phrase}\n"
+        )
+        head += "".join(
+            f"{name}: {value}\n" for name, value in response.headers.items()
+        )
         options["dump_header"].write_text(head, encoding="utf-8")
         logger.info("Headers saved to %s", options["dump_header"].resolve())
 

@@ -134,7 +134,6 @@ exclude = [
     "README.md",
     "src/audible_cli/cli.py",
     "src/audible_cli/cmds/cmd_activation_bytes.py",
-    "src/audible_cli/cmds/cmd_api.py",
     "src/audible_cli/cmds/cmd_download.py",
     "src/audible_cli/cmds/cmd_library.py",
     "src/audible_cli/cmds/cmd_manage.py",
