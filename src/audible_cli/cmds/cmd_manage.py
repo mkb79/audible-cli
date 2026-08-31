@@ -151,7 +151,13 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
 )
 @click.option(
     "--password", "-p",
-    help="The optional password for the auth file."
+    prompt="Please enter a password for the auth file (or enter for none)",
+    default="",
+    show_default=False,
+    hide_input=True,
+    confirmation_prompt=True,
+    help="The optional password for the auth file.",
+    cls=DialogOption,
 )
 @click.option(
     "--audible-username", "-au",
@@ -195,7 +201,7 @@ def add_auth_file(
         username=audible_username,
         password=audible_password,
         country_code=country_code,
-        file_password=password,
+        file_password=password or None,
         external_login=external_login,
         with_username=with_username
     )
