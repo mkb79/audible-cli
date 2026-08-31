@@ -324,7 +324,8 @@ from Audible on a daily schedule using this action.
 ## 🧩 Built-in commands
 
 - **activation-bytes** → Manage DRM activation keys  
-- **api** → Call raw Audible API endpoints  
+- **api** → Call an Audible API endpoint and get JSON back  
+- **request** → Send a request to any host audible-cli talks to  
 - **download** → Download audiobooks  
 - **library** → List, export your library  
 - **wishlist** → Manage wishlist (list, add, remove, export)  
@@ -376,6 +377,39 @@ page. `--dump-header` writes them to a file while stdout stays JSON:
 audible api "library?num_results=50" -D headers.txt > page1.json
 grep continuation-token headers.txt
 ```
+
+### Calling everything else
+
+Audible is not only the API. A companion file comes from the website, the
+audio itself from the delivery host, annotations from Amazon's CDE service.
+`request` is for those: it takes a whole URL, sends the body as it was
+written, and writes the answer as it arrived — bytes, not JSON, and streamed,
+so a file of any size can go through `--output`.
+
+```shell
+audible request https://www.audible.de/companion-file/B07J2M2VC7 -o chapters.json
+audible request https://cde-ta-g7g.amazon.com/FionaCDEServiceEngine/sidecar \
+    -q "type=AUDI" -q "key=B07J2M2VC7" -i
+```
+
+The host has to be one audible-cli itself talks to — `api`, `www`, `cds` and
+`api.amazon` of a marketplace, plus `cde-ta-g7g.amazon.com`. The request
+carries the credentials of the profile, and a URL naming anything else is
+refused before they are loaded. Only https, no port of its own, and no
+name and password written into the URL.
+
+`--include/-i` puts the status line and the response headers in front of the
+body, wherever the body goes — `--output` included. `--dump-header/-D` writes
+them to a file of their own instead. A redirect is shown, not followed. An
+error status ends the command after the answer has been written, so the body
+that explains the refusal is not lost.
+
+The query is sent exactly as it was typed, which matters because a delivery
+URL is signed over those bytes. `--query` appends to it rather than rewriting
+it. The method is whatever the host understands, `PATCH` and `OPTIONS`
+included. A compressed answer arrives unpacked while the headers still say
+what came over the wire, and the client sends `Content-Type: application/json`
+unless `--header` says otherwise.
 
 ---
 

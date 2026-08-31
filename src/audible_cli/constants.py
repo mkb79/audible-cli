@@ -76,3 +76,30 @@ CDE_FIRST_DELAY: float = 0.5
 AVAILABLE_MARKETPLACES = [
     market["country_code"] for market in LOCALE_TEMPLATES.values()
 ]
+
+#: The hosts of a marketplace that audible-cli has business with: the
+#: API, the website a companion file comes from, the content delivery
+#: the download is redirected to, and the Amazon endpoint that answers
+#: for the user behind the profile.
+MARKETPLACE_HOST_TEMPLATES = (
+    "api.audible.{domain}",
+    "www.audible.{domain}",
+    "cds.audible.{domain}",
+    "api.amazon.{domain}",
+)
+
+#: The one host that is the same for every marketplace. Annotations and
+#: the AAX download url come from it.
+CDE_HOST = "cde-ta-g7g.amazon.com"
+
+#: Where `audible request` may be pointed. The request carries the
+#: credentials of a profile, so this is the list of who is allowed to
+#: receive them.
+ALLOWED_REQUEST_HOSTS = frozenset(
+    {CDE_HOST}
+    | {
+        template.format(domain=market["domain"])
+        for template in MARKETPLACE_HOST_TEMPLATES
+        for market in LOCALE_TEMPLATES.values()
+    }
+)
