@@ -30,7 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- `audible manage auth-file encrypt` puts a password on an auth file that has none, and `audible manage auth-file decrypt` takes it off again. Whatever is not given is asked for, so a password need not be typed where the shell keeps it, and a script that passes both options is asked nothing. Either says so and changes nothing when the file is not an auth file, when it is one but of the wrong shape, or when it has a second name in the file system (#313, #315)
+- `audible manage auth-file encrypt` puts a password on an auth file that has none. Whatever is not given is asked for, so a password need not be typed where the shell keeps it, and a script that passes both options is asked nothing. It says so and changes nothing when the file is not an auth file, when it is encrypted already, or when it has a second name in the file system (#313, #315)
+- `audible manage auth-file decrypt` takes the password off again, asking and refusing the same way (#313, #315)
 - `--log-file PATH` writes the log to a file as well, with timestamp, module and line (#306)
 - `NO_COLOR` and `FORCE_COLOR` decide whether diagnostics are coloured (#306)
 - Standalone builds for arm64 on Linux and Windows; the macOS build stays Apple silicon only (#296)
