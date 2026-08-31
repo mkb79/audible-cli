@@ -3,14 +3,13 @@ import os
 import pathlib
 
 import click
-from audible import Authenticator
 from click import echo
 from tabulate import tabulate
 
 from .._dialog import DialogOption
 from ..constants import AVAILABLE_MARKETPLACES
 from ..decorators import pass_session
-from ..utils import build_auth_file
+from ..utils import build_auth_file, read_auth_file
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_manage")
@@ -231,7 +230,7 @@ def check_if_auth_file_exists(session, ctx, param, value):
 )
 def remove_auth_file(auth_file, password):
     """Deregister a device and remove auth file from config dir."""
-    auth = Authenticator.from_file(auth_file, password)
+    auth = read_auth_file(auth_file, password)
     device_name = auth.device_info["device_name"]
     auth.refresh_access_token()
     auth.deregister_device()
