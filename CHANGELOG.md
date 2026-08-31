@@ -8,9 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
-- `audible manage auth-file add --external-login` no longer asks for an Audible username and password. The browser does the login, and the two values never reached it (#314)
-- `audible manage auth-file remove` with a wrong password now says the file does not open, instead of a traceback about PKCS7 padding (#313)
-- `audible manage auth-file add` asks whether the auth file should have a password. The option was there but was never offered, so anyone going through the questions got an unencrypted file, while `quickstart` asked. A script that passed every other option now has to pass `--password ''` as well, to say that it wants none (#313)
+- `audible manage auth-file add --external-login` no longer asks for an Audible username and password. The browser does the login, and the two values never reached it (#314, #315)
+- `audible manage auth-file remove` with a wrong password now says the file does not open, instead of a traceback about PKCS7 padding (#313, #315)
+- `audible manage auth-file add` asks whether the auth file should have a password. The option was there but was never offered, so anyone going through the questions got an unencrypted file, while `quickstart` asked. A script that passed every other option now has to pass `--password ''` as well, to say that it wants none (#313, #315)
 - `--version` no longer exits 1 with the error glued to the version when the update check cannot reach GitHub (#309)
 - A podcast episode that is already downloaded no longer costs a voucher on every run (#299)
 - A cover size a title does not offer is reported as a warning, not an error (#300)
@@ -30,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- `audible manage auth-file encrypt` puts a password on an auth file that has none, and `audible manage auth-file decrypt` takes it off again. Neither asks for anything: the file and the password come from the command line, so both can run in a script. Either says so and changes nothing when the file is not an auth file, when it is one but of the wrong shape, or when it has a second name in the file system (#313)
+- `audible manage auth-file encrypt` puts a password on an auth file that has none, and `audible manage auth-file decrypt` takes it off again. Neither asks for anything: the file and the password come from the command line, so both can run in a script. Either says so and changes nothing when the file is not an auth file, when it is one but of the wrong shape, or when it has a second name in the file system (#313, #315)
 - `--log-file PATH` writes the log to a file as well, with timestamp, module and line (#306)
 - `NO_COLOR` and `FORCE_COLOR` decide whether diagnostics are coloured (#306)
 - Standalone builds for arm64 on Linux and Windows; the macOS build stays Apple silicon only (#296)
