@@ -17,6 +17,7 @@ import httpx
 from audible.client import raise_for_status
 from click.core import ParameterSource
 
+from .._params import AUTHENTICATION_HEADERS, HeaderPair, QueryPair
 from ..config import Session
 from ..constants import AVAILABLE_MARKETPLACES
 from ..decorators import pass_session, run_async, timeout_option
@@ -24,6 +25,11 @@ from ..exceptions import AudibleCliException
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_api")
+
+#: `content-type` joins the shared list here: this command writes the
+#: body itself and always as JSON, so describing it is not the caller's
+#: to do.
+REFUSED_HEADERS = AUTHENTICATION_HEADERS | {"content-type"}
 
 
 class ApiPath(click.ParamType[tuple[str, list[tuple[str, str]]]]):
@@ -91,94 +97,6 @@ class ApiPath(click.ParamType[tuple[str, list[tuple[str, str]]]]):
             self.fail(f"{value!r} has a query parameter without a name", param, ctx)
 
         return path, query
-
-
-class QueryPair(click.ParamType[tuple[str, str]]):
-    """One `key=value` query parameter."""
-
-    name = "key[=value]"
-
-    def convert(
-        self,
-        value: Any,
-        param: click.Parameter | None,
-        ctx: click.Context | None,
-    ) -> tuple[str, str]:
-        """Split at the first `=` only, so a value may contain more.
-
-        A key on its own is a query parameter without a value. httpx sends
-        it as `key=`; a bare `key` cannot be expressed through it.
-
-        Args:
-            value: What was typed.
-            param: The parameter being converted.
-            ctx: The context it belongs to.
-
-        Returns:
-            The key and the value, which may be empty.
-        """
-        key, _, val = value.partition("=")
-
-        if not key:
-            self.fail(f"{value!r} has no name", param, ctx)
-
-        return key, val
-
-
-#: Header names a caller may not set. They carry the authentication, or
-#: they describe a body this command always writes itself: the body is
-#: JSON, and the client says so.
-REFUSED_HEADERS = frozenset(
-    {
-        "authorization",
-        "content-length",
-        "content-type",
-        "host",
-        "proxy-authorization",
-        "transfer-encoding",
-        "x-adp-alg",
-        "x-adp-signature",
-        "x-adp-token",
-        "x-amz-access-token",
-    }
-)
-
-
-class HeaderPair(click.ParamType[tuple[str, str]]):
-    """One `Name: value` request header."""
-
-    name = "name: value"
-
-    def convert(
-        self,
-        value: Any,
-        param: click.Parameter | None,
-        ctx: click.Context | None,
-    ) -> tuple[str, str]:
-        """Split at the first colon, and refuse what is not ours to set.
-
-        Args:
-            value: What was typed.
-            param: The parameter being converted.
-            ctx: The context it belongs to.
-
-        Returns:
-            The header name and its value.
-        """
-        name, sep, val = value.partition(":")
-        name = name.strip()
-
-        if not sep or not name:
-            self.fail(f"{value!r} is not 'Name: value'", param, ctx)
-
-        if name.lower() in REFUSED_HEADERS:
-            self.fail(
-                f"{name} is set by audible-cli itself and cannot be given here",
-                param,
-                ctx,
-            )
-
-        return name, val.strip()
 
 
 def load_json(text: str) -> Any:
@@ -305,7 +223,7 @@ def resolve_body(options: dict[str, Any]) -> tuple[Any, bool]:
 @click.option(
     "--header",
     "-H",
-    type=HeaderPair(),
+    type=HeaderPair(REFUSED_HEADERS),
     multiple=True,
     help="A request header (e.g. 'Accept-Language: en-US'). Repeatable, "
     "including the same name twice. The headers that carry the "
