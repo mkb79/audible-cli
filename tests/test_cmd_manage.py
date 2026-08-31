@@ -226,16 +226,67 @@ def test_the_wrong_password_leaves_the_file_alone(tmp_path):
     assert path.read_bytes() == before
 
 
+def test_what_is_missing_is_asked_for(tmp_path, narrating):
+    # So that a password need not be typed where the shell keeps it.
+    path = auth_file(tmp_path)
+
+    result = manage(
+        tmp_path,
+        "auth-file",
+        "encrypt",
+        input=f"one.json\n{FILE_PASSWORD}\n{FILE_PASSWORD}\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "name for the auth file" in result.stderr
+    assert "password for the auth file" in result.stderr
+    assert result.stdout == ""
+    assert detect_auth_file(path) == "json"
+
+
+def test_a_password_that_was_asked_for_opens_the_file_again(tmp_path):
+    # Round trip through the questions rather than through the options.
+    path = auth_file(tmp_path)
+    before = json.loads(path.read_text())
+
+    manage(
+        tmp_path,
+        "auth-file",
+        "encrypt",
+        input=f"one.json\n{FILE_PASSWORD}\n{FILE_PASSWORD}\n",
+    )
+    result = manage(
+        tmp_path, "auth-file", "decrypt", input=f"one.json\n{FILE_PASSWORD}\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(path.read_text()) == before
+
+
+def test_the_password_is_not_repeated_back_when_taking_it_off(tmp_path):
+    # A wrong one cannot destroy anything, so asking twice would only
+    # be in the way.
+    path = auth_file(tmp_path, password=FILE_PASSWORD)
+
+    result = manage(
+        tmp_path, "auth-file", "decrypt", input=f"one.json\n{FILE_PASSWORD}\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Repeat for confirmation" not in result.stderr
+    assert detect_auth_file(path) == "plain"
+
+
 @pytest.mark.parametrize("command", ["encrypt", "decrypt"])
-def test_neither_command_asks_for_anything(tmp_path, command):
-    # They are meant for a script, so a missing option is a usage error
-    # rather than a prompt that would wait for a person.
-    auth_file(tmp_path)
+def test_an_option_that_is_given_is_not_asked_about(tmp_path, command):
+    auth_file(tmp_path, password=None if command == "encrypt" else FILE_PASSWORD)
 
-    result = manage(tmp_path, "auth-file", command)
+    result = manage(
+        tmp_path, "auth-file", command, "-f", "one.json", "-p", FILE_PASSWORD
+    )
 
-    assert result.exit_code == 2
-    assert "Missing option" in result.stderr
+    assert result.exit_code == 0, result.output
+    assert "Please enter" not in result.stderr
 
 
 def test_the_permissions_survive_the_rewrite(tmp_path):

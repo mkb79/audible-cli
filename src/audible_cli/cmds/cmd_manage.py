@@ -302,23 +302,27 @@ def check_password_is_not_empty(ctx, param, value):
 @click.option(
     "--auth-file", "-f",
     type=click.Path(exists=False, file_okay=True),
-    required=True,
+    prompt="Please enter name for the auth file",
     callback=check_if_auth_file_exists,
-    help="The auth file name (without dir) to encrypt."
+    help="The auth file name (without dir) to encrypt.",
+    cls=DialogOption,
 )
 @click.option(
     "--password", "-p",
-    required=True,
+    prompt="Please enter a password for the auth file",
+    hide_input=True,
+    confirmation_prompt=True,
     callback=check_password_is_not_empty,
-    help="The password to encrypt the auth file with."
+    help="The password to encrypt the auth file with.",
+    cls=DialogOption,
 )
 def encrypt_auth_file(auth_file: pathlib.Path, password: str) -> None:
     """Encrypt an auth file that has no password yet.
 
-    Nothing is asked for here. Both the file and the password come from
-    the command line, so this runs where nobody is watching -- which
-    also means the password is in the shell history and, while the
-    command runs, in the process list.
+    Whatever is not given is asked for, so a password need not be typed
+    where the shell keeps it. Given as an option, it is in the shell
+    history and, while the command runs, in the process list -- which is
+    the price of running this without anybody watching.
     """
     auth_file = resolve_to_the_real_file(auth_file)
     shape = detect_auth_file(auth_file)
@@ -340,20 +344,25 @@ def encrypt_auth_file(auth_file: pathlib.Path, password: str) -> None:
 @click.option(
     "--auth-file", "-f",
     type=click.Path(exists=False, file_okay=True),
-    required=True,
+    prompt="Please enter name for the auth file",
     callback=check_if_auth_file_exists,
-    help="The auth file name (without dir) to decrypt."
+    help="The auth file name (without dir) to decrypt.",
+    cls=DialogOption,
 )
 @click.option(
     "--password", "-p",
-    required=True,
+    prompt="Please enter the password of the auth file",
+    hide_input=True,
     callback=check_password_is_not_empty,
-    help="The password the auth file has."
+    help="The password the auth file has.",
+    cls=DialogOption,
 )
 def decrypt_auth_file(auth_file: pathlib.Path, password: str) -> None:
     """Take the password off an auth file.
 
-    Nothing is asked for here, the same way `encrypt` asks for nothing.
+    Whatever is not given is asked for, the same way `encrypt` asks. The
+    password is not repeated back here: a wrong one cannot destroy
+    anything, it only fails to open the file.
     """
     auth_file = resolve_to_the_real_file(auth_file)
     shape = detect_auth_file(auth_file)
