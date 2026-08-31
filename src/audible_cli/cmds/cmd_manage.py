@@ -9,7 +9,13 @@ from tabulate import tabulate
 from .._dialog import DialogOption
 from ..constants import AVAILABLE_MARKETPLACES
 from ..decorators import pass_session
-from ..utils import build_auth_file, read_auth_file
+from ..exceptions import AudibleCliException
+from ..utils import (
+    build_auth_file,
+    detect_auth_file,
+    read_auth_file,
+    rewrite_auth_file,
+)
 
 
 logger = logging.getLogger("audible_cli.cmds.cmd_manage")
@@ -237,3 +243,116 @@ def remove_auth_file(auth_file, password):
     logger.info("%s deregistered", device_name)
     auth_file.unlink()
     logger.info("%s removed from config dir", auth_file)
+
+
+def resolve_to_the_real_file(auth_file: pathlib.Path) -> pathlib.Path:
+    """Find the file that actually holds the credentials.
+
+    A rewrite replaces a name with a new file. Given a symlink, that
+    would put the new file where the link was and leave the credentials
+    it pointed at untouched, while the command reported success -- so
+    the link is followed first. A second hard link cannot be dealt with
+    the same way, because every other name would keep pointing at the
+    old content; that one is refused.
+
+    Args:
+        auth_file: The name that was given.
+
+    Returns:
+        The file it stands for.
+
+    Raises:
+        AudibleCliException: If the file has more than one name.
+    """
+    target = auth_file.resolve()
+
+    if target.stat().st_nlink > 1:
+        raise AudibleCliException(
+            f"{auth_file.name} has more than one name in the file system, "
+            f"and rewriting it would leave the credentials readable under "
+            f"the others"
+        )
+
+    return target
+
+
+def check_password_is_not_empty(ctx, param, value):
+    """Refuse an empty password, which would not encrypt anything.
+
+    `required=True` only asks for the option to be there. An empty value
+    passes it, and would then read as "no password" further down and
+    write the file in the open while reporting success.
+    """
+    if not value:
+        raise click.BadParameter("a password cannot be empty")
+    return value
+
+
+@manage_auth_files.command("encrypt")
+@click.option(
+    "--auth-file", "-f",
+    type=click.Path(exists=False, file_okay=True),
+    required=True,
+    callback=check_if_auth_file_exists,
+    help="The auth file name (without dir) to encrypt."
+)
+@click.option(
+    "--password", "-p",
+    required=True,
+    callback=check_password_is_not_empty,
+    help="The password to encrypt the auth file with."
+)
+def encrypt_auth_file(auth_file: pathlib.Path, password: str) -> None:
+    """Encrypt an auth file that has no password yet.
+
+    Nothing is asked for here. Both the file and the password come from
+    the command line, so this runs where nobody is watching -- which
+    also means the password is in the shell history and, while the
+    command runs, in the process list.
+    """
+    auth_file = resolve_to_the_real_file(auth_file)
+    shape = detect_auth_file(auth_file)
+
+    if shape is None:
+        raise AudibleCliException(f"{auth_file.name} is not an auth file")
+
+    if shape != "plain":
+        raise AudibleCliException(
+            f"{auth_file.name} is encrypted already. Decrypt it first to "
+            f"give it another password."
+        )
+
+    rewrite_auth_file(read_auth_file(auth_file), auth_file, password)
+    logger.info("%s is encrypted now", auth_file.name)
+
+
+@manage_auth_files.command("decrypt")
+@click.option(
+    "--auth-file", "-f",
+    type=click.Path(exists=False, file_okay=True),
+    required=True,
+    callback=check_if_auth_file_exists,
+    help="The auth file name (without dir) to decrypt."
+)
+@click.option(
+    "--password", "-p",
+    required=True,
+    callback=check_password_is_not_empty,
+    help="The password the auth file has."
+)
+def decrypt_auth_file(auth_file: pathlib.Path, password: str) -> None:
+    """Take the password off an auth file.
+
+    Nothing is asked for here, the same way `encrypt` asks for nothing.
+    """
+    auth_file = resolve_to_the_real_file(auth_file)
+    shape = detect_auth_file(auth_file)
+
+    if shape is None:
+        raise AudibleCliException(f"{auth_file.name} is not an auth file")
+
+    if shape == "plain":
+        raise AudibleCliException(f"{auth_file.name} is not encrypted")
+
+    rewrite_auth_file(read_auth_file(auth_file, password), auth_file, None)
+    logger.info("%s is not encrypted any more", auth_file.name)
