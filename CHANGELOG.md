@@ -36,7 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- `audible request URL` sends one request to any host audible-cli talks to and writes the answer as it arrived. It is for what `audible api` is not: the website, the delivery host and Amazon's CDE service, bodies that are not JSON, and answers that are not either. The host has to be one of `api`, `www`, `cds` or `api.amazon` of a marketplace, or `cde-ta-g7g.amazon.com` — the request carries the credentials of the profile, and a url naming anything else is refused before they are loaded (#NNN)
+- `audible request URL` sends one request to any host audible-cli talks to and writes the answer as it arrived. It is for what `audible api` is not: the website, the delivery host and Amazon's CDE service, bodies that are not JSON, and answers that are not either. The host has to be one of `api`, `www`, `cds` or `api.amazon` of a marketplace, or `cde-ta-g7g.amazon.com` — the request carries the credentials of the profile, and a url naming anything else is refused before they are loaded (#316)
 - `audible api --body-file` reads the request body from a file, or from standard input with `-` (#311)
 - `audible api --header/-H` sends a request header, the same name as often as needed; the headers that carry the authentication or describe the body are refused (#311)
 - `audible api --dump-header/-D` writes the status line and the response headers to a file, which is where `total-count` and `continuation-token` come from (#311)
