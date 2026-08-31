@@ -6,7 +6,7 @@ import click
 from click import echo
 from tabulate import tabulate
 
-from .._dialog import DialogOption
+from .._dialog import DialogOption, ask
 from ..constants import AVAILABLE_MARKETPLACES
 from ..decorators import pass_session
 from ..exceptions import AudibleCliException
@@ -166,17 +166,13 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
 )
 @click.option(
     "--audible-username", "-au",
-    prompt="Please enter the audible username",
-    help="The audible username to authenticate.",
-    cls=DialogOption,
+    help="The audible username to authenticate. Asked for unless "
+         "--external-login says a browser will do it.",
 )
 @click.option(
     "--audible-password", "-ap",
-    hide_input=True,
-    confirmation_prompt=True,
-    prompt="Please enter the password for the audible user",
-    help="The password for the audible user.",
-    cls=DialogOption,
+    help="The password for the audible user. Asked for unless "
+         "--external-login says a browser will do it.",
 )
 @click.option(
     "--country-code", "-cc",
@@ -201,6 +197,20 @@ def add_auth_file(
         audible_password, country_code, external_login, with_username
 ):
     """Register a new device and add an auth file to config dir."""
+    # `--external-login` hands the login to a browser, which asks for
+    # itself. The two values below never reach it, so asking for them
+    # here would be asking for something to throw away.
+    if not external_login:
+        if audible_username is None:
+            audible_username = ask("Please enter the audible username")
+
+        if audible_password is None:
+            audible_password = ask(
+                "Please enter the password for the audible user",
+                hide_input=True,
+                confirmation_prompt=True
+            )
+
     build_auth_file(
         filename=session.config.dirname / auth_file,
         username=audible_username,
