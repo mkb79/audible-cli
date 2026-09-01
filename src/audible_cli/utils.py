@@ -326,10 +326,12 @@ def detect_auth_file(auth_file: pathlib.Path) -> str | None:
         document = None
 
     if isinstance(document, dict):
-        if {"salt", "iv", "ciphertext", "info"} <= document.keys():
+        # `info` is written as well, but only these three are read
+        # back, so a file without it still opens.
+        if {"salt", "iv", "ciphertext"} <= document.keys():
             return "json"
 
-        if any(all(f in document for f in pair) for pair in AUTH_FILE_FIELDS):
+        if any(all(document.get(f) for f in pair) for pair in AUTH_FILE_FIELDS):
             return "plain"
 
         return None
@@ -342,6 +344,30 @@ def detect_auth_file(auth_file: pathlib.Path) -> str | None:
     blocks = len(data) >= 3 * BLOCK_SIZE and len(data) % BLOCK_SIZE == 0
 
     return "bytes" if header and blocks else None
+
+
+def flush_directory(directory: pathlib.Path) -> None:
+    """Put a directory's own contents on disk.
+
+    A rename is a change to the directory, and is only durable once the
+    directory is written out. Not every platform lets one be opened for
+    that; where it cannot, what survives a power cut is the file as it
+    was before, which is the safe half of the answer anyway.
+
+    Args:
+        directory: The directory to flush.
+    """
+    try:
+        handle = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+
+    try:
+        os.fsync(handle)
+    except OSError:
+        pass
+    finally:
+        os.close(handle)
 
 
 def rewrite_auth_file(
@@ -393,6 +419,7 @@ def rewrite_auth_file(
             os.fsync(file.fileno())
 
         os.replace(written, auth_file)
+        flush_directory(auth_file.parent)
     finally:
         written.unlink(missing_ok=True)
 

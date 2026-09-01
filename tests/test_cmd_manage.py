@@ -399,21 +399,25 @@ def test_a_write_that_fails_leaves_the_auth_file_as_it_was(tmp_path, breaks):
     # The file is the device registration. Writing it in place would put
     # it at risk of every error between the first byte and the last. The
     # second case gets as far as a written file beside it, which is the
-    # one that has to be cleaned up again.
+    # one that has to be cleaned up again -- under whichever name
+    # `mkstemp` gave it, so the whole directory is checked.
     path = auth_file(tmp_path)
     before = path.read_bytes()
 
     with mock.patch(breaks, side_effect=OSError("no room")):
-        manage(tmp_path, "auth-file", "encrypt", "-f", "one.json", "-p", FILE_PASSWORD)
+        result = manage(
+            tmp_path, "auth-file", "encrypt", "-f", "one.json", "-p", FILE_PASSWORD
+        )
 
+    assert result.exit_code != 0
     assert path.read_bytes() == before
-    assert not (tmp_path / "one.json.new").exists()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["config.toml", "one.json"]
 
 
 @pytest.mark.parametrize("command", ["encrypt", "decrypt"])
 def test_an_empty_password_is_refused(tmp_path, command):
-    # `required=True` is happy with "", which would then read as "no
-    # password" and write the file in the open while saying otherwise.
+    # An empty value passes for a given option, and would then read as
+    # "no password" and write the file in the open while saying so.
     path = auth_file(tmp_path)
     before = path.read_bytes()
 
@@ -629,3 +633,75 @@ def test_the_older_format_is_told_apart_from_nonsense(tmp_path, content, shape):
     path.write_bytes(content)
 
     assert detect_auth_file(path) == shape
+
+
+def test_an_empty_answer_is_asked_again(tmp_path):
+    # A prompt without a default keeps asking while the answer is empty,
+    # so the guard that catches `-p ""` is never reached from here.
+    path = auth_file(tmp_path)
+
+    result = manage(
+        tmp_path,
+        "auth-file",
+        "encrypt",
+        input=f"one.json\n\n{FILE_PASSWORD}\n{FILE_PASSWORD}\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert detect_auth_file(path) == "json"
+
+
+def test_an_empty_password_option_says_no_encryption(tmp_path):
+    # What the changelog tells a script to pass instead of answering the
+    # question it now asks.
+    profile_config(tmp_path, "one")
+
+    with mock.patch("audible_cli.cmds.cmd_manage.build_auth_file") as build:
+        result = manage(
+            tmp_path,
+            "auth-file",
+            "add",
+            "-f",
+            "new.json",
+            "-p",
+            "",
+            "-au",
+            "someone",
+            "-ap",
+            AUDIBLE_PASSWORD,
+            "-cc",
+            "de",
+        )
+
+    assert result.exit_code == 0, result.output
+    assert build.call_args.kwargs["file_password"] is None
+    assert "password for the auth file" not in result.stderr
+
+
+def test_an_encrypted_file_without_the_extra_field_is_still_one(tmp_path):
+    # `info` is written along with the encryption, but only `salt`, `iv`
+    # and `ciphertext` are read back, so a file without it opens.
+    path = auth_file(tmp_path, password=FILE_PASSWORD)
+    document = json.loads(path.read_text())
+    del document["info"]
+    path.write_text(json.dumps(document))
+
+    result = manage(
+        tmp_path, "auth-file", "decrypt", "-f", "one.json", "-p", FILE_PASSWORD
+    )
+
+    assert result.exit_code == 0, result.output
+    assert detect_auth_file(path) == "plain"
+
+
+def test_fields_that_are_there_but_empty_are_no_auth_file(tmp_path):
+    profile_config(tmp_path, "one")
+    path = tmp_path / "one.json"
+    path.write_text(json.dumps({"adp_token": None, "device_private_key": None}))
+
+    result = manage(
+        tmp_path, "auth-file", "encrypt", "-f", "one.json", "-p", FILE_PASSWORD
+    )
+
+    assert isinstance(result.exception, AudibleCliException)
+    assert "is not an auth file" in str(result.exception)

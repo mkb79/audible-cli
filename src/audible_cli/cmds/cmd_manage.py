@@ -156,7 +156,7 @@ def check_if_auth_file_not_exists(session, ctx, param, value):
 )
 @click.option(
     "--password", "-p",
-    prompt="Please enter a password for the auth file (or enter for none)",
+    prompt="A password for the auth file, or nothing for none",
     default="",
     show_default=False,
     hide_input=True,
