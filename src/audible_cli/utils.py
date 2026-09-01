@@ -1,9 +1,13 @@
 import asyncio
 import csv
 import io
+import json
 import logging
+import os
 import pathlib
 import random
+import shutil
+import tempfile
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 
@@ -11,6 +15,7 @@ import aiofiles
 import click
 import httpx
 from audible import Authenticator
+from audible.aescipher import BLOCK_SIZE, AESCipher
 from audible.client import raise_for_status
 from audible.exceptions import (
     NetworkError,
@@ -18,10 +23,10 @@ from audible.exceptions import (
     RequestError,
     StatusError,
 )
-from audible.login import default_login_url_callback
-from click import echo, prompt, secho
+from audible.login import playwright_external_login_url_callback
 from PIL import Image
 
+from ._dialog import ask, confirm, say
 from .constants import DEFAULT_AUTH_FILE_ENCRYPTION
 from .progress import progress_disabled, take_progressbar
 
@@ -151,31 +156,68 @@ datetime_type = UTCDateTime([
 
 def prompt_captcha_callback(captcha_url: str) -> str:
     """Helper function for handling captcha."""
-    echo("Captcha found")
-    if click.confirm("Open Captcha with default image viewer", default=True):
+    say("Captcha found")
+    if confirm("Open Captcha with default image viewer", default=True):
         captcha = httpx.get(captcha_url).content
         f = io.BytesIO(captcha)
         img = Image.open(f)
         img.show()
     else:
-        echo(
+        say(
             "Please open the following url with a web browser "
             "to get the captcha:"
         )
-        echo(captcha_url)
+        say(captcha_url)
 
-    guess = prompt("Answer for CAPTCHA")
+    guess = ask("Answer for CAPTCHA")
     return str(guess).strip().lower()
 
 
 def prompt_otp_callback() -> str:
     """Helper function for handling 2-factor authentication."""
-    echo("2FA is activated for this account.")
-    guess = prompt("Please enter OTP Code")
+    say("2FA is activated for this account.")
+    guess = ask("Please enter OTP Code")
     return str(guess).strip().lower()
 
 
+def prompt_cvf_callback() -> str:
+    """Helper function for handling the code Amazon sends by mail or SMS."""
+    say("Amazon has sent a verification code by mail or SMS.")
+    guess = ask("Please enter CVF Code")
+    return str(guess).strip().lower()
+
+
+def prompt_approval_callback() -> None:
+    """Helper function for handling an approval alert."""
+    say("Approval alert detected! Amazon sends you a mail.")
+    ask(
+        "Please press ENTER when you approve the notification",
+        default="",
+        show_default=False,
+    )
+
+
+EXTERNAL_LOGIN_INSTRUCTIONS = """\
+Please copy the following url and insert it into a web browser of your choice:
+
+{url}
+
+Now you have to login with your Amazon credentials. After submit your username
+and password you have to do this a second time and solving a captcha before
+sending the login form.
+
+After login, your browser will show you an error page (Page not found). Do not
+worry about this. It has to be like this. Please copy the url from the address
+bar in your browser now."""
+
+
 def prompt_external_callback(url: str) -> str:
+    """Ask for the login url a browser was redirected to.
+
+    The audible library has a callback of its own, but it holds the
+    conversation with `print` and `input`. The browser route it tries
+    first has nothing to print, so that one is still worth asking for.
+    """
     # import readline to prevent issues when input URL in
     # CLI prompt when using macOS
     try:
@@ -183,7 +225,16 @@ def prompt_external_callback(url: str) -> str:
     except ImportError:
         pass
 
-    return default_login_url_callback(url)
+    try:
+        return playwright_external_login_url_callback(url)
+    except ImportError:
+        pass
+
+    say()
+    say(EXTERNAL_LOGIN_INSTRUCTIONS.format(url=url))
+    say()
+
+    return ask("Please insert the copied url (after login)")
 
 
 def full_response_callback(resp: httpx.Response) -> httpx.Response:
@@ -200,8 +251,8 @@ def build_auth_file(
         external_login: bool = False,
         with_username: bool = False
 ) -> None:
-    echo()
-    secho("Login with amazon to your audible account now.", bold=True)
+    say()
+    say("Login with amazon to your audible account now.", bold=True)
 
     # Normalize once: the signature allows a str, but the parent directory is
     # created further down, after the login has already registered the device
@@ -224,17 +275,248 @@ def build_auth_file(
             password=password,
             locale=country_code,
             captcha_callback=prompt_captcha_callback,
-            otp_callback=prompt_otp_callback)
-
-    echo()
+            otp_callback=prompt_otp_callback,
+            cvf_callback=prompt_cvf_callback,
+            approval_callback=prompt_approval_callback)
 
     device_name = auth.device_info["device_name"]
-    secho(f"Successfully registered {device_name}.", bold=True)
+    logger.info("Successfully registered %s.", device_name)
 
     if not filename.parent.exists():
         filename.parent.mkdir(parents=True)
 
     auth.to_file(**file_options)
+
+
+#: What makes a document an auth file: the registration of a device, or
+#: the tokens a login leaves behind. One pair is enough.
+AUTH_FILE_FIELDS = (
+    ("adp_token", "device_private_key"),
+    ("access_token", "refresh_token"),
+)
+
+#: The older encryption writes the number of kdf iterations between two
+#: of these, and that header is what marks the format.
+SALT_MARKER = b"$"
+
+
+def detect_auth_file(auth_file: pathlib.Path) -> str | None:
+    """Say which shape a file has, if it has one of the three at all.
+
+    The library's own `detect_file_encryption` decides this from a
+    single key and a single exception: a json document holding
+    `adp_token` is unencrypted, one holding `ciphertext` is encrypted as
+    json, and anything that is not json at all is called encrypted as
+    bytes. So a file of nonsense reads as encrypted, and a json document
+    of something else reads as neither -- and both then reach a command
+    that would write over them.
+
+    Args:
+        auth_file: The file to look at.
+
+    Returns:
+        `"plain"`, `"json"`, `"bytes"`, or None for a file that is none
+        of the three.
+    """
+    data = auth_file.read_bytes()
+
+    try:
+        document = json.loads(data)
+    except ValueError:
+        document = None
+
+    if isinstance(document, dict):
+        # `info` is written as well, but only these three are read
+        # back, so a file without it still opens.
+        if {"salt", "iv", "ciphertext"} <= document.keys():
+            return "json"
+
+        if any(all(document.get(f) for f in pair) for pair in AUTH_FILE_FIELDS):
+            return "plain"
+
+        return None
+
+    # The bytes format opens with the salt header: the marker, the
+    # number of kdf iterations as a big-endian word, the marker again.
+    # An iv and whole cipher blocks follow it, so the length answers the
+    # rest of the question.
+    header = data[:1] == SALT_MARKER and data[3:4] == SALT_MARKER
+    blocks = len(data) >= 3 * BLOCK_SIZE and len(data) % BLOCK_SIZE == 0
+
+    return "bytes" if header and blocks else None
+
+
+def flush_directory(directory: pathlib.Path) -> None:
+    """Put a directory's own contents on disk.
+
+    A rename is a change to the directory, and is only durable once the
+    directory is written out. Not every platform lets one be opened for
+    that; where it cannot, what survives a power cut is the file as it
+    was before, which is the safe half of the answer anyway.
+
+    Args:
+        directory: The directory to flush.
+    """
+    try:
+        handle = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+
+    try:
+        os.fsync(handle)
+    except OSError:
+        pass
+    finally:
+        os.close(handle)
+
+
+def read_auth_text(
+        auth_file: pathlib.Path,
+        shape: str,
+        password: str | None = None
+) -> str:
+    """Read what an auth file holds, decrypting it on the way if need be.
+
+    The text is taken as it stands rather than through `Authenticator`.
+    Putting a password on a file is a thing done to the file, not to the
+    account behind it: what comes back out is what went in, down to the
+    key order and the fields the library has no name for, and nothing
+    here has to hold an opinion on whether the contents would make a
+    working login.
+
+    Args:
+        auth_file: The file to read.
+        shape: What `detect_auth_file` said it is.
+        password: Its password, if it has one.
+
+    Returns:
+        The text the file holds.
+
+    Raises:
+        AudibleCliException: If the file does not open.
+    """
+    # Imported here rather than at the top: `exceptions` takes
+    # `parse_api_datetime` from this module, so the two cannot both
+    # import each other while they are being read.
+    from .exceptions import AudibleCliException  # noqa: PLC0415
+
+    if shape == "plain":
+        return auth_file.read_text(encoding="utf-8")
+
+    try:
+        text = AESCipher(password or "").from_file(auth_file, encryption=shape)
+    except Exception as error:
+        raise AudibleCliException(
+            f"{auth_file.name} does not open: {error}"
+        ) from error
+
+    try:
+        document = json.loads(text)
+    except ValueError as error:
+        raise AudibleCliException(
+            f"{auth_file.name} opened, but holds no json"
+        ) from error
+
+    if not any(all(document.get(f) for f in pair) for pair in AUTH_FILE_FIELDS):
+        raise AudibleCliException(
+            f"{auth_file.name} opened, but holds no credentials"
+        )
+
+    return text
+
+
+def rewrite_auth_file(
+        auth_file: pathlib.Path,
+        text: str,
+        password: str | None
+) -> None:
+    """Write an auth file again, with or without a password.
+
+    The file carries the registration of a device, and half of one is
+    only recoverable by registering again. The new content therefore
+    goes to a file beside it and takes its place in a single step,
+    keeping the permissions the old one had. The name of that file is
+    made by `mkstemp`, so two runs at once cannot write to the same one
+    and no file that was already there is overwritten.
+
+    Give it the path a symlink points at, not the link: `os.replace`
+    would put the new file where the link was and leave the old
+    credentials where they are.
+
+    Args:
+        auth_file: The file to write.
+        text: What it is to hold.
+        password: What to encrypt with, or None to leave it in the open.
+    """
+    handle, name = tempfile.mkstemp(
+        dir=auth_file.parent, prefix=f"{auth_file.name}.", suffix=".new"
+    )
+    os.close(handle)
+    written = pathlib.Path(name)
+
+    try:
+        if password:
+            AESCipher(password).to_file(
+                text, written, encryption=DEFAULT_AUTH_FILE_ENCRYPTION
+            )
+        else:
+            written.write_text(text, encoding="utf-8")
+
+        shutil.copymode(auth_file, written)
+
+        # On disk before it takes the old file's place: a power cut after
+        # the rename but before the content is written out would leave
+        # neither the old file nor a readable new one.
+        with written.open("r+b") as file:
+            os.fsync(file.fileno())
+
+        os.replace(written, auth_file)
+        flush_directory(auth_file.parent)
+    finally:
+        written.unlink(missing_ok=True)
+
+
+def read_auth_file(
+        auth_file: pathlib.Path,
+        password: str | None = None
+) -> Authenticator:
+    """Read an auth file, and say what went wrong rather than raise it.
+
+    Args:
+        auth_file: The file to read.
+        password: Its password, if it has one.
+
+    Returns:
+        What the file holds.
+
+    Raises:
+        AudibleCliException: If the file does not open.
+    """
+    # Imported here rather than at the top: `exceptions` takes
+    # `parse_api_datetime` from this module, so the two cannot both
+    # import each other while they are being read.
+    from .exceptions import AudibleCliException  # noqa: PLC0415
+
+    try:
+        auth = Authenticator.from_file(auth_file, password=password)
+    except Exception as error:
+        # Every shape of wrong file lands here. The library says
+        # `FileEncryptionError` for a missing password, `ValueError` for
+        # a wrong one, and a `TypeError` or a `KeyError` for whichever
+        # field it reads first and does not like.
+        raise AudibleCliException(
+            f"{auth_file.name} does not open: {error}"
+        ) from error
+
+    # A json file of something else entirely reads as an authenticator
+    # with nothing in it. Writing that back would replace a file this
+    # command was never pointed at on purpose.
+    if not any(all(getattr(auth, f) for f in pair) for pair in AUTH_FILE_FIELDS):
+        raise AudibleCliException(
+            f"{auth_file.name} opened, but holds no credentials"
+        )
+
+    return auth
 
 
 class LongestSubString:

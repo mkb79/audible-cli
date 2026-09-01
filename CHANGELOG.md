@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- `audible manage auth-file add --external-login` no longer asks for an Audible username and password. The browser does the login, and the two values never reached it (#314, #315)
+- `audible manage auth-file remove` with a wrong password now says the file does not open, instead of a traceback about PKCS7 padding (#313, #315)
+- `audible manage auth-file add` asks whether the auth file should have a password. The option was there but was never offered, so anyone going through the questions got an unencrypted file, while `quickstart` asked. A script that passed every other option now has to pass `--password ''` as well, to say that it wants none (#313, #315)
+- `--version` no longer exits 1 with the error glued to the version when the update check cannot reach GitHub (#309)
 - The deprecated `resolve_podcats()` handed back a coroutine instead of awaiting it, so it warned and then did nothing (#305)
 - `--resolve-podcasts` now takes every parent podcast out of the library, not every second one where several sit next to each other (#305)
 - A podcast episode that is already downloaded no longer costs a voucher on every run (#299)
@@ -19,15 +23,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- Log output now goes to stderr, so stdout carries only what a command produces; `audible download … > log.txt` needs `2>` or the new `--log-file` from now on (#306)
+- Nine remaining status messages became log messages, so `--verbosity` reaches them too (#306)
+- `--version` prints the version alone; the update notice goes to stderr (#306)
+- Prompts and the sentences explaining them moved to stderr with the rest, so a redirected stdout no longer swallows half of `quickstart` (#306)
 - Progress bars now hold their line: a ruled block at the bottom of the terminal with one numbered line per worker and one for the queue, which follows the window through a resize and keeps the queue line when there is no room for the rest; `--no-progress` turns it off (#302)
 - A title too long for the window loses its middle instead of the bar and the counts it was pushing off the line (#302)
 
 ### Added
 
+<<<<<<< HEAD
 - `resolve_podcasts()` on `Library` and `Catalog` takes a `remove_parents` argument, for callers that want the episodes without the shows they came from (#305)
+=======
+- `audible manage auth-file encrypt` puts a password on an auth file that has none. Whatever is not given is asked for, so a password need not be typed where the shell keeps it, and a script that passes both options is asked nothing. It says so and changes nothing when the file is not an auth file, when it is encrypted already, or when it has a second name in the file system. The rewritten file keeps the permissions it had, so a decrypted one is as readable to others as it was before it was encrypted (#313, #315)
+- `audible manage auth-file decrypt` takes the password off again, asking and refusing the same way (#313, #315)
+- `--log-file PATH` writes the log to a file as well, with timestamp, module and line (#306)
+- `NO_COLOR` and `FORCE_COLOR` decide whether diagnostics are coloured (#306)
+>>>>>>> master
 - Standalone builds for arm64 on Linux and Windows; the macOS build stays Apple silicon only (#296)
 - Release download names now carry the architecture, for example `audible_win_arm64.zip`; the previous names stay until 15 November 2026 (#296)
 - A `pycryptodome` extra for platforms `cryptography` publishes no wheel for (#296)
+- Documentation for running audible-cli in CI with GitHub Actions via the `setup-audible-cli` action, storing only the two device credentials needed for ADP signing (#303)
 
 ## [0.5.1] - 2026-08-15
 
