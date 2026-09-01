@@ -4,13 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.6.0] - 2026-09-01
+
+### Breaking
+
+- Log output now goes to stderr, so stdout carries only what a command produces; `audible download … > log.txt` needs `2>` or the new `--log-file` from now on (#306)
+- `audible manage auth-file add` asks whether the auth file should have a password. The option was there but was never offered, so anyone going through the questions got an unencrypted file, while `quickstart` asked. A script that passed every other option now has to pass `--password ''` as well, to say that it wants none (#313, #315)
 
 ### Fixed
 
 - `audible manage auth-file add --external-login` no longer asks for an Audible username and password. The browser does the login, and the two values never reached it (#314, #315)
 - `audible manage auth-file remove` with a wrong password now says the file does not open, instead of a traceback about PKCS7 padding (#313, #315)
-- `audible manage auth-file add` asks whether the auth file should have a password. The option was there but was never offered, so anyone going through the questions got an unencrypted file, while `quickstart` asked. A script that passed every other option now has to pass `--password ''` as well, to say that it wants none (#313, #315)
 - `--version` no longer exits 1 with the error glued to the version when the update check cannot reach GitHub (#309)
 - The deprecated `resolve_podcats()` handed back a coroutine instead of awaiting it, so it warned and then did nothing (#305)
 - `--resolve-podcasts` now takes every parent podcast out of the library, not every second one where several sit next to each other (#305)
@@ -23,7 +27,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- Log output now goes to stderr, so stdout carries only what a command produces; `audible download … > log.txt` needs `2>` or the new `--log-file` from now on (#306)
 - Nine remaining status messages became log messages, so `--verbosity` reaches them too (#306)
 - `--version` prints the version alone; the update notice goes to stderr (#306)
 - Prompts and the sentences explaining them moved to stderr with the rest, so a redirected stdout no longer swallows half of `quickstart` (#306)
