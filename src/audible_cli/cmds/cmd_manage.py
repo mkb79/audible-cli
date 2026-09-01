@@ -14,6 +14,7 @@ from ..utils import (
     build_auth_file,
     detect_auth_file,
     read_auth_file,
+    read_auth_text,
     rewrite_auth_file,
 )
 
@@ -336,7 +337,7 @@ def encrypt_auth_file(auth_file: pathlib.Path, password: str) -> None:
             f"give it another password."
         )
 
-    rewrite_auth_file(read_auth_file(auth_file), auth_file, password)
+    rewrite_auth_file(auth_file, read_auth_text(auth_file, shape), password)
     logger.info("%s is encrypted now", auth_file.name)
 
 
@@ -373,5 +374,7 @@ def decrypt_auth_file(auth_file: pathlib.Path, password: str) -> None:
     if shape == "plain":
         raise AudibleCliException(f"{auth_file.name} is not encrypted")
 
-    rewrite_auth_file(read_auth_file(auth_file, password), auth_file, None)
+    text = read_auth_text(auth_file, shape, password)
+
+    rewrite_auth_file(auth_file, text, None)
     logger.info("%s is not encrypted any more", auth_file.name)

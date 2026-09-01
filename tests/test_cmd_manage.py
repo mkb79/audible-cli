@@ -156,13 +156,15 @@ def test_an_auth_file_can_be_encrypted_after_the_fact(tmp_path, narrating):
 
 
 def test_the_round_trip_changes_nothing(tmp_path):
+    # Byte for byte: what comes back is the text that went in, not a
+    # rendering of what a parser made of it.
     path = auth_file(tmp_path)
-    before = json.loads(path.read_text())
+    before = path.read_text()
 
     manage(tmp_path, "auth-file", "encrypt", "-f", "one.json", "-p", FILE_PASSWORD)
     manage(tmp_path, "auth-file", "decrypt", "-f", "one.json", "-p", FILE_PASSWORD)
 
-    assert json.loads(path.read_text()) == before
+    assert path.read_text() == before
 
 
 def test_an_encrypted_auth_file_can_be_decrypted(tmp_path, narrating):
@@ -394,7 +396,9 @@ def test_the_option_skips_the_prompt(tmp_path):
     assert "password for the auth file" not in result.stderr
 
 
-@pytest.mark.parametrize("breaks", ["audible.Authenticator.to_file", "shutil.copymode"])
+@pytest.mark.parametrize(
+    "breaks", ["audible.aescipher.AESCipher.to_file", "shutil.copymode"]
+)
 def test_a_write_that_fails_leaves_the_auth_file_as_it_was(tmp_path, breaks):
     # The file is the device registration. Writing it in place would put
     # it at risk of every error between the first byte and the last. The
@@ -555,20 +559,52 @@ def test_a_file_that_was_already_there_is_not_overwritten(tmp_path):
     assert detect_auth_file(path) == "json"
 
 
-def test_a_field_of_the_wrong_type_is_refused(tmp_path):
-    # The library validates field by field and raises whatever fits the
-    # field it looked at -- a `TypeError` here, a `ValueError` there.
-    # None of them may reach the user as a traceback.
+def test_a_file_the_library_would_not_load_can_still_be_encrypted(tmp_path):
+    # `website_cookies` of the wrong type makes `Authenticator.from_file`
+    # raise. Encrypting is a thing done to a file, not to an account, so
+    # it does not ask the library what it thinks of the contents.
     profile_config(tmp_path, "one")
     path = tmp_path / "one.json"
-    path.write_text(json.dumps({**FAKE_AUTH, "website_cookies": {"session-id": 123}}))
+    before = json.dumps({**FAKE_AUTH, "website_cookies": {"session-id": 123}})
+    path.write_text(before)
 
-    result = manage(
+    manage(tmp_path, "auth-file", "encrypt", "-f", "one.json", "-p", FILE_PASSWORD)
+    encrypted = detect_auth_file(path)
+    manage(tmp_path, "auth-file", "decrypt", "-f", "one.json", "-p", FILE_PASSWORD)
+
+    assert encrypted == "json"
+    assert path.read_text() == before
+
+
+def test_no_marketplace_has_to_be_known(tmp_path):
+    # Neither command asks which marketplace the file belongs to,
+    # because neither logs in with it. Going back through
+    # `Authenticator` would reintroduce the question, and fail with
+    # `'NoneType' object has no attribute 'country_code'` on a file that
+    # does not answer it.
+    profile_config(tmp_path, "one")
+    path = tmp_path / "one.json"
+    before = json.dumps(
+        {
+            "adp_token": FAKE_AUTH["adp_token"],
+            "device_private_key": FAKE_AUTH["device_private_key"],
+        },
+        indent=4,
+    )
+    path.write_text(before)
+
+    encrypting = manage(
         tmp_path, "auth-file", "encrypt", "-f", "one.json", "-p", FILE_PASSWORD
     )
+    encrypted = detect_auth_file(path)
+    decrypting = manage(
+        tmp_path, "auth-file", "decrypt", "-f", "one.json", "-p", FILE_PASSWORD
+    )
 
-    assert isinstance(result.exception, AudibleCliException)
-    assert "does not open" in str(result.exception)
+    assert encrypting.exit_code == 0, encrypting.output
+    assert decrypting.exit_code == 0, decrypting.output
+    assert encrypted == "json"
+    assert path.read_text() == before
 
 
 def test_the_older_encryption_is_recognised_and_can_be_taken_off(tmp_path, narrating):

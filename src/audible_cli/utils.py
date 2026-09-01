@@ -15,7 +15,7 @@ import aiofiles
 import click
 import httpx
 from audible import Authenticator
-from audible.aescipher import BLOCK_SIZE
+from audible.aescipher import BLOCK_SIZE, AESCipher
 from audible.client import raise_for_status
 from audible.exceptions import (
     NetworkError,
@@ -370,9 +370,64 @@ def flush_directory(directory: pathlib.Path) -> None:
         os.close(handle)
 
 
-def rewrite_auth_file(
-        auth: Authenticator,
+def read_auth_text(
         auth_file: pathlib.Path,
+        shape: str,
+        password: str | None = None
+) -> str:
+    """Read what an auth file holds, decrypting it on the way if need be.
+
+    The text is taken as it stands rather than through `Authenticator`.
+    Putting a password on a file is a thing done to the file, not to the
+    account behind it: what comes back out is what went in, down to the
+    key order and the fields the library has no name for, and nothing
+    here has to hold an opinion on whether the contents would make a
+    working login.
+
+    Args:
+        auth_file: The file to read.
+        shape: What `detect_auth_file` said it is.
+        password: Its password, if it has one.
+
+    Returns:
+        The text the file holds.
+
+    Raises:
+        AudibleCliException: If the file does not open.
+    """
+    # Imported here rather than at the top: `exceptions` takes
+    # `parse_api_datetime` from this module, so the two cannot both
+    # import each other while they are being read.
+    from .exceptions import AudibleCliException  # noqa: PLC0415
+
+    if shape == "plain":
+        return auth_file.read_text(encoding="utf-8")
+
+    try:
+        text = AESCipher(password or "").from_file(auth_file, encryption=shape)
+    except Exception as error:
+        raise AudibleCliException(
+            f"{auth_file.name} does not open: {error}"
+        ) from error
+
+    try:
+        document = json.loads(text)
+    except ValueError as error:
+        raise AudibleCliException(
+            f"{auth_file.name} opened, but holds no json"
+        ) from error
+
+    if not any(all(document.get(f) for f in pair) for pair in AUTH_FILE_FIELDS):
+        raise AudibleCliException(
+            f"{auth_file.name} opened, but holds no credentials"
+        )
+
+    return text
+
+
+def rewrite_auth_file(
+        auth_file: pathlib.Path,
+        text: str,
         password: str | None
 ) -> None:
     """Write an auth file again, with or without a password.
@@ -389,8 +444,8 @@ def rewrite_auth_file(
     credentials where they are.
 
     Args:
-        auth: What was read from the file.
-        auth_file: Where it came from, and goes back to.
+        auth_file: The file to write.
+        text: What it is to hold.
         password: What to encrypt with, or None to leave it in the open.
     """
     handle, name = tempfile.mkstemp(
@@ -401,14 +456,11 @@ def rewrite_auth_file(
 
     try:
         if password:
-            auth.to_file(
-                written,
-                password=password,
-                encryption=DEFAULT_AUTH_FILE_ENCRYPTION,
-                set_default=False
+            AESCipher(password).to_file(
+                text, written, encryption=DEFAULT_AUTH_FILE_ENCRYPTION
             )
         else:
-            auth.to_file(written, encryption=False, set_default=False)
+            written.write_text(text, encoding="utf-8")
 
         shutil.copymode(auth_file, written)
 
