@@ -28,7 +28,7 @@ jobs:
           # errors out on a detached HEAD since v6.
           ref: ${{ github.head_ref }}
 
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
 
