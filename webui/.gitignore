@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+/data/
+
+frontend/node_modules/
+frontend/dist/
+src/audible_cli_webui/static/

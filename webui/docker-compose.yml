@@ -1,0 +1,29 @@
+# Deployment stack for Dockhand (or any Docker Compose-based manager) on
+# Unraid. Dockhand's Git integration can point directly at this file in the
+# repo — see webui/README.md for the exact setup steps.
+#
+# Pulls the image built by .github/workflows/webui-docker.yml. To build
+# locally instead, run `docker compose build` from the repo root — the
+# build context below is intentionally the parent directory, since
+# webui/Dockerfile needs the real audible_cli source to resolve its
+# editable path dependency on the parent package.
+
+services:
+  audible-web-ui:
+    image: ghcr.io/drakebridgewater/audible-web-ui:latest
+    build:
+      context: ..
+      dockerfile: webui/Dockerfile
+    restart: unless-stopped
+    ports:
+      # host:container — change the host side if 8000 is already taken.
+      - "8000:8000"
+    volumes:
+      # Holds the SQLite database and in-progress downloads/transcodes.
+      # Adjust the host path to wherever you keep appdata on Unraid.
+      - /mnt/user/appdata/audible-web-ui:/data
+    env_file:
+      # Copy webui/.env.example to webui/.env next to this file and fill
+      # in real values (Authelia client, Audiobookshelf API key, etc.)
+      # before first start.
+      - .env
