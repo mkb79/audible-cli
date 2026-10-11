@@ -81,6 +81,9 @@ class AbsSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     base_url: Mapped[str] = mapped_column(String(500))
     encrypted_api_key: Mapped[bytes] = mapped_column()
+    # Where imports land for users without their own TenantLibraryMapping.
+    default_library_id: Mapped[str | None] = mapped_column(String(255))
+    default_folder_id: Mapped[str | None] = mapped_column(String(255))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

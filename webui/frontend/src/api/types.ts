@@ -58,6 +58,13 @@ export interface ImportRunDetail extends ImportRunSummary {
 export interface AbsSettingsInfo {
   base_url: string
   api_key_set: boolean
+  default_library_id: string | null
+  default_folder_id: string | null
+}
+
+export interface ImportReadiness {
+  ready: boolean
+  reason: string | null
 }
 
 export interface AbsLibraryFolder {
@@ -68,6 +75,7 @@ export interface AbsLibraryFolder {
 export interface AbsLibrary {
   id: string
   name: string
+  media_type: 'book' | 'podcast'
   folders: AbsLibraryFolder[]
 }
 

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..deps import get_current_user, get_db
 from ..importer.jobs import job_manager
+from ..importer.targets import missing_setup_reason
 
 router = APIRouter(prefix="/api/imports")
 
@@ -16,6 +17,10 @@ async def trigger_import(
 ) -> dict:
     if job_manager.is_user_busy(user.id):
         raise HTTPException(status_code=409, detail="An import is already running for your account.")
+    # Refuse up front, so a setup gap doesn't show up later as a failed run.
+    reason = missing_setup_reason(db, user.id)
+    if reason is not None:
+        raise HTTPException(status_code=400, detail=reason)
 
     run = models.ImportRun(user_id=user.id)
     db.add(run)
@@ -24,6 +29,15 @@ async def trigger_import(
 
     job_manager.start_run(run.id, user.id)
     return {"run_id": run.id}
+
+
+@router.get("/readiness", response_model=schemas.ImportReadinessOut)
+async def import_readiness(
+    user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> schemas.ImportReadinessOut:
+    reason = missing_setup_reason(db, user.id)
+    return schemas.ImportReadinessOut(ready=reason is None, reason=reason)
 
 
 @router.get("", response_model=list[schemas.ImportRunOut])

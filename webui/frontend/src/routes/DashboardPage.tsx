@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError, api } from '../api/client'
-import type { AudibleAccountInfo, ImportRunDetail } from '../api/types'
+import type { AudibleAccountInfo, ImportReadiness, ImportRunDetail } from '../api/types'
 import { RunStatusTable } from '../components/RunStatusTable'
 import { StatusBadge } from '../components/StatusBadge'
 import { usePolling } from '../hooks/usePolling'
@@ -12,12 +12,18 @@ export function DashboardPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [triggerError, setTriggerError] = useState<string | null>(null)
   const [triggering, setTriggering] = useState(false)
+  const [readiness, setReadiness] = useState<ImportReadiness | null>(null)
 
   useEffect(() => {
     api
       .audibleAccount()
       .then(setAccount)
       .catch((err) => setLoadError(String(err)))
+    // Best-effort: if this fails, the import request still reports the reason.
+    api
+      .importReadiness()
+      .then(setReadiness)
+      .catch(() => setReadiness(null))
   }, [])
 
   const { data: run } = usePolling<ImportRunDetail | null>(() => api.currentImport())
@@ -69,7 +75,11 @@ export function DashboardPage() {
         </div>
       ) : (
         <div className="card">
-          <button onClick={trigger} disabled={triggering || account.status === 'needs_reconnect'}>
+          {readiness && !readiness.ready && <p className="error">{readiness.reason}</p>}
+          <button
+            onClick={trigger}
+            disabled={triggering || account.status === 'needs_reconnect' || readiness?.ready === false}
+          >
             {triggering ? 'Starting…' : 'Trigger Import'}
           </button>
           {triggerError && <p className="error">{triggerError}</p>}

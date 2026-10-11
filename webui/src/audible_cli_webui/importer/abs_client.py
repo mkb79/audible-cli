@@ -24,6 +24,9 @@ class AbsClient:
             {
                 "id": lib["id"],
                 "name": lib["name"],
+                # "book" or "podcast". Uploads only make sense into a book
+                # library, so callers filter/validate on this.
+                "media_type": lib.get("mediaType", "book"),
                 "folders": [{"id": f["id"], "name": f.get("fullPath", f["id"])} for f in lib.get("folders", [])],
             }
             for lib in resp.json().get("libraries", [])

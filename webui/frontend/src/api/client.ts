@@ -2,6 +2,7 @@ import type {
   AbsLibrary,
   AbsSettingsInfo,
   AudibleAccountInfo,
+  ImportReadiness,
   ImportRunDetail,
   ImportRunSummary,
   LoginUrlResponse,
@@ -16,6 +17,18 @@ export class ApiError extends Error {
     super(message)
     this.status = status
   }
+}
+
+// FastAPI errors arrive as {"detail": "..."}; show just the sentence.
+async function errorMessage(res: Response): Promise<string> {
+  const body = await res.text()
+  try {
+    const detail = (JSON.parse(body) as { detail?: unknown }).detail
+    if (typeof detail === 'string') return detail
+  } catch {
+    // Not JSON (e.g. a proxy error page); fall through to the raw text.
+  }
+  return body || res.statusText
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -35,8 +48,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    const body = await res.text()
-    throw new ApiError(res.status, body || res.statusText)
+    throw new ApiError(res.status, await errorMessage(res))
   }
 
   if (res.status === 204) {
@@ -64,6 +76,7 @@ export const api = {
     post<{ ok: boolean }>('/api/audible/connect/complete', { pasted_url: pastedUrl }),
   disconnectAudible: () => del<void>('/api/audible/account'),
 
+  importReadiness: () => get<ImportReadiness>('/api/imports/readiness'),
   triggerImport: () => post<{ run_id: number }>('/api/imports'),
   listImports: () => get<ImportRunSummary[]>('/api/imports'),
   currentImport: () => get<ImportRunDetail | null>('/api/imports/current'),
@@ -73,12 +86,18 @@ export const api = {
   adminGetAbsSettings: () => get<AbsSettingsInfo>('/api/admin/abs-settings'),
   adminSaveAbsSettings: (baseUrl: string, apiKey: string) =>
     put<AbsSettingsInfo>('/api/admin/abs-settings', { base_url: baseUrl, api_key: apiKey }),
+  adminSetDefaultTarget: (absLibraryId: string, absFolderId: string) =>
+    put<AbsSettingsInfo>('/api/admin/abs-default-target', {
+      abs_library_id: absLibraryId,
+      abs_folder_id: absFolderId,
+    }),
   adminListAbsLibraries: () => get<AbsLibrary[]>('/api/admin/abs-libraries'),
   adminSetTenantMapping: (userId: number, absLibraryId: string, absFolderId: string) =>
     put<void>(`/api/admin/tenant-mappings/${userId}`, {
       abs_library_id: absLibraryId,
       abs_folder_id: absFolderId,
     }),
+  adminClearTenantMapping: (userId: number) => del<void>(`/api/admin/tenant-mappings/${userId}`),
   adminListImports: (userId?: number) =>
     get<ImportRunSummary[]>(`/api/admin/imports${userId ? `?user_id=${userId}` : ''}`),
 }

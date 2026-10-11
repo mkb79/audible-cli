@@ -33,6 +33,11 @@ class CompleteConnectRequest(BaseModel):
     pasted_url: str
 
 
+class ImportReadinessOut(BaseModel):
+    ready: bool
+    reason: str | None = None
+
+
 class ImportRunItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -93,11 +98,14 @@ class ImportRunDetailOut(ImportRunOut):
 class AbsSettingsOut(BaseModel):
     base_url: str
     api_key_set: bool
+    default_library_id: str | None = None
+    default_folder_id: str | None = None
 
 
 class AbsSettingsIn(BaseModel):
     base_url: str
-    api_key: str
+    # Blank keeps the stored key, so the URL can change without re-entering it.
+    api_key: str = ""
 
 
 class AbsLibraryFolderOut(BaseModel):
@@ -108,6 +116,7 @@ class AbsLibraryFolderOut(BaseModel):
 class AbsLibraryOut(BaseModel):
     id: str
     name: str
+    media_type: str
     folders: list[AbsLibraryFolderOut]
 
 

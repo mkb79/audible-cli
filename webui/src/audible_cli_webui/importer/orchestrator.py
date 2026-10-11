@@ -17,6 +17,7 @@ from ..db import SessionLocal
 from ..settings import settings
 from .abs_client import AbsApiError, AbsClient
 from .decrypt import DecryptError, decrypt_aaxc, extract_voucher_credentials
+from .targets import missing_setup_reason, resolve_target
 
 logger = logging.getLogger("audible_cli_webui.importer.orchestrator")
 
@@ -30,26 +31,24 @@ WORKERS_PER_RUN = 3
 
 async def run_import(run_id: int, user_id: int) -> None:
     with SessionLocal() as db:
-        account = auth_store.get_account(db, user_id)
-        mapping = db.execute(
-            select(models.TenantLibraryMapping).where(models.TenantLibraryMapping.user_id == user_id)
-        ).scalar_one_or_none()
-        abs_settings = db.get(models.AbsSettings, 1)
-
         run = db.get(models.ImportRun, run_id)
         run.status = models.ImportRunStatus.RUNNING
         run.started_at = datetime.now(UTC)
 
-        if account is None or mapping is None or abs_settings is None:
+        # trigger_import already checked this; re-checked in case setup
+        # changed between the request and the job starting.
+        reason = missing_setup_reason(db, user_id)
+        if reason is not None:
             run.status = models.ImportRunStatus.FAILED
-            run.error_message = "Audible account, library mapping, or Audiobookshelf settings are not configured."
+            run.error_message = reason
             run.finished_at = datetime.now(UTC)
             db.commit()
             return
 
         db.commit()
-        library_id = mapping.abs_library_id
-        folder_id = mapping.abs_folder_id
+        account = auth_store.get_account(db, user_id)
+        abs_settings = db.get(models.AbsSettings, 1)
+        library_id, folder_id = resolve_target(db, user_id)
         abs_base_url = abs_settings.base_url
         abs_api_key = decrypt_bytes(abs_settings.encrypted_api_key).decode("utf-8")
         # Built while `account` is still attached to this session — using it
