@@ -39,3 +39,20 @@ packages = ["src/audible_cli_webui"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+# Alembic-generated, not hand-maintained — same reasoning as excluding
+# build/vendor output elsewhere.
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+# B008: FastAPI's dependency injection is designed around exactly this
+# pattern (`user: User = Depends(get_current_user)`) — not a bug here.
+ignore = ["B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["audible_cli_webui"]
+

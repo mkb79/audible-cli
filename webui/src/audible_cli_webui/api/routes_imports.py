@@ -32,7 +32,9 @@ async def list_imports(
     db: Session = Depends(get_db),
 ) -> list[schemas.ImportRunOut]:
     runs = (
-        db.execute(select(models.ImportRun).where(models.ImportRun.user_id == user.id).order_by(models.ImportRun.id.desc()))
+        db.execute(
+            select(models.ImportRun).where(models.ImportRun.user_id == user.id).order_by(models.ImportRun.id.desc())
+        )
         .scalars()
         .all()
     )

@@ -62,8 +62,7 @@ def complete_login(pending_state: dict, pasted_url: str) -> dict:
         )
     except Exception as exc:
         raise AudibleConnectError(
-            "Amazon rejected the login attempt. The link may have expired — "
-            "try generating a new one."
+            "Amazon rejected the login attempt. The link may have expired — try generating a new one."
         ) from exc
 
     return {

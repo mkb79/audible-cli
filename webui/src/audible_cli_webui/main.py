@@ -20,8 +20,7 @@ logger = logging.getLogger("audible_cli_webui")
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if shutil.which("ffmpeg") is None:
         raise RuntimeError(
-            "ffmpeg was not found on PATH. It is required to decrypt and "
-            "transcode downloaded audiobooks."
+            "ffmpeg was not found on PATH. It is required to decrypt and transcode downloaded audiobooks."
         )
     Path(settings.work_dir).mkdir(parents=True, exist_ok=True)
     recover_interrupted_runs()

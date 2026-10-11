@@ -5,7 +5,7 @@ from . import models
 from .auth.session import SessionData, get_session
 from .db import get_db
 
-__all__ = ["get_db", "get_current_session", "get_current_user", "require_admin"]
+__all__ = ["get_current_session", "get_current_user", "get_db", "require_admin"]
 
 
 def get_current_session(request: Request) -> SessionData:

@@ -137,18 +137,24 @@ async def run_import(run_id: int, user_id: int) -> None:
 
 
 def _already_succeeded_asins(db: Session, user_id: int) -> set[str]:
-    rows = db.execute(
-        select(models.ImportRunItem.asin)
-        .join(models.ImportRun, models.ImportRun.id == models.ImportRunItem.run_id)
-        .where(
-            models.ImportRun.user_id == user_id,
-            models.ImportRunItem.status == models.ImportRunItemStatus.SUCCEEDED,
+    rows = (
+        db.execute(
+            select(models.ImportRunItem.asin)
+            .join(models.ImportRun, models.ImportRun.id == models.ImportRunItem.run_id)
+            .where(
+                models.ImportRun.user_id == user_id,
+                models.ImportRunItem.status == models.ImportRunItemStatus.SUCCEEDED,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return set(rows)
 
 
-async def _worker(queue: asyncio.Queue, client, work_dir: Path, library_id: str, folder_id: str, abs_client: AbsClient) -> None:
+async def _worker(
+    queue: asyncio.Queue, client, work_dir: Path, library_id: str, folder_id: str, abs_client: AbsClient
+) -> None:
     while True:
         item, item_row_id = await queue.get()
         try:
@@ -162,7 +168,9 @@ async def _worker(queue: asyncio.Queue, client, work_dir: Path, library_id: str,
             queue.task_done()
 
 
-async def _process_item(item, item_row_id: int, client, work_dir: Path, library_id: str, folder_id: str, abs_client: AbsClient) -> None:
+async def _process_item(
+    item, item_row_id: int, client, work_dir: Path, library_id: str, folder_id: str, abs_client: AbsClient
+) -> None:
     item_dir = work_dir / item.asin
     item_dir.mkdir(parents=True, exist_ok=True)
     base_filename = item.asin

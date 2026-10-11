@@ -9,12 +9,12 @@ class Base(DeclarativeBase):
     pass
 
 
-class AudibleAccountStatus(str, enum.Enum):
+class AudibleAccountStatus(enum.StrEnum):
     ACTIVE = "active"
     NEEDS_RECONNECT = "needs_reconnect"
 
 
-class ImportRunStatus(str, enum.Enum):
+class ImportRunStatus(enum.StrEnum):
     QUEUED = "queued"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
@@ -22,7 +22,7 @@ class ImportRunStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class ImportRunItemStatus(str, enum.Enum):
+class ImportRunItemStatus(enum.StrEnum):
     PENDING = "pending"
     DOWNLOADING = "downloading"
     DECRYPTING = "decrypting"
@@ -51,9 +51,7 @@ class User(Base):
     library_mapping: Mapped["TenantLibraryMapping | None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
-    import_runs: Mapped[list["ImportRun"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
-    )
+    import_runs: Mapped[list["ImportRun"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class AudibleAccount(Base):
@@ -129,9 +127,7 @@ class ImportRunItem(Base):
     run_id: Mapped[int] = mapped_column(ForeignKey("import_runs.id"), index=True)
     asin: Mapped[str] = mapped_column(String(32), index=True)
     title: Mapped[str] = mapped_column(String(500))
-    status: Mapped[ImportRunItemStatus] = mapped_column(
-        Enum(ImportRunItemStatus), default=ImportRunItemStatus.PENDING
-    )
+    status: Mapped[ImportRunItemStatus] = mapped_column(Enum(ImportRunItemStatus), default=ImportRunItemStatus.PENDING)
     error_message: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
