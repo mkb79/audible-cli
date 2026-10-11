@@ -117,6 +117,12 @@ line-length = 88
 src = ["src", "plugin_cmds", "utils"]
 target-version = "py311"
 output-format = "grouped"
+# webui/ is an independent uv project (own pyproject.toml, own lockfile,
+# own dependency set — see webui/README.md) with its own [tool.ruff]
+# config. Without this, ruff's config resolution would still apply this
+# stricter, CLI-oriented rule set to it, which is how FastAPI's idiomatic
+# `Depends(...)` default-argument pattern ended up flagged as a bug (B008).
+extend-exclude = ["webui"]
 
 [tool.ruff.format]
 # Files the formatter has never run over. Take one off the list by
