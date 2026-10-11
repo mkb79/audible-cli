@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from audible import AsyncClient
-from audible_cli.cmds.cmd_download import download_aaxc, download_cover
+from audible_cli.cmds.cmd_download import CLIENT_HEADERS, download_aaxc, download_cover
 from audible_cli.models import Library
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -62,7 +62,9 @@ async def run_import(run_id: int, user_id: int) -> None:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        async with AsyncClient(auth=authenticator, timeout=30) as api_client:
+        # The CLI attaches CLIENT_HEADERS via @pass_client; without the Audible
+        # app User-Agent, the CloudFront CDN serving .aaxc files answers 403.
+        async with AsyncClient(auth=authenticator, timeout=30, headers=CLIENT_HEADERS) as api_client:
             library = await Library.from_api_full_sync(
                 api_client,
                 image_sizes=COVER_SIZE,
