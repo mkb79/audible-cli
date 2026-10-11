@@ -1,0 +1,90 @@
+name: webui Docker image
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      # Distinct from the root CLI's own `v*` release tags (build.yml) so
+      # the two independent release cadences never collide in the same
+      # tag namespace.
+      - 'webui-v*'
+    paths:
+      - 'webui/**'
+      - 'src/audible_cli/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/webui-docker.yml'
+  pull_request:
+    paths:
+      - 'webui/**'
+      - 'src/audible_cli/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/webui-docker.yml'
+  workflow_dispatch:
+
+# A newer push to the same branch/PR makes the running build obsolete
+concurrency:
+  group: webui-docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  docker:
+    name: Build and push webui image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Only used on push/dispatch (see the login step's `if`); a PR run
+      # never authenticates and never pushes.
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # latest tracks master, so Dockhand's compose stack (image: ...:latest)
+      # picks up new pushes without any manual tag bump. webui-vX.Y.Z tags
+      # additionally publish a pinned X.Y.Z, for anyone who wants to stop
+      # auto-tracking master.
+      - name: Compute image tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          tags="${IMAGE}:sha-$(git rev-parse --short HEAD)"
+          if [[ "${{ github.ref }}" == refs/heads/master ]]; then
+            tags="${tags},${IMAGE}:latest"
+          elif [[ "${{ github.ref }}" == refs/tags/webui-v* ]]; then
+            version="${{ github.ref_name }}"
+            version="${version#webui-v}"
+            tags="${tags},${IMAGE}:${version},${IMAGE}:latest"
+          fi
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+
+      # Context is the repo root, not webui/: webui/Dockerfile depends on
+      # the parent audible_cli package via an editable path dependency
+      # ("../" from webui/pyproject.toml) and needs the real source present
+      # in the build context to resolve it. See webui/README.md.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: webui/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

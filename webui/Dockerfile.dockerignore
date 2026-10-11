@@ -1,0 +1,16 @@
+# Scoped to webui/Dockerfile (Docker looks for <dockerfile-path>.dockerignore
+# relative to the build context root — this must be built with the repo
+# root as context, see webui/README.md).
+.git
+docs
+tests
+plugin_cmds
+assets
+*.spec
+
+webui/.venv
+webui/data
+webui/frontend/node_modules
+webui/frontend/dist
+webui/.env
+webui/**/__pycache__
