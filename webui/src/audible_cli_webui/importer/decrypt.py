@@ -52,9 +52,11 @@ async def decrypt_aaxc(source: pathlib.Path, key: str, iv: str) -> pathlib.Path:
 
     cmd = [
         "ffmpeg",
+        # "error" rather than "quiet", so a failure's reason reaches stderr
+        # and the DecryptError message below instead of an empty string.
         "-v",
-        "quiet",
-        "-stats",
+        "error",
+        "-nostats",
         "-y",
         "-audible_key",
         key,
@@ -64,6 +66,10 @@ async def decrypt_aaxc(source: pathlib.Path, key: str, iv: str) -> pathlib.Path:
         str(source),
         "-c",
         "copy",
+        # The output name ends in .tmp, so ffmpeg can't infer the container
+        # from the extension and exits 234 (EINVAL) without being told.
+        "-f",
+        "mp4",
         str(tmp_target),
     ]
 
