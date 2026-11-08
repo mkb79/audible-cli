@@ -6,6 +6,7 @@ go, because a parent carries no audio of its own.
 """
 
 import asyncio
+from datetime import UTC, datetime
 
 import pytest
 from click.testing import CliRunner
@@ -238,3 +239,74 @@ def test_the_deprecated_spelling_actually_resolves(monkeypatch, recwarn):
 
     assert sorted(i.asin for i in library) == ["CAST0001", "CAST0001EP"]
     assert any(issubclass(w.category, DeprecationWarning) for w in recwarn)
+
+
+# --- a show with episodes the library does not list ------------------------
+
+
+@pytest.fixture
+def a_show_with_more_episodes(monkeypatch):
+    """A show of three episodes, of which the library lists one.
+
+    The count is off, which sends the episodes to the catalog for the rest.
+    """
+    asked = {"library": [], "catalog": []}
+
+    async def fake_library(cls, api_client, **request_params):
+        asked["library"].append(request_params)
+        return a_library(an_item("CAST0001EP1", "Added Episode"))
+
+    async def fake_catalog(cls, api_client, **request_params):
+        asked["catalog"].append(request_params)
+        return a_catalog(
+            an_item("CAST0001EP1", "Added Episode"),
+            an_item("CAST0001EP2", "Older Episode"),
+            an_item("CAST0001EP3", "Oldest Episode"),
+        )
+
+    monkeypatch.setattr(Library, "from_api_full_sync", classmethod(fake_library))
+    monkeypatch.setattr(Catalog, "from_api", classmethod(fake_catalog))
+    show = an_item("CAST0001", "A Show", parent=True)
+    show["episode_count"] = 3
+    return a_library(show), asked
+
+
+def test_a_date_range_keeps_the_episodes_the_library_returned(
+    a_show_with_more_episodes,
+):
+    # The catalog knows nothing of when an episode was added, so it cannot
+    # answer a date range. Going there anyway handed back every episode.
+    library, asked = a_show_with_more_episodes
+
+    asyncio.run(library.resolve_podcasts(start_date=datetime(2008, 1, 1, tzinfo=UTC)))
+
+    assert sorted(i.asin for i in library) == ["CAST0001", "CAST0001EP1"]
+    assert asked["catalog"] == [], "the catalog has no date to filter on"
+    assert asked["library"][0]["start_date"] == datetime(2008, 1, 1, tzinfo=UTC)
+
+
+def test_an_end_date_alone_keeps_the_episodes_the_library_returned(
+    a_show_with_more_episodes,
+):
+    library, asked = a_show_with_more_episodes
+
+    asyncio.run(library.resolve_podcasts(end_date=datetime(2008, 1, 1, tzinfo=UTC)))
+
+    assert sorted(i.asin for i in library) == ["CAST0001", "CAST0001EP1"]
+    assert asked["catalog"] == []
+
+
+def test_without_dates_the_catalog_fills_in_the_rest(a_show_with_more_episodes):
+    library, asked = a_show_with_more_episodes
+
+    asyncio.run(library.resolve_podcasts())
+
+    assert sorted(i.asin for i in library) == [
+        "CAST0001",
+        "CAST0001EP1",
+        "CAST0001EP2",
+        "CAST0001EP3",
+    ]
+    # Only what `catalog/products` understands goes there: the empty date
+    # bounds are no query parameters of it
+    assert asked["catalog"] == [{"parent_asin": "CAST0001"}], asked["catalog"]

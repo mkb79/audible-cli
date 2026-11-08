@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- `--start-date` / `--end-date` now hold for podcast episodes. A show whose episode count differed from what the library listed fetched its episodes from the catalog, which knows no date added, so every episode came back; the library's filtered episodes are now kept when a date range is given, and the catalog is no longer sent the date bounds as query parameters (#267)
+
 ## [0.6.0] - 2026-09-01
 
 ### Breaking
