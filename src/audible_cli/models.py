@@ -274,13 +274,32 @@ class LibraryItem(BaseItem):
         if self.is_parent_podcast() and "episode_count" in self and \
                 self.episode_count is not None:
             if int(self.episode_count) != len(children):
-
-                if "response_groups" in request_params:
-                    request_params.pop("response_groups")
-                children = await Catalog.from_api(
-                    api_client=self._client,
-                    **request_params
+                # The catalog has no date an episode was added to the
+                # library, so it cannot answer a date range: asking it
+                # anyway returned every episode of the show. The library
+                # already filtered by the range, so its answer stands.
+                date_bounds = (
+                    request_params.get("start_date"),
+                    request_params.get("end_date")
                 )
+                if any(d is not None for d in date_bounds):
+                    logger.debug(
+                        "%s: the library lists %s of %s episodes, keeping "
+                        "them because the catalog cannot filter by date.",
+                        self.asin,
+                        len(children),
+                        self.episode_count
+                    )
+                else:
+                    # Only send what `catalog/products` understands
+                    catalog_params = {
+                        k: v for k, v in request_params.items()
+                        if k not in ("response_groups", "start_date", "end_date")
+                    }
+                    children = await Catalog.from_api(
+                        api_client=self._client,
+                        **catalog_params
+                    )
 
         for child in children:
             child._parent = self
