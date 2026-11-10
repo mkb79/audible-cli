@@ -546,6 +546,8 @@ class LongestSubString:
 
     @property
     def percentage(self):
+        if not self._search_for:
+            return 0.0
         return self._match.size / len(self._search_for) * 100
 
 
